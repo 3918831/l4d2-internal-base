@@ -235,6 +235,7 @@
     <ClInclude Include="SDK\L4D2\Includes\dt_recv.h" />
     <ClInclude Include="SDK\L4D2\Includes\ehandle.h" />
     <ClInclude Include="SDK\L4D2\Includes\globalvars_base.h" />
+    <ClInclude Include="SDK\L4D2\Includes\iconvar.h" />
     <ClInclude Include="SDK\L4D2\Includes\usercmd.h" />
     <ClInclude Include="SDK\L4D2\Interfaces\BaseClientDLL.h" />
     <ClInclude Include="SDK\L4D2\Interfaces\DebugOverlay.h" />
@@ -243,6 +244,7 @@
     <ClInclude Include="SDK\L4D2\Interfaces\EngineTrace.h" />
     <ClInclude Include="SDK\L4D2\Interfaces\EngineVGui.h" />
     <ClInclude Include="SDK\L4D2\Interfaces\GameMovement.h" />
+    <ClInclude Include="SDK\L4D2\Interfaces\ICvar.h" />
     <ClInclude Include="SDK\L4D2\Interfaces\MaterialSystem.h" />
     <ClInclude Include="SDK\L4D2\Interfaces\MatRenderContext.h" />
     <ClInclude Include="SDK\L4D2\Interfaces\MatSystemSurface.h" />
@@ -273,6 +275,9 @@
     <ClInclude Include="Util\Util.h" />
     <ClInclude Include="Util\VFunc\VFunc.h" />
     <ClInclude Include="Util\XorString\XorString.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="Docs\DebugLog.txt" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

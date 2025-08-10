@@ -124,5 +124,10 @@
     <ClInclude Include="Hooks\TerrorGameRules\TerrorGameRules.h" />
     <ClInclude Include="Util\XorString\XorString.h" />
     <ClInclude Include="Features\EnginePrediction\EnginePrediction.h" />
+    <ClInclude Include="SDK\L4D2\Interfaces\ICvar.h" />
+    <ClInclude Include="SDK\L4D2\Includes\iconvar.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="Docs\DebugLog.txt" />
   </ItemGroup>
 </Project>

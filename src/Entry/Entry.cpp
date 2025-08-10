@@ -1,4 +1,5 @@
 #include "Entry.h"
+#include "../SDK/L4D2/Interfaces/ICvar.h"
 #include <iostream>
 
 void CGlobal_ModuleEntry::Run()
@@ -20,7 +21,12 @@ void CGlobal_ModuleEntry::Run()
 		}
 	}
 	//}
+	auto CvarPtr = I::Cvar->FindCommandBase("sv_cheats");
+	std::cout << "I::Cvar->FindCommandBase of sv_cheats: " << CvarPtr << std::endl;
 
+	auto CvarPtr2 = I::Cvar->FindCommandBase("god");
+	std::cout << "I::Cvar->FindCommandBase of god: " << CvarPtr2 << std::endl;
+	//I::Cvar->FindVar("sv_cheats")->GetInt();
 }
 
 void CGlobal_ModuleEntry::Load()
@@ -79,6 +85,10 @@ void CGlobal_ModuleEntry::Load()
 		std::cout << "MatSystemSurface: " << I::MatSystemSurface << std::endl;
 
 		I::MaterialSystem   = U::Interface.Get<IMaterialSystem*>("materialsystem.dll", "VMaterialSystem080");
+        std::cout << "MaterialSystem: " << I::MaterialSystem << std::endl;
+
+		I::Cvar = U::Interface.Get<ICvar*>("materialsystem.dll", "VEngineCvar007");
+		std::cout << "Cvar: " << I::Cvar << std::endl;
 
 		{
 			I::ClientMode = **reinterpret_cast<void***>(U::Offsets.m_dwClientMode);
