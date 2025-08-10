@@ -12,7 +12,7 @@ void CGlobal_Hooks::Init()
 		BaseClient::Init();
 		BasePlayer::Init();
 		CL_Main::Init();
-		ClientMode::Init();
+		ClientMode::Init(); //启用这条hook目前导致游戏出现异常:人物不停跳跃和右键
 		ClientPrediction::Init();
 		EngineVGui::Init();
 		ModelRender::Init();

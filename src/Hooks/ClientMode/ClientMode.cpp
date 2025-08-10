@@ -55,7 +55,7 @@ void ClientMode::Init()
 {
 	XASSERT(Table.Init(I::ClientMode) == false);
 	XASSERT(Table.Hook(&ShouldDrawFog::Detour, ShouldDrawFog::Index) == false);
-	XASSERT(Table.Hook(&CreateMove::Detour, CreateMove::Index) == false);
+	//XASSERT(Table.Hook(&CreateMove::Detour, CreateMove::Index) == false); //启用这条hook目前导致游戏出现异常:人物不停跳跃和右键
 	XASSERT(Table.Hook(&DoPostScreenSpaceEffects::Detour, DoPostScreenSpaceEffects::Index) == false);
 	XASSERT(Table.Hook(&GetViewModelFOV::Detour, GetViewModelFOV::Index) == false);
 }
