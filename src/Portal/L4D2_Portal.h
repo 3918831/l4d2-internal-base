@@ -6,8 +6,13 @@ public:
     ITexture* CreateNamedRenderTargetEx(const char* pRtName, int w, int h, int sizeMode, int img_format, int depth, int textureFlags, int rtFlags)
 	{
 		using FN = ITexture * (__thiscall*)(Custom_IMaterialSystem*, const char*, int, int, int, int, int, int, int);
-		DWORD abc = (int)(*(FN**)this)[85];
-		return (*(FN**)this)[85](this, pRtName, w, h, sizeMode,img_format,depth,textureFlags,rtFlags);
+		DWORD abc = (int)(*(FN**)this)[84];
+		return (*(FN**)this)[84](this, pRtName, w, h, sizeMode,img_format,depth,textureFlags,rtFlags);
+	}
+
+    void UnLockRTAllocation()
+	{
+		((DWORD*)this)[2734] = false;//m_bDisableRenderTargetAllocationForever
 	}
 };
 class L4D2_Portal {

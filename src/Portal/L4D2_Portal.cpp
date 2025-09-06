@@ -17,28 +17,30 @@
  IMaterial* g_pPortalMaterial = nullptr;
 
 // 定义CViewSetup结构体以用于渲染视图设置
-struct CViewSetup
+// CViewSetup取自L4D2VR插件
+class CViewSetup
 {
-    int            x, y, width, height;
-    int            m_nUnscaledX, m_nUnscaledY, m_nUnscaledWidth, m_nUnscaledHeight;
-    bool           m_bOrtho;
-    float          m_OrthoLeft;
-    float          m_OrthoTop;
-    float          m_OrthoRight;
-    float          m_OrthoBottom;
-    float          m_flAspectRatio;
-    float          m_flNearZ;
-    float          m_flFarZ;
-    float          m_flNearViewmodelZ;
-    float          m_flFarViewmodelZ;
-    float          m_flFOV;
-    float          m_flViewmodelFOV;
-    Vector         m_origin;
-    QAngle         m_angles;
-    Vector         m_viewSize;
-    float          m_flZNear;
-    float          m_flZFar;
-};
+public:
+	int32_t x; //0x0000
+	int32_t m_nUnscaledX; //0x0004
+	int32_t y; //0x0008
+	int32_t m_nUnscaledY; //0x000C
+	int32_t width; //0x0010
+	int32_t m_nUnscaledWidth; //0x0014
+	int32_t height; //0x0018
+	int32_t m_nUnscaledHeight; //0x001C
+	char pad_0020[20]; //0x0020
+	float fov; //0x0034
+	float fovViewmodel; //0x0038
+	Vector origin; //0x003C
+	Vector angles; //0x0048
+	float zNear; //0x0054
+	float zFar; //0x0058
+	float zNearViewmodel; //0x005C
+	float zFarViewmodel; //0x0060
+	float m_flAspectRatio; //0x0064
+	char pad_0068[1660]; //0x0068
+}; //Size: 0x06E4
 
 void L4D2_Portal::CreatePortalTexture()
 {
@@ -48,15 +50,18 @@ void L4D2_Portal::CreatePortalTexture()
         return;
     }
 
+    m_pCustomMaterialSystem->UnLockRTAllocation();
+    m_pMaterialSystem->BeginRenderTargetAllocation();
+    // m_LeftEyeTexture = m_Game->m_MaterialSystem->CreateNamedRenderTargetTextureEx("leftEye0", m_RenderWidth, m_RenderHeight, RT_SIZE_NO_CHANGE, m_Game->m_MaterialSystem->GetBackBufferFormat(), MATERIAL_RT_DEPTH_SHARED, TEXTUREFLAGS_NOMIP);
     // 创建512x512的渲染目标纹理
-    //g_pPortalTexture = g_pPortalMaterialSystem->CreateNamedRenderTargetTextureEx("_rt_PortalTexture", 
-    //    512, 512, 
-    //    RT_SIZE_DEFAULT, 
-    //    IMAGE_FORMAT_RGBA8888, 
-    //    MATERIAL_RT_DEPTH_SHARED, 
-    //    TEXTUREFLAGS_CLAMPS | TEXTUREFLAGS_CLAMPT, 
-    //    CREATERENDERTARGETFLAGS_HDR);
-
+    m_pPortalTexture = m_pMaterialSystem->CreateNamedRenderTargetTextureEx("_rt_PortalTexture", 
+       512, 512, 
+       RT_SIZE_DEFAULT, 
+       IMAGE_FORMAT_RGBA8888, 
+       MATERIAL_RT_DEPTH_SHARED, 
+       TEXTUREFLAGS_CLAMPS | TEXTUREFLAGS_CLAMPT, 
+       CREATERENDERTARGETFLAGS_HDR);
+    m_pMaterialSystem->EndRenderTargetAllocation();
 
     //m_pPortalTexture = m_pCustomMaterialSystem->CreateNamedRenderTargetEx("_rt_PortalTexture",
     //        512, 512, 
@@ -66,7 +71,7 @@ void L4D2_Portal::CreatePortalTexture()
     //        TEXTUREFLAGS_CLAMPS | TEXTUREFLAGS_CLAMPT, 
     //        CREATERENDERTARGETFLAGS_HDR);
 
-    m_pPortalTexture = m_pCustomMaterialSystem->CreateNamedRenderTargetEx("rt_test1", 4096, 4096, 0, 1, 0, true, false);
+    // m_pPortalTexture = m_pCustomMaterialSystem->CreateNamedRenderTargetEx("rt_test1", 4096, 4096, 0, 1, 0, true, false);
 
     if (!m_pPortalTexture)
     {
@@ -166,6 +171,8 @@ void L4D2_Portal::PortalInit()
 
     // 初始化完成后，可以调用RenderPortalFrame进行渲染
     printf("[Portal] Initialization completed\n");
+
+    RenderPortalFrame();
 }
 
 // 渲染场景到传送门纹理
@@ -185,92 +192,27 @@ void L4D2_Portal::RenderPortalFrame()
         printf("[Portal] Failed to get render context\n");
         return;
     }
+    // 保存当前渲染状态
+    pRenderContext->PushRenderTargetAndViewport();
 
-    try
-    {
-        // 推送渲染目标和视口
-        pRenderContext->PushRenderTargetAndViewport(m_pPortalTexture, 0, 0, 512, 512);
-        
-        // 清除缓冲区
-        pRenderContext->ClearBuffers(true, true, true);
-        
-        // 设置CViewSetup结构体（模拟传送门后的视角）
-        CViewSetup viewSetup;
-        memset(&viewSetup, 0, sizeof(CViewSetup));
-        
-        // 设置视口大小
-        viewSetup.x = 0;
-        viewSetup.y = 0;
-        viewSetup.width = 512;
-        viewSetup.height = 512;
-        viewSetup.m_nUnscaledX = 0;
-        viewSetup.m_nUnscaledY = 0;
-        viewSetup.m_nUnscaledWidth = 512;
-        viewSetup.m_nUnscaledHeight = 512;
-        
-        // 设置透视参数
-        viewSetup.m_bOrtho = false;
-        viewSetup.m_flAspectRatio = 1.0f; // 512x512的宽高比为1:1
-        viewSetup.m_flFOV = 90.0f; // 标准FOV
-        viewSetup.m_flNearZ = 4.0f;
-        viewSetup.m_flFarZ = 16384.0f;
-        
-        // 获取当前玩家视角，并模拟传送门后的视角
-        // 这里简单地使用当前玩家的位置和角度，但在实际实现中需要根据传送门的位置和方向进行转换
-        //C_BasePlayer* pLocalPlayer = I::EngineClient->GetLocalPlayer();
-        //C_BasePlayer* pLocalPlayer = I::ClientEntityList->GetClientEntity(I::EngineClient->GetLocalPlayer())->As<C_BasePlayer*>();
-        C_BasePlayer* pLocalPlayer = nullptr;
-        if (pLocalPlayer)
-        {
-            Vector eyePos;
-            QAngle eyeAng {0.0, 0.0, 0.0};
-            pLocalPlayer->ViewPunch(eyePos);
-            //pLocalPlayer->GetEyeAngles(&eyeAng);
-            
-            // 这里只是一个示例，实际实现中需要根据传送门的位置和方向调整视角
-            // 例如：将玩家视角旋转180度，模拟从传送门另一侧看到的场景
-            viewSetup.m_origin = eyePos;
-            viewSetup.m_angles = eyeAng;
-            
-            // 为了演示效果，将视角稍微偏移一点
-            Vector forward;
-            //U::Math.AngleVectors(eyeAng, &forward);
-            viewSetup.m_origin += forward * 100.0f; // 向前移动100单位
-        }
-        else
-        {
-            // 如果没有本地玩家，使用默认位置
-            viewSetup.m_origin = Vector(0, 0, 0);
-            viewSetup.m_angles = QAngle(0, 0, 0);
-        }
-        
-        // 开始场景渲染
-        I::RenderView->SceneBegin();
-        
-        // 推送3D视图
-        I::RenderView->Push3DView(pRenderContext, &viewSetup, 0, nullptr, nullptr);
-        
-        // 渲染世界（这里只是基本实现，实际需要更复杂的渲染逻辑）
-        // 在实际Source引擎中，你需要调用DrawWorldLists等函数
-        // 这里为了示例，我们使用简化的方法
-        
-        // 结束场景渲染
-        I::RenderView->PopView(pRenderContext, nullptr);
-        I::RenderView->SceneEnd();
-        
-        // 弹出渲染目标和视口
-        pRenderContext->PopRenderTargetAndViewport();
-        
-        printf("[Portal] Successfully rendered frame to portal texture\n");
-    }
-    catch (...)
-    {
-        // 确保在发生异常时也弹出渲染目标和视口
-        pRenderContext->PopRenderTargetAndViewport();
-        printf("[Portal] Exception occurred during rendering\n");
-    }
+    // 创建临时的CViewSetup结构
+    CViewSetup viewSetup;
+    viewSetup.x = 0;
+    viewSetup.y = 0;
+    viewSetup.width = 512;
+    viewSetup.height = 512;
+    viewSetup.fov = 90;
+    viewSetup.origin = { 0, 0, 0 };
+    viewSetup.angles = { 0, 0, 0 };
+    viewSetup.zNear = 6;
+    viewSetup.zFar = 4096;
+
+    // 设置渲染目标为传送门纹理
+    pRenderContext->SetRenderTarget(m_pPortalTexture);
+    I::BaseClient->RenderView(&viewSetup, 2 | 1, 0);
     
-    // 释放渲染上下文
+    // 恢复渲染状态
+    pRenderContext->PopRenderTargetAndViewport();
     pRenderContext->Release();
 }
 
