@@ -38,6 +38,7 @@
     <ClCompile Include="Hooks\ModelRenderSystem\ModelRenderSystem.cpp" />
     <ClCompile Include="Hooks\TerrorGameRules\TerrorGameRules.cpp" />
     <ClCompile Include="Features\EnginePrediction\EnginePrediction.cpp" />
+    <ClCompile Include="Portal\L4D2_Portal.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Util\Util.h" />
@@ -126,6 +127,8 @@
     <ClInclude Include="Features\EnginePrediction\EnginePrediction.h" />
     <ClInclude Include="SDK\L4D2\Interfaces\ICvar.h" />
     <ClInclude Include="SDK\L4D2\Includes\iconvar.h" />
+    <ClInclude Include="Portal\L4D2_Portal.h" />
+    <ClInclude Include="Portal\public\qAngle.h" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="Docs\DebugLog.txt" />

@@ -72,7 +72,7 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <LinkIncremental>true</LinkIncremental>
-    <TargetName>pol</TargetName>
+    <TargetName>Lak3_l4d2_hack</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
@@ -91,6 +91,7 @@
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
+      <AdditionalOptions>/D "_CRT_SECURE_NO_WARNINGS" %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -169,6 +170,7 @@
     <ClCompile Include="Hooks\TerrorGameRules\TerrorGameRules.cpp" />
     <ClCompile Include="Hooks\TerrorPlayer\TerrorPlayer.cpp" />
     <ClCompile Include="Hooks\WndProc\WndProc.cpp" />
+    <ClCompile Include="Portal\L4D2_Portal.cpp" />
     <ClCompile Include="SDK\DrawManager\DrawManager.cpp" />
     <ClCompile Include="SDK\GameUtil\GameUtil.cpp" />
     <ClCompile Include="SDK\KeyValues\KeyValues.cpp" />
@@ -207,6 +209,8 @@
     <ClInclude Include="Hooks\TerrorGameRules\TerrorGameRules.h" />
     <ClInclude Include="Hooks\TerrorPlayer\TerrorPlayer.h" />
     <ClInclude Include="Hooks\WndProc\WndProc.h" />
+    <ClInclude Include="Portal\L4D2_Portal.h" />
+    <ClInclude Include="Portal\public\qAngle.h" />
     <ClInclude Include="SDK\DrawManager\DrawManager.h" />
     <ClInclude Include="SDK\GameUtil\GameUtil.h" />
     <ClInclude Include="SDK\KeyValues\KeyValues.h" />

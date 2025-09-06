@@ -15,4 +15,8 @@ src/Release/vc142.pdb
 *.opendb
 src/Release/*
 src/.vs/*
+.vs/*
+.vscode/
+src/Debug/
+src/Portal/
 

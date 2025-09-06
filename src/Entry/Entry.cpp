@@ -1,6 +1,7 @@
 #include "Entry.h"
 #include "../SDK/L4D2/Interfaces/ICvar.h"
 #include <iostream>
+#include "../Portal/L4D2_Portal.h"
 
 void CGlobal_ModuleEntry::Run()
 {
@@ -27,6 +28,96 @@ void CGlobal_ModuleEntry::Run()
 	auto CvarPtr2 = I::Cvar->FindCommandBase("god");
 	std::cout << "I::Cvar->FindCommandBase of god: " << CvarPtr2 << std::endl;
 	//I::Cvar->FindVar("sv_cheats")->GetInt();
+
+	//if (!I::EngineClient->IsInGame()) {
+		for (MaterialHandle_t i = I::MaterialSystem->FirstMaterial(); i != I::MaterialSystem->InvalidMaterial(); i = I::MaterialSystem->NextMaterial(i))
+		{
+			IMaterial* pMaterial = I::MaterialSystem->GetMaterial(i);
+			if (pMaterial->IsErrorMaterial())continue;
+
+			std::cout << pMaterial->GetName() << std::endl;
+
+			if (strstr("models/zimu/zimu1_hd/zimu1_hd", pMaterial->GetName()))
+			{
+				std::cout << "material: zimu1_hd found" << std::endl;
+				//I::ModelRender->ForcedMaterialOverride(pMaterial, OVERRIDE_NORMAL);
+				bool btemp = false;
+				IMaterialVar* iMaterialVar = pMaterial->FindVar("$basetexture", &btemp, false);
+				if (iMaterialVar) {
+					auto materialvar = iMaterialVar->GetName();
+					std::cout << "materialvar: " << materialvar << std::endl;
+
+					auto materialvar_string_value = iMaterialVar->GetStringValue();
+					std::cout << "materialvar_string_value: " << materialvar_string_value << std::endl;
+
+					std::cout << "iMaterialVar->GetTextureValue->name: " << iMaterialVar->GetTextureValue()->GetName() << std::endl;
+
+
+					// 查找material
+					IMaterial* zimu2 = I::MaterialSystem->FindMaterial("models/zimu/zimu2_hd/zimu2_hd", TEXTURE_GROUP_MODEL, false);
+					IMaterial* zimu3 = I::MaterialSystem->FindMaterial("models/zimu/zimu3_hd/zimu3_hd", TEXTURE_GROUP_MODEL, false);
+					ITexture* zimu2_texture = nullptr;
+					ITexture* zimu3_texture = nullptr;
+					if (zimu2 != nullptr) {
+						zimu2_texture = zimu2->FindVar("$basetexture", &btemp, false)->GetTextureValue();
+						//iMaterialVar->SetTextureValue(zimu2_texture);
+					} else {
+                        std::cout << "models/zimu/zimu2_hd/zimu2_hd not found" << std::endl;
+					}
+
+					if (zimu3 != nullptr) {
+						zimu3_texture = zimu3->FindVar("$basetexture", &btemp, false)->GetTextureValue();
+						//iMaterialVar->SetTextureValue(zimu3_texture);
+					}
+					else {
+						std::cout << "models/zimu/zimu3_hd/zimu3_hd not found" << std::endl;
+					}
+
+					//while (true) {
+					//	iMaterialVar->SetTextureValue(zimu2_texture);
+					//	Sleep(1000);
+					//	iMaterialVar->SetTextureValue(zimu3_texture);
+					//	Sleep(1000);
+					//}
+
+
+					//iMaterialVar->SetStringValue("zimu/zimu2_hd"); //直接这么设置会白屏
+					//std::cout << "materialvar_string_new_value: " << iMaterialVar->GetStringValue() << std::endl;
+				} else {
+					std::cout << "iMaterialVar not found" << std::endl;
+				}
+			}
+
+			//const char* mat = pMaterial->GetTextureGroupName();
+			
+			//if (strstr(TEXTURE_GROUP_WORLD, pMaterial->GetTextureGroupName()))
+			//{
+			//	//pMaterial->AlphaModulate(alpha);
+			//}
+			////20220905, 空气墙材质渲染为半透明
+			//if (strstr(TEXTURE_GROUP_OTHER, pMaterial->GetTextureGroupName()))
+			//{
+			//	pMaterial->AlphaModulate(0.5);
+			//}
+		}
+	//}
+	//else {
+	//	std::cout << "not in game." << std::endl;
+	//}
+
+	//ITexture* ret =  I::MaterialSystem->CreateNamedRenderTargetTextureEx("_rt_PortalTexture",
+	//		512, 512,
+	//		RT_SIZE_DEFAULT,
+	//		IMAGE_FORMAT_RGBA8888,
+	//		MATERIAL_RT_DEPTH_SHARED,
+	//		TEXTUREFLAGS_CLAMPS | TEXTUREFLAGS_CLAMPT,
+	//		CREATERENDERTARGETFLAGS_HDR);
+
+	
+
+	//传送门实验代码
+	L4D2_Portal l4d2_Portal;
+	l4d2_Portal.PortalInit();
 }
 
 void CGlobal_ModuleEntry::Load()
