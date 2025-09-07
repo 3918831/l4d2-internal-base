@@ -35,7 +35,7 @@ void CGlobal_ModuleEntry::Run()
 			IMaterial* pMaterial = I::MaterialSystem->GetMaterial(i);
 			if (pMaterial->IsErrorMaterial())continue;
 
-			std::cout << pMaterial->GetName() << std::endl;
+			//std::cout << pMaterial->GetName() << std::endl;
 
 			if (strstr("models/zimu/zimu1_hd/zimu1_hd", pMaterial->GetName()))
 			{

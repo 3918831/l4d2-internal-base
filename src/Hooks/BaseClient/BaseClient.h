@@ -40,6 +40,24 @@ namespace Hooks
 			void __fastcall Detour(void* ecx, void* edx, ClientFrameStage_t curStage);
 		}
 		
+		// add RenderView Hook 
+		//namespace RenderView
+		//{
+		//	using FN = void(__fastcall*)(void*, void*, CViewSetup&, int , int);
+		//	constexpr uint32_t Index = 26u;
+
+		//	void __fastcall Detour(void *ecx, void *edx, CViewSetup &setup, int nClearFlags, int whatToDraw);
+		//}
+
+		// add RenderView Hook 
+		namespace RenderView
+		{
+			inline Hook::CFunction Func;
+			using FN = void(__fastcall*)(void*, void*, CViewSetup&, CViewSetup&, int, int);
+
+			void __fastcall Detour(void* ecx, void* edx, CViewSetup& setup, CViewSetup& hudViewSetup, int nClearFlags, int whatToDraw);
+		}
+		
 		void Init();
 	}
 }

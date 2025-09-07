@@ -16,32 +16,6 @@
  //IMaterialSystem* g_pPortalMaterialSystem = nullptr;
  IMaterial* g_pPortalMaterial = nullptr;
 
-// 定义CViewSetup结构体以用于渲染视图设置
-// CViewSetup取自L4D2VR插件
-class CViewSetup
-{
-public:
-	int32_t x; //0x0000
-	int32_t m_nUnscaledX; //0x0004
-	int32_t y; //0x0008
-	int32_t m_nUnscaledY; //0x000C
-	int32_t width; //0x0010
-	int32_t m_nUnscaledWidth; //0x0014
-	int32_t height; //0x0018
-	int32_t m_nUnscaledHeight; //0x001C
-	char pad_0020[20]; //0x0020
-	float fov; //0x0034
-	float fovViewmodel; //0x0038
-	Vector origin; //0x003C
-	Vector angles; //0x0048
-	float zNear; //0x0054
-	float zFar; //0x0058
-	float zNearViewmodel; //0x005C
-	float zFarViewmodel; //0x0060
-	float m_flAspectRatio; //0x0064
-	char pad_0068[1660]; //0x0068
-}; //Size: 0x06E4
-
 void L4D2_Portal::CreatePortalTexture()
 {
     if (!m_pCustomMaterialSystem)
@@ -193,7 +167,7 @@ void L4D2_Portal::RenderPortalFrame()
         return;
     }
     // 保存当前渲染状态
-    pRenderContext->PushRenderTargetAndViewport();
+    //pRenderContext->PushRenderTargetAndViewport();
 
     // 创建临时的CViewSetup结构
     CViewSetup viewSetup;
@@ -208,12 +182,12 @@ void L4D2_Portal::RenderPortalFrame()
     viewSetup.zFar = 4096;
 
     // 设置渲染目标为传送门纹理
-    pRenderContext->SetRenderTarget(m_pPortalTexture);
-    I::BaseClient->RenderView(&viewSetup, 2 | 1, 0);
+    //pRenderContext->SetRenderTarget(m_pPortalTexture);
+    //I::BaseClient->RenderView(&viewSetup, 2 | 1, 0);
     
     // 恢复渲染状态
-    pRenderContext->PopRenderTargetAndViewport();
-    pRenderContext->Release();
+    //pRenderContext->PopRenderTargetAndViewport();
+    //pRenderContext->Release();
 }
 
 // 清理函数，在不需要传送门时调用

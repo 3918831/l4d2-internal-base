@@ -56,4 +56,8 @@ void CUtil_Offsets::Init()
 	XASSERT(m_dwGlobalVars == 0x0);
 	XASSERT(m_dwMoveHelper == 0x0);
 	XASSERT(m_dwRandomSeed == 0x0);
+
+	//自行添加的hook
+	m_dwRenderView = U::Pattern.Find(_("client.dll"), _("55 8B EC 81 EC ? ? ? ? 53 56 57 8B D9"));
+	XASSERT(m_dwRenderView == 0x0);
 }
