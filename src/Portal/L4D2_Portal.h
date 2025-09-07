@@ -19,7 +19,7 @@ class L4D2_Portal {
 public:
     ITexture* m_pPortalTexture;
     IMaterialSystem* m_pMaterialSystem;
-    IMaterial* m_pPortalMaterial;
+    IMaterial* m_pPortalMaterial; //这个变量暂时未使用
     Custom_IMaterialSystem* m_pCustomMaterialSystem;
 
     void PortalInit();
@@ -28,3 +28,5 @@ public:
     void CreatePortalTexture();
     void PortalShutdown();
 };
+
+namespace G { inline L4D2_Portal G_L4D2Portal; }

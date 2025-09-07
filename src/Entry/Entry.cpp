@@ -116,8 +116,8 @@ void CGlobal_ModuleEntry::Run()
 	
 
 	//传送门实验代码
-	L4D2_Portal l4d2_Portal;
-	l4d2_Portal.PortalInit();
+	// L4D2_Portal l4d2_Portal;
+	// l4d2_Portal.PortalInit();
 }
 
 void CGlobal_ModuleEntry::Load()
@@ -194,6 +194,7 @@ void CGlobal_ModuleEntry::Load()
 	}
 
 	G::Draw.Init();
+	G::G_L4D2Portal.PortalInit();
 	G::Hooks.Init();
-	Run();
+	//Run();
 }

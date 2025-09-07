@@ -51,6 +51,8 @@ void L4D2_Portal::CreatePortalTexture()
     {
         printf("[Portal] Failed to create portal texture!\n");
         return;
+    } else {
+        printf("[Portal] m_pPortalTexture Name: %s\n", m_pPortalTexture->GetName());
     }
 
     printf("[Portal] Created portal texture successfully\n");
@@ -105,18 +107,18 @@ void L4D2_Portal::CreatePortalMaterial()
     }
 
     // 设置材质为半透明
-    IMaterialVar* pTranslucentVar = g_pPortalMaterial->FindVar("$translucent", NULL, false);
-    if (pTranslucentVar)
-    {
-        pTranslucentVar->SetIntValue(1);
-    }
+    // IMaterialVar* pTranslucentVar = g_pPortalMaterial->FindVar("$translucent", NULL, false);
+    // if (pTranslucentVar)
+    // {
+    //     pTranslucentVar->SetIntValue(1);
+    // }
 
     // 禁用Z缓冲区测试，允许透过其他物体看到传送门内容
-    IMaterialVar* pIgnoreZVar = g_pPortalMaterial->FindVar("$ignorez", NULL, false);
-    if (pIgnoreZVar)
-    {
-        pIgnoreZVar->SetIntValue(1);
-    }
+    // IMaterialVar* pIgnoreZVar = g_pPortalMaterial->FindVar("$ignorez", NULL, false);
+    // if (pIgnoreZVar)
+    // {
+    //     pIgnoreZVar->SetIntValue(1);
+    // }
 }
 
 void L4D2_Portal::PortalInit()
@@ -144,9 +146,15 @@ void L4D2_Portal::PortalInit()
     CreatePortalMaterial();
 
     // 初始化完成后，可以调用RenderPortalFrame进行渲染
-    printf("[Portal] Initialization completed\n");
+    printf("[Portal] Initialization completed\n\n");
 
-    RenderPortalFrame();
+    printf("[Portal] g_pPortalMaterial: %p\n", g_pPortalMaterial);
+    printf("[Portal] m_pPortalTexture: %p\n", m_pPortalTexture);
+    printf("[Portal] m_pMaterialSystem: %p\n", m_pMaterialSystem);
+    printf("[Portal] m_pPortalMaterial: %p\n", m_pPortalMaterial);
+    printf("[Portal] m_pCustomMaterialSystem: %p\n", m_pCustomMaterialSystem);
+
+    //RenderPortalFrame();
 }
 
 // 渲染场景到传送门纹理
@@ -166,6 +174,17 @@ void L4D2_Portal::RenderPortalFrame()
         printf("[Portal] Failed to get render context\n");
         return;
     }
+
+    // 获取并保存当前原始渲染上下文的渲染目标
+    ITexture* pOriginalRenderTarget = reinterpret_cast<ITexture*>(pRenderContext->GetRenderTarget());
+
+    // 设置渲染目标为当前纹理
+    pRenderContext->SetRenderTarget(m_pPortalTexture);
+
+    // 清除渲染目标
+    // pRenderContext->ClearColor4ub(0, 0, 0, 0);
+    // pRenderContext->ClearBuffers(true, true);
+
     // 保存当前渲染状态
     //pRenderContext->PushRenderTargetAndViewport();
 
