@@ -14,6 +14,11 @@ public:
 	{
 		((DWORD*)this)[2734] = false;//m_bDisableRenderTargetAllocationForever
 	}
+
+    void LockRTAllocation()
+    {
+        ((DWORD*)this)[2734] = true;//m_bDisableRenderTargetAllocationForever
+    }
 };
 class L4D2_Portal {
 public:

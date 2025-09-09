@@ -34,13 +34,14 @@ void __fastcall BaseClient::RenderView::Detour(void* ecx, void* edx, CViewSetup&
 {
 	//printf("RenderView Hooked.\n"); //Ŀǰ�Ѿ�hook�ɹ�
 	//printf("[Hooked RenderView]: original fov: %f\n", setup.fov);
-	//setup.fov = 160.0;
+	setup.fov += 30.0;
 	//printf("[Hooked RenderView]: new fov: %f\n", setup.fov);
 
 	//先调用原函数保证正常游戏场景的渲染
-	//Func.Original<FN>()(ecx, edx, setup, hudViewSetup, nClearFlags, whatToDraw);
+	Func.Original<FN>()(ecx, edx, setup, hudViewSetup, nClearFlags, whatToDraw);
 
 	if(I::EngineClient->IsInGame()) {
+	//if (false) {
 		// 检查材质系统和纹理是否有效
 		if (!G::G_L4D2Portal.m_pMaterialSystem || !G::G_L4D2Portal.m_pPortalTexture)
 		{
@@ -55,14 +56,25 @@ void __fastcall BaseClient::RenderView::Detour(void* ecx, void* edx, CViewSetup&
 			printf("[Portal] Failed to get render context\n");
 			return;
 		}
+
+		//IMaterial* pMaterial = pRenderContext->GetCurrentMaterial();
+		//auto name = pMaterial->GetName();
+
+		//if (strstr("models/zimu/zimu1_hd/zimu1_hd", pMaterial->GetName())) {
+		//	printf("[Portal] Current material of name1: %s\n", pMaterial->GetName());
+		//}
+		
+
 		// 解锁渲染目标分配
-        G::G_L4D2Portal.m_pCustomMaterialSystem->UnLockRTAllocation();
+        //G::G_L4D2Portal.m_pCustomMaterialSystem->UnLockRTAllocation();
 
 		// 保存当前渲染状态
     	pRenderContext->PushRenderTargetAndViewport();
 
+
 		// 获取并保存当前原始渲染上下文的渲染目标
-		ITexture* pOriginalRenderTarget = reinterpret_cast<ITexture*>(pRenderContext->GetRenderTarget()); // 20250907:返回空指针
+		//ITexture* pOriginalRenderTarget = reinterpret_cast<ITexture*>(pRenderContext->GetRenderTarget()); // 20250907:返回空指针
+
 
 		// 设置渲染目标为当前纹理
 		pRenderContext->SetRenderTarget(G::G_L4D2Portal.m_pPortalTexture);
@@ -71,7 +83,7 @@ void __fastcall BaseClient::RenderView::Detour(void* ecx, void* edx, CViewSetup&
 		Func.Original<FN>()(ecx, edx, setup, hudViewSetup, nClearFlags, whatToDraw);
 		
 		// 恢复渲染目标(是否有必要?)
-		pRenderContext->SetRenderTarget(pOriginalRenderTarget);
+		//pRenderContext->SetRenderTarget(pOriginalRenderTarget);
 
 
 		// 恢复渲染状态
@@ -80,9 +92,6 @@ void __fastcall BaseClient::RenderView::Detour(void* ecx, void* edx, CViewSetup&
 		// 清除渲染目标
 		// pRenderContext->ClearColor4ub(0, 0, 0, 0);
 		// pRenderContext->ClearBuffers(true, true);
-
-		// 保存当前渲染状态
-		//pRenderContext->PushRenderTargetAndViewport();
 
 		// 创建临时的CViewSetup结构
 		// CViewSetup viewSetup;
@@ -96,7 +105,7 @@ void __fastcall BaseClient::RenderView::Detour(void* ecx, void* edx, CViewSetup&
 		// viewSetup.zNear = 6;
 		// viewSetup.zFar = 4096;
 	} else {
-		printf("[Portal] Not in game.\n");
+		// printf("[Portal] Not in game.\n");
 	}
 }
 
