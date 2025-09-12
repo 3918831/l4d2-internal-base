@@ -30,11 +30,11 @@ void L4D2_Portal::CreatePortalTexture()
     // 创建512x512的渲染目标纹理
     m_pPortalTexture = m_pMaterialSystem->CreateNamedRenderTargetTextureEx("_rt_PortalTexture",
         3840, 2160,
-        RT_SIZE_NO_CHANGE,
+        RT_SIZE_FULL_FRAME_BUFFER,
         I::MaterialSystem->GetBackBufferFormat(), // or IMAGE_FORMAT_RGBA8888, 
         MATERIAL_RT_DEPTH_SHARED,
-        TEXTUREFLAGS_NOMIP);
-       //CREATERENDERTARGETFLAGS_HDR);
+        0,//TEXTUREFLAGS_NOMIP,
+       CREATERENDERTARGETFLAGS_HDR);
     m_pMaterialSystem->EndRenderTargetAllocation();
 
     //m_pPortalTexture = m_pCustomMaterialSystem->CreateNamedRenderTargetEx("_rt_PortalTexture",

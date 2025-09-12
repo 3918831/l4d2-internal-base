@@ -1,5 +1,6 @@
 #include "BaseClient.h"
 #include "../../Portal/L4D2_Portal.h"
+#include "../../SDK/L4D2/Interfaces/RenderView.h"
 #include <memory>
 
 using namespace Hooks;
@@ -32,62 +33,70 @@ void __fastcall BaseClient::FrameStageNotify::Detour(void* ecx, void* edx, Clien
 
 void __fastcall BaseClient::RenderView::Detour(void* ecx, void* edx, CViewSetup& setup, CViewSetup& hudViewSetup, int nClearFlags, int whatToDraw)
 {
-	//printf("RenderView Hooked.\n"); //Ŀǰ�Ѿ�hook�ɹ�
-	//printf("[Hooked RenderView]: original fov: %f\n", setup.fov);
-	setup.fov += 30.0;
-	//printf("[Hooked RenderView]: new fov: %f\n", setup.fov);
-
-	//先调用原函数保证正常游戏场景的渲染
-	Func.Original<FN>()(ecx, edx, setup, hudViewSetup, nClearFlags, whatToDraw);
-
-	if(I::EngineClient->IsInGame()) {
-	//if (false) {
-		// 检查材质系统和纹理是否有效
-		if (!G::G_L4D2Portal.m_pMaterialSystem || !G::G_L4D2Portal.m_pPortalTexture)
+	// 添加静态标志防止递归渲染
+	static bool bIsRenderingPortal = false;
+	
+	// 正常游戏渲染路径
+	if (!bIsRenderingPortal)
+	{
+		// 检查是否在游戏中且需要渲染portal
+		if (I::EngineClient->IsInGame() && G::G_L4D2Portal.m_pMaterialSystem && G::G_L4D2Portal.m_pPortalTexture)
 		{
-			printf("[Portal] Material system or texture not initialized, skipping render\n");
-			return;
+			// 获取渲染上下文
+			IMatRenderContext* pRenderContext = G::G_L4D2Portal.m_pMaterialSystem->GetRenderContext();
+			if (pRenderContext)
+			{
+				// 设置递归保护标志，准备渲染portal
+				bIsRenderingPortal = true;
+				
+				// 保存当前渲染状态
+				pRenderContext->PushRenderTargetAndViewport();
+
+				try
+					{
+						// 设置渲染目标为portal纹理
+						pRenderContext->SetRenderTarget(G::G_L4D2Portal.m_pPortalTexture);
+
+						// 设置视口大小为纹理大小
+						int textureWidth = G::G_L4D2Portal.m_pPortalTexture->GetActualWidth();
+						int textureHeight = G::G_L4D2Portal.m_pPortalTexture->GetActualHeight();
+						pRenderContext->Viewport(0, 0, textureWidth, textureHeight);
+
+						// 确保深度缓冲区正确设置
+						//pRenderContext->DepthRange(0.0f, 1.0f);
+						//pRenderContext->OverrideDepthEnable(true, true);
+
+						// 清除渲染目标和深度缓冲区
+						//pRenderContext->ClearColor4ub(0, 0, 0, 0);
+						//pRenderContext->ClearBuffers(true, true);
+
+						// 使用游戏原始的whatToDraw参数确保渲染所有内容
+						Func.Original<FN>()(ecx, edx, setup, hudViewSetup, nClearFlags, whatToDraw);
+						
+						// 重置强制材质覆盖
+						I::ModelRender->ForcedMaterialOverride(nullptr);
+					}
+				catch (...)
+				{
+					// 发生异常时确保恢复状态
+				}
+
+				// 恢复渲染状态
+				pRenderContext->PopRenderTargetAndViewport();
+				
+				// 清除递归保护标志
+				bIsRenderingPortal = false;
+			}
 		}
 
-		// 获取渲染上下文
-		IMatRenderContext* pRenderContext = G::G_L4D2Portal.m_pMaterialSystem->GetRenderContext();
-		if (!pRenderContext)
-		{
-			printf("[Portal] Failed to get render context\n");
-			return;
-		}
-
-		//IMaterial* pMaterial = pRenderContext->GetCurrentMaterial();
-		//auto name = pMaterial->GetName();
-
-		//if (strstr("models/zimu/zimu1_hd/zimu1_hd", pMaterial->GetName())) {
-		//	printf("[Portal] Current material of name1: %s\n", pMaterial->GetName());
-		//}
-		
-
-		// 解锁渲染目标分配
-        //G::G_L4D2Portal.m_pCustomMaterialSystem->UnLockRTAllocation();
-
-		// 保存当前渲染状态
-    	pRenderContext->PushRenderTargetAndViewport();
-
-
-		// 获取并保存当前原始渲染上下文的渲染目标
-		//ITexture* pOriginalRenderTarget = reinterpret_cast<ITexture*>(pRenderContext->GetRenderTarget()); // 20250907:返回空指针
-
-
-		// 设置渲染目标为当前纹理
-		pRenderContext->SetRenderTarget(G::G_L4D2Portal.m_pPortalTexture);
-
-		// 对目标纹理进行渲染
+		// 调用原函数渲染主场景
 		Func.Original<FN>()(ecx, edx, setup, hudViewSetup, nClearFlags, whatToDraw);
-		
-		// 恢复渲染目标(是否有必要?)
-		//pRenderContext->SetRenderTarget(pOriginalRenderTarget);
-
-
-		// 恢复渲染状态
-    	pRenderContext->PopRenderTargetAndViewport();
+	}
+	else
+	{
+		// 递归调用路径 - 直接调用原始函数不进行portal渲染
+		Func.Original<FN>()(ecx, edx, setup, hudViewSetup, nClearFlags, whatToDraw);
+	}
 
 		// 清除渲染目标
 		// pRenderContext->ClearColor4ub(0, 0, 0, 0);
@@ -104,9 +113,9 @@ void __fastcall BaseClient::RenderView::Detour(void* ecx, void* edx, CViewSetup&
 		// viewSetup.angles = { 0, 0, 0 };
 		// viewSetup.zNear = 6;
 		// viewSetup.zFar = 4096;
-	} else {
-		// printf("[Portal] Not in game.\n");
-	}
+	// } else {
+	// 	// printf("[Portal] Not in game.\n");
+	// }
 }
 
 void BaseClient::Init()
