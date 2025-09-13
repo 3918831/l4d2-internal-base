@@ -71,10 +71,11 @@ void __fastcall BaseClient::RenderView::Detour(void* ecx, void* edx, CViewSetup&
 						//pRenderContext->ClearBuffers(true, true);
 
 						// 使用游戏原始的whatToDraw参数确保渲染所有内容
+						// use whatToDraw & (1<<1) to skip hud, see RenderViewInfo_t in other source code
 						Func.Original<FN>()(ecx, edx, setup, hudViewSetup, nClearFlags, whatToDraw);
 						
 						// 重置强制材质覆盖
-						I::ModelRender->ForcedMaterialOverride(nullptr);
+						// I::ModelRender->ForcedMaterialOverride(nullptr);
 					}
 				catch (...)
 				{
