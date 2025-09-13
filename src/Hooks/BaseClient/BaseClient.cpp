@@ -50,12 +50,12 @@ void __fastcall BaseClient::RenderView::Detour(void* ecx, void* edx, CViewSetup&
 				bIsRenderingPortal = true;
 				
 				// 保存当前渲染状态
-				pRenderContext->PushRenderTargetAndViewport();
+				pRenderContext->PushRenderTargetAndViewport(G::G_L4D2Portal.m_pPortalTexture);
 
 				try
 					{
 						// 设置渲染目标为portal纹理
-						pRenderContext->SetRenderTarget(G::G_L4D2Portal.m_pPortalTexture);
+						//pRenderContext->SetRenderTarget(G::G_L4D2Portal.m_pPortalTexture);
 
 						// 设置视口大小为纹理大小
 						int textureWidth = G::G_L4D2Portal.m_pPortalTexture->GetActualWidth();
