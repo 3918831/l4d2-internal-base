@@ -147,6 +147,8 @@ void L4D2_Portal::PortalInit()
 
     // 初始化完成后，可以调用RenderPortalFrame进行渲染
     printf("[Portal] Initialization completed\n\n");
+    
+    m_pPortalMaterial = g_pPortalMaterial;
 
     printf("[Portal] g_pPortalMaterial: %p\n", g_pPortalMaterial);
     printf("[Portal] m_pPortalTexture: %p\n", m_pPortalTexture);

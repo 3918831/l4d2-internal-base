@@ -2,6 +2,9 @@
 
 #include "../../SDK/SDK.h"
 
+// 全局标志，用于跟踪是否正在渲染Portal纹理
+extern bool g_bIsRenderingPortalTexture;
+
 namespace Hooks
 {
 	namespace ModelRender

@@ -24,7 +24,7 @@ class L4D2_Portal {
 public:
     ITexture* m_pPortalTexture;
     IMaterialSystem* m_pMaterialSystem;
-    IMaterial* m_pPortalMaterial; //这个变量暂时未使用
+    IMaterial* m_pPortalMaterial;
     Custom_IMaterialSystem* m_pCustomMaterialSystem;
 
     void PortalInit();

@@ -35,6 +35,14 @@ struct color32 {
 	int r, g, b, a;
 };
 
+enum RenderViewInfo_t
+{
+	RENDERVIEW_UNSPECIFIED	 = 0,
+	RENDERVIEW_DRAWVIEWMODEL = (1<<0),
+	RENDERVIEW_DRAWHUD		 = (1<<1),
+	RENDERVIEW_SUPPRESSMONITORRENDERING = (1<<2),
+};
+
 class IVEngineClient
 {
 public:
