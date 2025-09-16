@@ -44,12 +44,13 @@ void __fastcall BaseClient::RenderView::Detour(void* ecx, void* edx, CViewSetup&
 		if (pRenderContext)
 		{
 			// 保存当前渲染状态
-			pRenderContext->PushRenderTargetAndViewport(G::G_L4D2Portal.m_pPortalTexture);
+			// pRenderContext->PushRenderTargetAndViewport(G::G_L4D2Portal.m_pPortalTexture);
+			pRenderContext->PushRenderTargetAndViewport();
 
 			try
 			{
 				// 设置渲染目标为portal纹理
-				// pRenderContext->SetRenderTarget(G::G_L4D2Portal.m_pPortalTexture);
+				pRenderContext->SetRenderTarget(G::G_L4D2Portal.m_pPortalTexture);
 
 				// 设置视口大小为纹理大小
 				int textureWidth = G::G_L4D2Portal.m_pPortalTexture->GetActualWidth();
@@ -60,8 +61,8 @@ void __fastcall BaseClient::RenderView::Detour(void* ecx, void* edx, CViewSetup&
 				//pRenderContext->DepthRange(0.0f, 1.0f);
 
 				// 清除渲染目标和深度缓冲区
-				/*pRenderContext->ClearColor4ub(0, 0, 0, 0);
-				pRenderContext->ClearBuffers(true, true);*/
+				// pRenderContext->ClearColor4ub(0, 0, 0, 0);
+				// pRenderContext->ClearBuffers(true, true);
 
 				// 设置全局标志，表示正在渲染Portal纹理（无效，暂未使用）
 				//g_bIsRenderingPortalTexture = true;
@@ -70,16 +71,16 @@ void __fastcall BaseClient::RenderView::Detour(void* ecx, void* edx, CViewSetup&
 				// 在调用原函数渲染目标纹理之前，先设置MATERIAL_VAR_NO_DRAW位true来跳过目标纹理上渲染自身，完成渲染后再恢复为false
 				// G::G_L4D2Portal.m_pPortalMaterial->GetMaterialVarFlag(MATERIAL_VAR_NO_DRAW);返回的值是false
 				// bool ret = G::G_L4D2Portal.m_pPortalMaterial->GetMaterialVarFlag(MATERIAL_VAR_NO_DRAW);
-				G::G_L4D2Portal.m_pPortalMaterial->SetMaterialVarFlag(MATERIAL_VAR_NO_DRAW, true);
+				 G::G_L4D2Portal.m_pPortalMaterial->SetMaterialVarFlag(MATERIAL_VAR_NO_DRAW, true);
 
 				// 使用游戏原始的whatToDraw参数确保渲染所有内容
 				// use whatToDraw & (1<<1) to skip hud, see RenderViewInfo_t
-				whatToDraw &= ~RENDERVIEW_DRAWVIEWMODEL;
-				whatToDraw &= ~RENDERVIEW_DRAWHUD;
-				Func.Original<FN>()(ecx, edx, setup, hudViewSetup, nClearFlags, whatToDraw);
+				// whatToDraw &= ~RENDERVIEW_DRAWVIEWMODEL;
+				// whatToDraw &= ~RENDERVIEW_DRAWHUD;
+				Func.Original<FN>()(ecx, edx, setup, hudViewSetup, nClearFlags, whatToDraw & (~RENDERVIEW_DRAWVIEWMODEL) & (~RENDERVIEW_DRAWHUD));
 						
-						// 重置强制材质覆盖
-						// I::ModelRender->ForcedMaterialOverride(nullptr);
+				// 重置强制材质覆盖
+				// I::ModelRender->ForcedMaterialOverride(nullptr);
 			}
 			catch (...)
 			{
@@ -88,7 +89,8 @@ void __fastcall BaseClient::RenderView::Detour(void* ecx, void* edx, CViewSetup&
 
 			// 清除全局标志
 			//g_bIsRenderingPortalTexture = false;
-			whatToDraw |= (RENDERVIEW_DRAWVIEWMODEL | RENDERVIEW_DRAWHUD);
+			// 还原各类视角渲染设置
+			// whatToDraw |= (RENDERVIEW_DRAWVIEWMODEL | RENDERVIEW_DRAWHUD);
 			G::G_L4D2Portal.m_pPortalMaterial->SetMaterialVarFlag(MATERIAL_VAR_NO_DRAW, false);
 			// 恢复渲染状态
 			pRenderContext->PopRenderTargetAndViewport();
