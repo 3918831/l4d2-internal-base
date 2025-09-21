@@ -28,8 +28,8 @@ void L4D2_Portal::CreatePortalTexture()
     m_pMaterialSystem->BeginRenderTargetAllocation();
     // m_LeftEyeTexture = m_Game->m_MaterialSystem->CreateNamedRenderTargetTextureEx("leftEye0", m_RenderWidth, m_RenderHeight, RT_SIZE_NO_CHANGE, m_Game->m_MaterialSystem->GetBackBufferFormat(), MATERIAL_RT_DEPTH_SHARED, TEXTUREFLAGS_NOMIP);
     // 创建512x512的渲染目标纹理
-    m_pPortalTexture = m_pMaterialSystem->CreateNamedRenderTargetTextureEx("_rt_PortalTexture",
-        3840, 2160,
+    m_pPortalTexture = m_pMaterialSystem->CreateNamedRenderTargetTextureEx("_rt_Portal1Texture",
+        1, 1,
         RT_SIZE_FULL_FRAME_BUFFER,
         I::MaterialSystem->GetBackBufferFormat(), // or IMAGE_FORMAT_RGBA8888, 
         MATERIAL_RT_DEPTH_SHARED,
