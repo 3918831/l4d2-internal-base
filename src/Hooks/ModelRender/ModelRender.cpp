@@ -1,9 +1,29 @@
 #include "ModelRender.h"
 #include "../../Portal/L4D2_Portal.h"
+#include "../../Hooks/BaseClient/BaseClient.h"
 using namespace Hooks;
 
-// 全局标志，用于跟踪是否正在渲染Portal纹理
-//static bool g_bIsRenderingPortalTexture = true;
+// 状态管理
+bool g_bDrawingPortalView = false; // 防止在绘制传送门内部世界时，再次触发传送门逻辑，造成无限递归
+static int s_nRenderViewRecursion = 0; // RenderView的递归深度计数
+
+// 在你的初始化函数中预加载这个材质
+//IMaterial* g_pWriteStencilMaterial = I::MaterialSystem->FindMaterial("materials/dev/write_stencil", TEXTURE_GROUP_OTHER);
+
+// 1. 从你的Hook管理器中获取原始函数指针，并使用正确的函数签名类型。
+//    注意这里我们使用了修正后的、更可能正确的L4D2签名。
+//using RenderView_FN = void(__fastcall*)(void*, void*, CViewSetup&, CViewSetup&, int, int);
+
+extern CViewSetup g_ViewSetup;
+extern CViewSetup g_hudViewSetup;
+extern void* g_pClient_this_ptr;
+
+// 检查模型是否是我们的传送门模型
+bool IsPortalModel(const char* modelName) {
+	// TODO: 将 "portal_model.mdl" 替换为你的传送门模型的实际名称
+	// 使用 strstr 可以匹配路径中的一部分，更灵活
+	return (strstr(modelName, "models/blackops/portal.mdl") != nullptr);
+}
 
 void __fastcall ModelRender::ForcedMaterialOverride::Detour(void* ecx, void* edx, IMaterial* newMaterial, OverrideType_t nOverrideType)
 {
@@ -12,63 +32,90 @@ void __fastcall ModelRender::ForcedMaterialOverride::Detour(void* ecx, void* edx
 
 void __fastcall ModelRender::DrawModelExecute::Detour(void* ecx, void* edx, const DrawModelState_t& state, const ModelRenderInfo_t& pInfo, matrix3x4_t* pCustomBoneToWorld)
 {
-	/* 20250913：以下代码尝试跳过对固定模型的渲染，目的是在RenderView阶段不参与绘制,解决类<传送门>纹理无限递归的问题，但始终找不到对应的模型名称
-	// 检查是否正在渲染Portal纹理
-	if (g_bIsRenderingPortalTexture && pInfo.pModel)
-	{
-		// 检查模型名称是否是特定的portal模型
-		const char* modelName = I::ModelInfo->GetModelName(pInfo.pModel);
-		//if (modelName && strstr(modelName, "models/zimu/zimu1_hd.mdl"))
-		if (modelName && strcmp(modelName, "models/zimu/zimu1_hd.mdl") == 0)
-		{
-			// 直接跳过渲染特定的portal模型
-			volatile int breakpoint_here = 0; // 这一行设置普通断点
-			return;
-		}
+    // 基础检查和递归保护
+    if (g_bDrawingPortalView || !I::EngineClient->IsInGame()) {
+        Table.Original<FN>(Index)(ecx, edx, state, pInfo, pCustomBoneToWorld);
+        return;
+    }
 
-		// 获取模型材质
-		IMaterial** materials = new IMaterial*[10];
-		int materialCount = I::ModelInfo->GetModelMaterialCount(pInfo.pModel);
-		// 限制最大材质数量为数组大小
-		if (materialCount > 10) materialCount = 10;
-		I::ModelInfo->GetModelMaterials(pInfo.pModel, materialCount, materials);
-		
-		// 检查材质是否与Portal纹理相关
-		for (int i = 0; i < materialCount; i++)
-		{
-			if (!materials[i]) continue;
+    const char* modelName = I::ModelInfo->GetModelName(pInfo.pModel);
+    if (modelName && strcmp(modelName, "models/blackops/portal.mdl") == 0)
+    {
+        // ============================ FIX #1: 添加初始化保护 ============================
+        if (!g_pClient_this_ptr) {
+            Table.Original<FN>(Index)(ecx, edx, state, pInfo, pCustomBoneToWorld);
+            return;
+        }
+        // ==============================================================================
 
-			// 检查材质名称
-			const char* materialName = materials[i]->GetName();
-			if (materialName && strstr(materialName, "models/zimu/zimu1_hd/zimu1_hd"))
-			{
-				delete[] materials;
-				return;
-			}
+        g_bDrawingPortalView = true;
+        IMatRenderContext* pRenderContext = G::G_L4D2Portal.m_pMaterialSystem->GetRenderContext();
+        IMaterial* g_pWriteStencilMaterial = I::MaterialSystem->FindMaterial("materials/dev/write_stencil", TEXTURE_GROUP_OTHER);
 
-			// 检查材质的basetexture纹理名称
-			bool found = false;
-			IMaterialVar* baseTextureVar = materials[i]->FindVar("$basetexture", &found, false);
-			if (found && baseTextureVar)
-			{
-				ITexture* baseTexture = baseTextureVar->GetTextureValue();
-				if (baseTexture)
-				{
-					const char* textureName = baseTexture->GetName();
-					if (textureName && strstr(textureName, "_rt_PortalTexture"))
-					{
-						delete[] materials;
-						return;
-					}
-				}
-			}
-		}
-		delete[] materials;
-	}
-	*/
+        if (pRenderContext && g_pWriteStencilMaterial)
+        {
+            // --- 阶段 1: 绘制模板遮罩 ---
+            I::ModelRender->ForcedMaterialOverride(g_pWriteStencilMaterial);
 
-	// 正常渲染
-	Table.Original<FN>(Index)(ecx, edx, state, pInfo, pCustomBoneToWorld);
+            ShaderStencilState_t stencilState;
+            stencilState.m_bEnable = true;
+            stencilState.m_nReferenceValue = 1;
+            stencilState.m_CompareFunc = STENCILCOMPARISONFUNCTION_ALWAYS;
+            stencilState.m_PassOp = STENCILOPERATION_REPLACE;
+            stencilState.m_FailOp = STENCILOPERATION_KEEP;
+            stencilState.m_ZFailOp = STENCILOPERATION_REPLACE; // ZFail也应REPLACE，确保被遮挡部分也能形成模板
+            pRenderContext->SetStencilState(stencilState);
+
+            Table.Original<FN>(Index)(ecx, edx, state, pInfo, pCustomBoneToWorld);
+            I::ModelRender->ForcedMaterialOverride(nullptr);
+
+            // FIX #2 (备用方案): 强制刷新渲染队列，确保状态变更被提交
+            pRenderContext->Flush(true);
+
+            // --- 阶段 2: 渲染传送门内的场景 ---
+            pRenderContext->OverrideDepthEnable(false, true);
+
+            stencilState.m_CompareFunc = STENCILCOMPARISONFUNCTION_EQUAL;
+            stencilState.m_PassOp = STENCILOPERATION_KEEP;
+            stencilState.m_FailOp = STENCILOPERATION_KEEP;
+            stencilState.m_ZFailOp = STENCILOPERATION_KEEP;
+            pRenderContext->SetStencilState(stencilState);
+
+            CViewSetup portalView = g_ViewSetup; // 创建一个副本进行修改
+            portalView.angles.y += 180.0f; // 仅修改副本
+
+            using RenderView_FN = void(__fastcall*)(void*, void*, CViewSetup&, CViewSetup&, int, int);
+            auto oRenderView = BaseClient::RenderView::Func.Original<RenderView_FN>();
+
+            if (g_pClient_this_ptr) {
+                oRenderView(
+                    g_pClient_this_ptr,
+                    nullptr,
+                    portalView, // 使用修改后的副本
+                    g_hudViewSetup, // HUD视角通常不需要改
+                    2, // 使用枚举代替魔法数字34
+                    RENDERVIEW_DRAWVIEWMODEL
+                );
+            }
+
+            // --- 阶段 3: 绘制传送门模型本身 (例如边框) ---
+            stencilState.m_bEnable = false;
+            pRenderContext->SetStencilState(stencilState);
+
+            // ============================ FIX #3: 完成阶段3的绘制 ============================
+            // 正常绘制模型本身，让边框显示出来
+            Table.Original<FN>(Index)(ecx, edx, state, pInfo, pCustomBoneToWorld);
+            // ==============================================================================
+        }
+
+        g_bDrawingPortalView = false;
+        // ============================ FIX #2: 添加 return 避免二次绘制 ============================
+        return;
+        // ==============================================================================
+    }
+
+    // 如果不是传送门模型，正常调用原始函数
+    Table.Original<FN>(Index)(ecx, edx, state, pInfo, pCustomBoneToWorld);
 }
 
 void ModelRender::Init()

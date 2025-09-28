@@ -1,9 +1,15 @@
-#include "BaseClient.h"
+﻿#include "BaseClient.h"
 #include "../../Portal/L4D2_Portal.h"
 #include "../../SDK/L4D2/Interfaces/RenderView.h"
 #include "../../SDK/L4D2/Interfaces/EngineClient.h"
+#include "../../SDK/L4D2/Interfaces/ModelInfo.h"
+#include "../../SDK/L4D2/Interfaces/ModelRender.h"
+#include "../../SDK/L4D2/Includes/const.h"
 #include <memory>
 
+CViewSetup g_ViewSetup;
+CViewSetup g_hudViewSetup;
+void* g_pClient_this_ptr = nullptr; // 用于存储 RenderView 的真实 this 指针
 using namespace Hooks;
 
 void __fastcall BaseClient::LevelInitPreEntity::Detour(void* ecx, void* edx, char const* pMapName)
@@ -36,88 +42,44 @@ void __fastcall BaseClient::FrameStageNotify::Detour(void* ecx, void* edx, Clien
 //extern bool g_bIsRenderingPortalTexture;
 void __fastcall BaseClient::RenderView::Detour(void* ecx, void* edx, CViewSetup& setup, CViewSetup& hudViewSetup, int nClearFlags, int whatToDraw)
 {
+	// 如果我们还没有捕获过这个指针，就现在捕获它
+	// 这个操作只会在游戏过程中发生一次
+	if (!g_pClient_this_ptr) {
+		g_pClient_this_ptr = ecx;
+	}
+
+	g_ViewSetup = setup;
+	g_hudViewSetup = hudViewSetup;
+	// 正常情况下调用原函数
+	Func.Original<FN>()(ecx, edx, setup, hudViewSetup, nClearFlags, whatToDraw);
+	return;
+
+
 	// 检查是否在游戏中且需要渲染portal
 	if (I::EngineClient->IsInGame() && G::G_L4D2Portal.m_pMaterialSystem && G::G_L4D2Portal.m_pPortalTexture)
 	{
+		Func.Original<FN>()(ecx, edx, setup, hudViewSetup, nClearFlags, whatToDraw);
 		// 获取渲染上下文
 		IMatRenderContext* pRenderContext = G::G_L4D2Portal.m_pMaterialSystem->GetRenderContext();
 		if (pRenderContext)
 		{
 			// 保存当前渲染状态
-			// pRenderContext->PushRenderTargetAndViewport(G::G_L4D2Portal.m_pPortalTexture);
-			pRenderContext->PushRenderTargetAndViewport();
-			Func.Original<FN>()(ecx, edx, setup, hudViewSetup, nClearFlags, whatToDraw & (~RENDERVIEW_DRAWVIEWMODEL) & (~RENDERVIEW_DRAWHUD));
-			try
-			{
-				// 设置渲染目标为portal纹理
-				//pRenderContext->SetRenderTarget(G::G_L4D2Portal.m_pPortalTexture);
+			 pRenderContext->PushRenderTargetAndViewport(G::G_L4D2Portal.m_pPortalTexture);
+			//pRenderContext->PushRenderTargetAndViewport();			
+				
+			//pRenderContext->CopyRenderTargetToTextureEx(G::G_L4D2Portal.m_pPortalTexture, 0, NULL, NULL);
+			pRenderContext->ClearColor4ub(0, 0, 255, 255);
+			pRenderContext->ClearBuffers(true, false, false);
 
-				// 设置视口大小为纹理大小
-				//int textureWidth = G::G_L4D2Portal.m_pPortalTexture->GetActualWidth();
-				//int textureHeight = G::G_L4D2Portal.m_pPortalTexture->GetActualHeight();
-				//pRenderContext->Viewport(0, 0, textureWidth, textureHeight);
-
-				// 配置深度缓冲区
-				//pRenderContext->DepthRange(0.0f, 1.0f);
-
-				// 清除渲染目标和深度缓冲区
-				// pRenderContext->ClearColor4ub(0, 0, 0, 0);
-				// pRenderContext->ClearBuffers(true, true);
-
-				// 设置全局标志，表示正在渲染Portal纹理（无效，暂未使用）
-				//g_bIsRenderingPortalTexture = true;
-
-				// 通过设置目标材质的Flag值：MATERIAL_VAR_NO_DRAW，来规避材质无限递归问题
-				// 在调用原函数渲染目标纹理之前，先设置MATERIAL_VAR_NO_DRAW位true来跳过目标纹理上渲染自身，完成渲染后再恢复为false
-				// G::G_L4D2Portal.m_pPortalMaterial->GetMaterialVarFlag(MATERIAL_VAR_NO_DRAW);返回的值是false
-				// bool ret = G::G_L4D2Portal.m_pPortalMaterial->GetMaterialVarFlag(MATERIAL_VAR_NO_DRAW);
-				 //G::G_L4D2Portal.m_pPortalMaterial->SetMaterialVarFlag(MATERIAL_VAR_NO_DRAW, true);
-
-				// 使用游戏原始的whatToDraw参数确保渲染所有内容
-				// use whatToDraw & (1<<1) to skip hud, see RenderViewInfo_t
-				// whatToDraw &= ~RENDERVIEW_DRAWVIEWMODEL;
-				// whatToDraw &= ~RENDERVIEW_DRAWHUD;
-				//Func.Original<FN>()(ecx, edx, setup, hudViewSetup, nClearFlags, whatToDraw & (~RENDERVIEW_DRAWVIEWMODEL) & (~RENDERVIEW_DRAWHUD));
-						
-				// 重置强制材质覆盖
-				// I::ModelRender->ForcedMaterialOverride(nullptr);
-			}
-			catch (...)
-			{
-				// 发生异常时确保恢复状态
-			}
-
-			// 清除全局标志
-			//g_bIsRenderingPortalTexture = false;
-			// 还原各类视角渲染设置
-			// whatToDraw |= (RENDERVIEW_DRAWVIEWMODEL | RENDERVIEW_DRAWHUD);
-			//G::G_L4D2Portal.m_pPortalMaterial->SetMaterialVarFlag(MATERIAL_VAR_NO_DRAW, false);
 			// 恢复渲染状态
-
-			// 支持无限递归,仅使用PushRenderTargetAndViewport/CopyRenderTargetToTextureEx/PopRenderTargetAndViewport即可
-			pRenderContext->CopyRenderTargetToTextureEx(G::G_L4D2Portal.m_pPortalTexture, 0, NULL, NULL);
 			pRenderContext->PopRenderTargetAndViewport();
+			//return; // 直接返回，不执行原函数的完整渲染
+			//pRenderContext->DrawScreenSpaceQuad(G::G_L4D2Portal.m_pPortalMaterial);
 		}
 	}
 
-	// 调用原函数渲染主场景
-	Func.Original<FN>()(ecx, edx, setup, hudViewSetup, nClearFlags, whatToDraw);
-
-	// 清除渲染目标
-	// pRenderContext->ClearColor4ub(0, 0, 0, 0);
-	// pRenderContext->ClearBuffers(true, true);
-
-	// 创建临时的CViewSetup结构
-	// CViewSetup viewSetup;
-	// viewSetup.x = 0;
-	// viewSetup.y = 0;
-	// viewSetup.width = 512;
-	// viewSetup.height = 512;
-	// viewSetup.fov = 90;
-	// viewSetup.origin = { 0, 0, 0 };
-	// viewSetup.angles = { 0, 0, 0 };
-	// viewSetup.zNear = 6;
-	// viewSetup.zFar = 4096;
+	// 正常情况下调用原函数
+	// Func.Original<FN>()(ecx, edx, setup, hudViewSetup, nClearFlags, whatToDraw);
 }
 
 void BaseClient::Init()
