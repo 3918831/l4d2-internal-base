@@ -44,42 +44,49 @@ void __fastcall BaseClient::RenderView::Detour(void* ecx, void* edx, CViewSetup&
 {
 	// 如果我们还没有捕获过这个指针，就现在捕获它
 	// 这个操作只会在游戏过程中发生一次
+
 	if (!g_pClient_this_ptr) {
 		g_pClient_this_ptr = ecx;
 	}
 
 	g_ViewSetup = setup;
 	g_hudViewSetup = hudViewSetup;
-	// 正常情况下调用原函数
-	Func.Original<FN>()(ecx, edx, setup, hudViewSetup, nClearFlags, whatToDraw);
-	return;
 
-
+#ifdef PLAN_B //PLAN_B: 指在RenderView中绘制纹理，在DrawModelExecute中使用模板测试和纹理来绘制传送门内的场景
 	// 检查是否在游戏中且需要渲染portal
 	if (I::EngineClient->IsInGame() && G::G_L4D2Portal.m_pMaterialSystem && G::G_L4D2Portal.m_pPortalTexture)
 	{
-		Func.Original<FN>()(ecx, edx, setup, hudViewSetup, nClearFlags, whatToDraw);
+
 		// 获取渲染上下文
 		IMatRenderContext* pRenderContext = G::G_L4D2Portal.m_pMaterialSystem->GetRenderContext();
 		if (pRenderContext)
 		{
 			// 保存当前渲染状态
-			 pRenderContext->PushRenderTargetAndViewport(G::G_L4D2Portal.m_pPortalTexture);
-			//pRenderContext->PushRenderTargetAndViewport();			
-				
+			//pRenderContext->PushRenderTargetAndViewport(G::G_L4D2Portal.m_pPortalTexture);
+			pRenderContext->PushRenderTargetAndViewport();			
+			pRenderContext->SetRenderTarget(G::G_L4D2Portal.m_pPortalTexture);
 			//pRenderContext->CopyRenderTargetToTextureEx(G::G_L4D2Portal.m_pPortalTexture, 0, NULL, NULL);
-			pRenderContext->ClearColor4ub(0, 0, 255, 255);
-			pRenderContext->ClearBuffers(true, false, false);
+			//pRenderContext->ClearColor4ub(0, 0, 255, 255);
+			//pRenderContext->ClearBuffers(true, false, false);
+
+			CViewSetup portalView = g_ViewSetup; // 创建一个副本进行修改
+			portalView.angles.y += 180.0f; // 仅修改副本
+			portalView.origin.x = 0.0f;
+			portalView.origin.y = 0.0f;
+			portalView.origin.z = 0.0f;
+
+			Func.Original<FN>()(ecx, edx, portalView, hudViewSetup, nClearFlags, whatToDraw & (~RENDERVIEW_DRAWVIEWMODEL) & (~RENDERVIEW_DRAWHUD));
 
 			// 恢复渲染状态
 			pRenderContext->PopRenderTargetAndViewport();
 			//return; // 直接返回，不执行原函数的完整渲染
 			//pRenderContext->DrawScreenSpaceQuad(G::G_L4D2Portal.m_pPortalMaterial);
-		}
+		}		
 	}
+#endif
 
 	// 正常情况下调用原函数
-	// Func.Original<FN>()(ecx, edx, setup, hudViewSetup, nClearFlags, whatToDraw);
+	Func.Original<FN>()(ecx, edx, setup, hudViewSetup, nClearFlags, whatToDraw);
 }
 
 void BaseClient::Init()

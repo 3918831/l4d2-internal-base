@@ -54,7 +54,7 @@ void __fastcall ModelRender::ForcedMaterialOverride::Detour(void* ecx, void* edx
     // 对于所有其他情况，正常调用原始函数
 	Table.Original<FN>(Index)(ecx, edx, newMaterial, nOverrideType);
 }
-
+#ifdef PLAN_A //PLAN_A: 指在DrawModelExecute中绘制模板，并紧接着反向调用原生的RenderView函数绘制场景，这种方案暂时无法规避传送门框永远在最前面的问题
 void __fastcall ModelRender::DrawModelExecute::Detour(void* ecx, void* edx, const DrawModelState_t& state, const ModelRenderInfo_t& pInfo, matrix3x4_t* pCustomBoneToWorld)
 {
     // 基础检查和递归保护
@@ -206,6 +206,90 @@ void __fastcall ModelRender::DrawModelExecute::Detour(void* ecx, void* edx, cons
     // 如果不是传送门模型，正常调用原始函数
     Table.Original<FN>(Index)(ecx, edx, state, pInfo, pCustomBoneToWorld);
 }
+#endif
+
+#ifdef PLAN_B
+void __fastcall ModelRender::DrawModelExecute::Detour(void* ecx, void* edx, const DrawModelState_t& state, const ModelRenderInfo_t& pInfo, matrix3x4_t* pCustomBoneToWorld)
+{
+    // 基础检查和递归保护
+    if (g_bDrawingPortalView || !I::EngineClient->IsInGame()) {
+        Table.Original<FN>(Index)(ecx, edx, state, pInfo, pCustomBoneToWorld);
+        return;
+    }
+
+    const char* modelName = I::ModelInfo->GetModelName(pInfo.pModel);
+    if (modelName && strcmp(modelName, "models/blackops/portal.mdl") == 0)
+    {
+        // ============================ FIX #1: 添加初始化保护 ============================
+        if (!g_pClient_this_ptr) {
+            Table.Original<FN>(Index)(ecx, edx, state, pInfo, pCustomBoneToWorld);
+            return;
+        }
+        // ==============================================================================
+
+        g_bDrawingPortalView = true;
+        IMatRenderContext* pRenderContext = G::G_L4D2Portal.m_pMaterialSystem->GetRenderContext();
+        IMaterial* g_pWriteStencilMaterial = I::MaterialSystem->FindMaterial("materials/dev/write_stencil", TEXTURE_GROUP_OTHER);
+
+        if (pRenderContext && g_pWriteStencilMaterial)
+        {
+            // --- 阶段 1: 绘制模板遮罩和深度 (完全遵循深度规则) ---
+            // (这部分代码与我们之前修正好的版本完全一致)
+            pRenderContext->OverrideDepthEnable(false, true); // 确保深度写入开启
+            I::ModelRender->ForcedMaterialOverride(g_pWriteStencilMaterial);
+            ShaderStencilState_t stencilState;
+            stencilState.m_bEnable = true;
+            stencilState.m_nReferenceValue = 1;
+            stencilState.m_CompareFunc = STENCILCOMPARISONFUNCTION_ALWAYS;
+            stencilState.m_PassOp = STENCILOPERATION_REPLACE;
+            stencilState.m_ZFailOp = STENCILOPERATION_KEEP; // 关键：被遮挡时不写入
+            stencilState.m_FailOp = STENCILOPERATION_KEEP;
+            pRenderContext->SetStencilState(stencilState);
+            Table.Original<FN>(Index)(ecx, edx, state, pInfo, pCustomBoneToWorld);
+            I::ModelRender->ForcedMaterialOverride(nullptr);
+
+            // --- 阶段 2: 将RTT纹理绘制在模板区域内 ---
+            if (G::G_L4D2Portal.m_pPortalMaterial && G::G_L4D2Portal.m_pPortalTexture)
+            {
+                // 设置模板，只在值为1的区域绘制
+                stencilState.m_bEnable = true;
+                stencilState.m_CompareFunc = STENCILCOMPARISONFUNCTION_EQUAL;
+                stencilState.m_PassOp = STENCILOPERATION_KEEP;
+                stencilState.m_ZFailOp = STENCILOPERATION_KEEP;
+                pRenderContext->SetStencilState(stencilState);
+
+                // 不需要深度，因为我们是画在2D屏幕上
+                pRenderContext->OverrideDepthEnable(true, false);
+
+                pRenderContext->DrawScreenSpaceQuad(G::G_L4D2Portal.m_pPortalMaterial);
+
+                // 恢复深度
+                pRenderContext->OverrideDepthEnable(false, true);
+            }
+
+            // --- 阶段 3: 使用“深度相等”材质绘制边框 ---
+            // (这部分代码与我们之前修正好的版本完全一致)
+            stencilState.m_bEnable = false;
+            pRenderContext->SetStencilState(stencilState);
+            IMaterial* pPortalFrameMaterial = I::MaterialSystem->FindMaterial("sprites/blborder", TEXTURE_GROUP_OTHER);
+            if (pPortalFrameMaterial)
+            {
+                I::ModelRender->ForcedMaterialOverride(pPortalFrameMaterial);
+                Table.Original<FN>(Index)(ecx, edx, state, pInfo, pCustomBoneToWorld);
+                I::ModelRender->ForcedMaterialOverride(nullptr);
+            }
+        }
+        g_bDrawingPortalView = false;
+        // ============================ FIX #2: 添加 return 避免二次绘制 ============================
+        return;
+        // ==============================================================================
+    }
+
+    // 如果不是传送门模型，正常调用原始函数
+    Table.Original<FN>(Index)(ecx, edx, state, pInfo, pCustomBoneToWorld);
+}
+#endif
+
 
 void ModelRender::Init()
 {
