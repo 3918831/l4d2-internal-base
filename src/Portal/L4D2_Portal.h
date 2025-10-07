@@ -26,6 +26,7 @@ public:
     ITexture* m_pPortalTexture_2;
 
     IMaterial* m_pPortalMaterial;
+    IMaterial* m_pPortalMaterial_2;
 
     IMaterialSystem* m_pMaterialSystem;
     Custom_IMaterialSystem* m_pCustomMaterialSystem;

@@ -166,8 +166,10 @@ void L4D2_Portal::PortalInit()
     printf("[Portal] Initialization completed\n\n");
     
     m_pPortalMaterial = g_pPortalMaterial;
+    m_pPortalMaterial_2 = g_pPortalMaterial_2;
     
     printf("[Portal] g_pPortalMaterial: %p\n", g_pPortalMaterial);
+    printf("[Portal] g_pPortalMaterial_2: %p\n", g_pPortalMaterial_2);
     printf("[Portal] m_pPortalTexture: %p\n", m_pPortalTexture);
     printf("[Portal] m_pMaterialSystem: %p\n", m_pMaterialSystem);
     printf("[Portal] m_pPortalMaterial: %p\n", m_pPortalMaterial);

@@ -208,7 +208,7 @@ void __fastcall ModelRender::DrawModelExecute::Detour(void* ecx, void* edx, cons
 }
 #endif
 
-#ifdef PLAN_B
+#ifdef PLAN_B_ORI
 void __fastcall ModelRender::DrawModelExecute::Detour(void* ecx, void* edx, const DrawModelState_t& state, const ModelRenderInfo_t& pInfo, matrix3x4_t* pCustomBoneToWorld)
 {
     // 基础检查和递归保护
@@ -290,6 +290,85 @@ void __fastcall ModelRender::DrawModelExecute::Detour(void* ecx, void* edx, cons
 }
 #endif
 
+#ifdef PLAN_B
+void __fastcall ModelRender::DrawModelExecute::Detour(void* ecx, void* edx, const DrawModelState_t& state, const ModelRenderInfo_t& pInfo, matrix3x4_t* pCustomBoneToWorld)
+{
+    // 基础检查和递归保护
+    if (g_bDrawingPortalView || !I::EngineClient->IsInGame() || !g_pClient_this_ptr) {
+        Table.Original<FN>(Index)(ecx, edx, state, pInfo, pCustomBoneToWorld);
+        return;
+    }
+
+    const char* modelName = I::ModelInfo->GetModelName(pInfo.pModel);
+
+    // --- 统一的传送门渲染逻辑 ---
+    bool isBluePortal = (modelName && strcmp(modelName, "models/blackops/portal.mdl") == 0);
+    bool isOrangePortal = (modelName && strcmp(modelName, "models/blackops/portal_og.mdl") == 0);
+
+    if (isBluePortal || isOrangePortal)
+    {
+        g_bDrawingPortalView = true;
+
+        IMatRenderContext* pRenderContext = G::G_L4D2Portal.m_pMaterialSystem->GetRenderContext();
+        IMaterial* g_pWriteStencilMaterial = I::MaterialSystem->FindMaterial("materials/dev/write_stencil", TEXTURE_GROUP_OTHER);
+
+        if (pRenderContext && g_pWriteStencilMaterial)
+        {
+            // 根据当前是哪个传送门，选择对应的材质
+            IMaterial* pPortalContentMaterial = isBluePortal ? G::G_L4D2Portal.m_pPortalMaterial : G::G_L4D2Portal.m_pPortalMaterial_2;
+            IMaterial* pPortalFrameMaterial = isBluePortal
+                ? I::MaterialSystem->FindMaterial("sprites/blborder", TEXTURE_GROUP_OTHER)
+                : I::MaterialSystem->FindMaterial("sprites/ogborder", TEXTURE_GROUP_OTHER);
+
+            // --- 阶段 1: 绘制模板遮罩 ---
+            // (这段模板测试逻辑本身是完美的，我们保持原样)
+            pRenderContext->OverrideDepthEnable(false, true);
+            I::ModelRender->ForcedMaterialOverride(g_pWriteStencilMaterial);
+
+            ShaderStencilState_t stencilState;
+            stencilState.m_bEnable = true;
+            stencilState.m_nReferenceValue = 1;
+            stencilState.m_CompareFunc = STENCILCOMPARISONFUNCTION_ALWAYS;
+            stencilState.m_PassOp = STENCILOPERATION_REPLACE;
+            stencilState.m_ZFailOp = STENCILOPERATION_KEEP;
+            stencilState.m_FailOp = STENCILOPERATION_KEEP;
+            pRenderContext->SetStencilState(stencilState);
+
+            Table.Original<FN>(Index)(ecx, edx, state, pInfo, pCustomBoneToWorld);
+            I::ModelRender->ForcedMaterialOverride(nullptr);
+
+            // --- 阶段 2: 将RTT纹理绘制在模板区域内 ---
+            if (pPortalContentMaterial)
+            {
+                stencilState.m_bEnable = true;
+                stencilState.m_CompareFunc = STENCILCOMPARISONFUNCTION_EQUAL;
+                stencilState.m_PassOp = STENCILOPERATION_KEEP;
+                pRenderContext->SetStencilState(stencilState);
+
+                pRenderContext->OverrideDepthEnable(true, false);
+                pRenderContext->DrawScreenSpaceQuad(pPortalContentMaterial);
+                pRenderContext->OverrideDepthEnable(false, true);
+            }
+
+            // --- 阶段 3: 绘制边框 ---
+            stencilState.m_bEnable = false;
+            pRenderContext->SetStencilState(stencilState);
+            if (pPortalFrameMaterial)
+            {
+                I::ModelRender->ForcedMaterialOverride(pPortalFrameMaterial);
+                Table.Original<FN>(Index)(ecx, edx, state, pInfo, pCustomBoneToWorld);
+                I::ModelRender->ForcedMaterialOverride(nullptr);
+            }
+        }
+
+        g_bDrawingPortalView = false;
+        return; // 处理完传送门后必须返回，防止默认绘制
+    }
+
+    // 如果不是传送门模型，正常调用原始函数
+    Table.Original<FN>(Index)(ecx, edx, state, pInfo, pCustomBoneToWorld);
+}
+#endif
 
 void ModelRender::Init()
 {
