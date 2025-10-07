@@ -1,5 +1,14 @@
 #pragma once
 #include "../SDK/L4D2/Interfaces/MaterialSystem.h"
+//#include "../Portal/public/vector.h"
+
+
+struct PortalInfo_t
+{
+    bool bIsActive = false; // 传送门是否已激活
+    Vector origin;          // 传送门在世界中的位置
+    QAngle angles;          // 传送门在世界中的朝向
+};
 
 class Custom_IMaterialSystem {
 public:
@@ -36,6 +45,9 @@ public:
     void CreatePortalMaterial();
     void CreatePortalTexture();
     void PortalShutdown();
+
+    PortalInfo_t g_BluePortal;
+    PortalInfo_t g_OrangePortal;
 };
 
 namespace G { inline L4D2_Portal G_L4D2Portal; }

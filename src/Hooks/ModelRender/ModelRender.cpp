@@ -305,6 +305,20 @@ void __fastcall ModelRender::DrawModelExecute::Detour(void* ecx, void* edx, cons
     bool isBluePortal = (modelName && strcmp(modelName, "models/blackops/portal.mdl") == 0);
     bool isOrangePortal = (modelName && strcmp(modelName, "models/blackops/portal_og.mdl") == 0);
 
+    if (isBluePortal) {
+        G::G_L4D2Portal.g_BluePortal.origin = pInfo.origin;
+        G::G_L4D2Portal.g_BluePortal.angles.x = pInfo.angles.x;
+        G::G_L4D2Portal.g_BluePortal.angles.y = pInfo.angles.y;
+        G::G_L4D2Portal.g_BluePortal.angles.z = pInfo.angles.z;
+    }
+
+    if (isOrangePortal) {
+        G::G_L4D2Portal.g_OrangePortal.origin = pInfo.origin;
+        G::G_L4D2Portal.g_OrangePortal.angles.x = pInfo.angles.x;
+        G::G_L4D2Portal.g_OrangePortal.angles.y = pInfo.angles.y;
+        G::G_L4D2Portal.g_OrangePortal.angles.z = pInfo.angles.z;
+    }
+
     if (isBluePortal || isOrangePortal)
     {
         g_bDrawingPortalView = true;

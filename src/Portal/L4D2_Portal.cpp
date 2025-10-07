@@ -8,7 +8,7 @@
 #include "../SDK/L4D2/Interfaces/ModelRender.h"
 //#include "../SDK/L4D2/KeyValues/KeyValues.h"
 #include "../SDK/L4D2/Entities/C_BasePlayer.h"
-#include "public/qAngle.h"
+//#include "public/qAngle.h"
 #include "L4D2_Portal.h"
 
 // ITexture* g_pPortalTexture = nullptr;

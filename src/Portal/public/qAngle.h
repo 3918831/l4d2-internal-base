@@ -2,7 +2,7 @@
 #ifndef QANGLE_H
 #define QANGLE_H
 
-#include "..\..\Util\Math\Vector\Vector.h"
+// #include "..\..\Util\Math\Vector\Vector.h"
 
 inline vec_t VectorLength(const Vector& v)
 {

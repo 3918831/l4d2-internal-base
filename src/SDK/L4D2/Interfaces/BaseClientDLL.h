@@ -20,7 +20,7 @@ public:
 	float fov; //0x0034
 	float fovViewmodel; //0x0038
 	Vector origin; //0x003C
-	Vector angles; //0x0048
+	QAngle angles; //0x0048
 	float zNear; //0x0054
 	float zFar; //0x0058
 	float zNearViewmodel; //0x005C
