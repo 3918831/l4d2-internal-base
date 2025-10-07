@@ -208,7 +208,7 @@ void __fastcall ModelRender::DrawModelExecute::Detour(void* ecx, void* edx, cons
 }
 #endif
 
-#ifdef PLAN_B_ORI
+#ifdef PLAN_B_ORI //单个传送门版本,功能正常暂不使用
 void __fastcall ModelRender::DrawModelExecute::Detour(void* ecx, void* edx, const DrawModelState_t& state, const ModelRenderInfo_t& pInfo, matrix3x4_t* pCustomBoneToWorld)
 {
     // 基础检查和递归保护
@@ -320,6 +320,9 @@ void __fastcall ModelRender::DrawModelExecute::Detour(void* ecx, void* edx, cons
                 ? I::MaterialSystem->FindMaterial("sprites/blborder", TEXTURE_GROUP_OTHER)
                 : I::MaterialSystem->FindMaterial("sprites/ogborder", TEXTURE_GROUP_OTHER);
 
+            // 【修复 A】为不同的传送门分配不同的模板ID
+            int stencilRefValue = isBluePortal ? 1 : 2;
+
             // --- 阶段 1: 绘制模板遮罩 ---
             // (这段模板测试逻辑本身是完美的，我们保持原样)
             pRenderContext->OverrideDepthEnable(false, true);
@@ -327,7 +330,7 @@ void __fastcall ModelRender::DrawModelExecute::Detour(void* ecx, void* edx, cons
 
             ShaderStencilState_t stencilState;
             stencilState.m_bEnable = true;
-            stencilState.m_nReferenceValue = 1;
+            stencilState.m_nReferenceValue = stencilRefValue; // 使用我们分配的唯一ID
             stencilState.m_CompareFunc = STENCILCOMPARISONFUNCTION_ALWAYS;
             stencilState.m_PassOp = STENCILOPERATION_REPLACE;
             stencilState.m_ZFailOp = STENCILOPERATION_KEEP;
@@ -351,6 +354,7 @@ void __fastcall ModelRender::DrawModelExecute::Detour(void* ecx, void* edx, cons
             }
 
             // --- 阶段 3: 绘制边框 ---
+            // 绘制边框前禁用模板测试，以免互相影响
             stencilState.m_bEnable = false;
             pRenderContext->SetStencilState(stencilState);
             if (pPortalFrameMaterial)
