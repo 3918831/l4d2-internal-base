@@ -12,8 +12,11 @@
 #include "L4D2_Portal.h"
 
 // ITexture* g_pPortalTexture = nullptr;
- //IMaterialSystem* g_pPortalMaterialSystem = nullptr;
- IMaterial* g_pPortalMaterial = nullptr;
+//IMaterialSystem* g_pPortalMaterialSystem = nullptr;
+IMaterial* g_pPortalMaterial = nullptr;
+IMaterial* g_pPortalMaterial_2 = nullptr;
+IMaterial* g_pPortalMaterial_3 = nullptr;
+
 
 void L4D2_Portal::CreatePortalTexture()
 {
@@ -33,6 +36,14 @@ void L4D2_Portal::CreatePortalTexture()
         MATERIAL_RT_DEPTH_SHARED,
         0,//TEXTUREFLAGS_NOMIP,
        CREATERENDERTARGETFLAGS_HDR);
+
+    m_pPortalTexture_2 = m_pMaterialSystem->CreateNamedRenderTargetTextureEx("_rt_Portal1Texture_2",
+        1, 1,
+        RT_SIZE_FULL_FRAME_BUFFER,
+        I::MaterialSystem->GetBackBufferFormat(), // or IMAGE_FORMAT_RGBA8888, 
+        MATERIAL_RT_DEPTH_SHARED,
+        0,//TEXTUREFLAGS_NOMIP,
+        CREATERENDERTARGETFLAGS_HDR);
     m_pMaterialSystem->EndRenderTargetAllocation();
 
     //m_pPortalTexture = m_pCustomMaterialSystem->CreateNamedRenderTargetEx("_rt_PortalTexture",
@@ -45,7 +56,7 @@ void L4D2_Portal::CreatePortalTexture()
 
     // m_pPortalTexture = m_pCustomMaterialSystem->CreateNamedRenderTargetEx("rt_test1", 4096, 4096, 0, 1, 0, true, false);
 
-    if (!m_pPortalTexture)
+    if (!m_pPortalTexture || !m_pPortalTexture_2)
     {
         printf("[Portal] Failed to create portal texture!\n");
         return;
@@ -66,8 +77,10 @@ void L4D2_Portal::CreatePortalMaterial()
 
     // 使用FindMaterial查找游戏内置材质
     g_pPortalMaterial = m_pMaterialSystem->FindMaterial("models/zimu/zimu1_hd/zimu1_hd", TEXTURE_GROUP_MODEL, true, nullptr);
+    g_pPortalMaterial_2 = m_pMaterialSystem->FindMaterial("models/zimu/zimu2_hd/zimu2_hd", TEXTURE_GROUP_MODEL, true, nullptr);
+    g_pPortalMaterial_3 = m_pMaterialSystem->FindMaterial("dev/write_stencil", TEXTURE_GROUP_OTHER);
 
-    if (!g_pPortalMaterial)
+    if (!g_pPortalMaterial || !g_pPortalMaterial_2 || !g_pPortalMaterial_3)
     {
         printf("[Portal] Failed to find portal material!\n");
         return;
@@ -77,13 +90,17 @@ void L4D2_Portal::CreatePortalMaterial()
 
     // 设置材质为可绘制状态
     g_pPortalMaterial->IncrementReferenceCount();
+    g_pPortalMaterial_2->IncrementReferenceCount();
+    g_pPortalMaterial_3->IncrementReferenceCount();
 
     // 查找并设置基础纹理参数
     IMaterialVar* pBaseTextureVar = g_pPortalMaterial->FindVar("$basetexture", NULL, false);
-    if (pBaseTextureVar)
+    IMaterialVar* pBaseTextureVar_2 = g_pPortalMaterial_2->FindVar("$basetexture", NULL, false);
+    if (pBaseTextureVar && pBaseTextureVar_2)
     {
         if (m_pPortalTexture) {
             pBaseTextureVar->SetTextureValue(m_pPortalTexture);
+            pBaseTextureVar_2->SetTextureValue(m_pPortalTexture_2);
             printf("[Portal] Set base texture to portal render target\n");
         } else {
             printf("[Portal] Failed to set base texture because portal texture is null\n");
@@ -93,9 +110,11 @@ void L4D2_Portal::CreatePortalMaterial()
     {
         // 尝试查找diffusemap作为替代
         pBaseTextureVar = g_pPortalMaterial->FindVar("$diffusemap", NULL, false);
-        if (pBaseTextureVar)
+        pBaseTextureVar_2 = g_pPortalMaterial_2->FindVar("$diffusemap", NULL, false);
+        if (pBaseTextureVar && pBaseTextureVar_2)
         {
             pBaseTextureVar->SetTextureValue(m_pPortalTexture);
+            pBaseTextureVar_2->SetTextureValue(m_pPortalTexture_2);
             printf("[Portal] Set diffuse map to portal render target\n");
         }
         else
@@ -147,17 +166,13 @@ void L4D2_Portal::PortalInit()
     printf("[Portal] Initialization completed\n\n");
     
     m_pPortalMaterial = g_pPortalMaterial;
-
-    m_pWriteStencilMaterial = m_pMaterialSystem->FindMaterial("materials/dev/write_stencil", TEXTURE_GROUP_MODEL, true, nullptr);
-
+    
     printf("[Portal] g_pPortalMaterial: %p\n", g_pPortalMaterial);
     printf("[Portal] m_pPortalTexture: %p\n", m_pPortalTexture);
     printf("[Portal] m_pMaterialSystem: %p\n", m_pMaterialSystem);
     printf("[Portal] m_pPortalMaterial: %p\n", m_pPortalMaterial);
     printf("[Portal] m_pCustomMaterialSystem: %p\n", m_pCustomMaterialSystem);
-    printf("[Portal] m_pWriteStencilMaterial: %p\n", m_pWriteStencilMaterial);
 
-    //RenderPortalFrame();
 }
 
 // 清理函数，在不需要传送门时调用

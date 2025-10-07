@@ -66,14 +66,16 @@ void __fastcall BaseClient::RenderView::Detour(void* ecx, void* edx, CViewSetup&
 			pRenderContext->PushRenderTargetAndViewport();			
 			pRenderContext->SetRenderTarget(G::G_L4D2Portal.m_pPortalTexture);
 			//pRenderContext->CopyRenderTargetToTextureEx(G::G_L4D2Portal.m_pPortalTexture, 0, NULL, NULL);
-			//pRenderContext->ClearColor4ub(0, 0, 255, 255);
-			//pRenderContext->ClearBuffers(true, false, false);
+			pRenderContext->Viewport(0, 0, setup.width, setup.height);
+			pRenderContext->ClearColor4ub(0, 0, 255, 255);
+			pRenderContext->ClearBuffers(true, false, false);
 
 			CViewSetup portalView = g_ViewSetup; // 创建一个副本进行修改
-			portalView.angles.y += 180.0f; // 仅修改副本
-			portalView.origin.x = 0.0f;
-			portalView.origin.y = 0.0f;
-			portalView.origin.z = 0.0f;
+			portalView.angles.y -= 90.0f; // 仅修改副本
+			portalView.origin = Vector(0.0f, -1000.0f, -57.96875f);
+			//portalView.origin.x = 0.0f;
+			//portalView.origin.y = -1000.0f;
+			//portalView.origin.z = -57.96875f;
 
 			Func.Original<FN>()(ecx, edx, portalView, hudViewSetup, nClearFlags, whatToDraw & (~RENDERVIEW_DRAWVIEWMODEL) & (~RENDERVIEW_DRAWHUD));
 
@@ -81,6 +83,29 @@ void __fastcall BaseClient::RenderView::Detour(void* ecx, void* edx, CViewSetup&
 			pRenderContext->PopRenderTargetAndViewport();
 			//return; // 直接返回，不执行原函数的完整渲染
 			//pRenderContext->DrawScreenSpaceQuad(G::G_L4D2Portal.m_pPortalMaterial);
+
+
+
+
+			
+			// ==================== 渲染第二个传送门 (例如橙色) ====================
+			{
+				pRenderContext->PushRenderTargetAndViewport();
+				pRenderContext->SetRenderTarget(G::G_L4D2Portal.m_pPortalTexture_2);
+
+				pRenderContext->Viewport(0, 0, setup.width, setup.height);
+				pRenderContext->ClearBuffers(true, true, true);
+
+				// 【核心修正】同样基于当前的、实时的 setup
+				CViewSetup portalView2 = setup;
+				// TODO: 将这里的临时代码替换为我们之前设计的 CalculatePortalView 函数
+				portalView2.angles.y += 90.0f;
+				portalView2.origin = Vector(0.0f, 1000.0f, -57.96875f);
+
+				Func.Original<FN>()(ecx, edx, portalView2, hudViewSetup, nClearFlags, whatToDraw & (~RENDERVIEW_DRAWVIEWMODEL) & (~RENDERVIEW_DRAWHUD));
+				pRenderContext->PopRenderTargetAndViewport();
+			}
+			
 		}		
 	}
 #endif

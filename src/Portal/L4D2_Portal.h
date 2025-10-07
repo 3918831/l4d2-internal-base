@@ -23,8 +23,11 @@ public:
 class L4D2_Portal {
 public:
     ITexture* m_pPortalTexture;
-    IMaterialSystem* m_pMaterialSystem;
+    ITexture* m_pPortalTexture_2;
+
     IMaterial* m_pPortalMaterial;
+
+    IMaterialSystem* m_pMaterialSystem;
     Custom_IMaterialSystem* m_pCustomMaterialSystem;
     IMaterial* m_pWriteStencilMaterial;
 
