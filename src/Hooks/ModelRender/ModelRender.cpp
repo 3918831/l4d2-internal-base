@@ -75,7 +75,7 @@ void __fastcall ModelRender::DrawModelExecute::Detour(void* ecx, void* edx, cons
 
         g_bDrawingPortalView = true;
         IMatRenderContext* pRenderContext = G::G_L4D2Portal.m_pMaterialSystem->GetRenderContext();
-        IMaterial* g_pWriteStencilMaterial = I::MaterialSystem->FindMaterial("materials/dev/write_stencil", TEXTURE_GROUP_OTHER);
+        IMaterial* g_pWriteStencilMaterial = I::MaterialSystem->FindMaterial("dev/write_stencil", TEXTURE_GROUP_OTHER);
 
         if (pRenderContext && g_pWriteStencilMaterial)
         {
@@ -133,7 +133,7 @@ void __fastcall ModelRender::DrawModelExecute::Detour(void* ecx, void* edx, cons
 
             /*
             // ============================ 修正后的：阶段 2.5 - 模板清理 ============================
-            IMaterial* pStencilClearMaterial = I::MaterialSystem->FindMaterial("materials/dev/stencil_clear", TEXTURE_GROUP_OTHER);
+            IMaterial* pStencilClearMaterial = I::MaterialSystem->FindMaterial("dev/stencil_clear", TEXTURE_GROUP_OTHER);
             if (pStencilClearMaterial)
             {
                 // 1. 设置模板状态，准备清空
@@ -229,7 +229,7 @@ void __fastcall ModelRender::DrawModelExecute::Detour(void* ecx, void* edx, cons
 
         g_bDrawingPortalView = true;
         IMatRenderContext* pRenderContext = G::G_L4D2Portal.m_pMaterialSystem->GetRenderContext();
-        IMaterial* g_pWriteStencilMaterial = I::MaterialSystem->FindMaterial("materials/dev/write_stencil", TEXTURE_GROUP_OTHER);
+        IMaterial* g_pWriteStencilMaterial = I::MaterialSystem->FindMaterial("dev/write_stencil", TEXTURE_GROUP_OTHER);
 
         if (pRenderContext && g_pWriteStencilMaterial)
         {
