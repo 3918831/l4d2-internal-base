@@ -100,6 +100,9 @@ public:
 	// Initialize from a 3x4
 	void		Init(const matrix3x4_t& matrix3x4);
 
+	// Transpose.
+	VMatrix		Transpose() const;
+
 	// array access
 	inline float* operator[](int i)
 	{
@@ -140,6 +143,34 @@ inline VMatrix::VMatrix()
 {
 }
 
+inline void VMatrix::Init(
+	vec_t m00, vec_t m01, vec_t m02, vec_t m03,
+	vec_t m10, vec_t m11, vec_t m12, vec_t m13,
+	vec_t m20, vec_t m21, vec_t m22, vec_t m23,
+	vec_t m30, vec_t m31, vec_t m32, vec_t m33
+)
+{
+	m[0][0] = m00;
+	m[0][1] = m01;
+	m[0][2] = m02;
+	m[0][3] = m03;
+
+	m[1][0] = m10;
+	m[1][1] = m11;
+	m[1][2] = m12;
+	m[1][3] = m13;
+
+	m[2][0] = m20;
+	m[2][1] = m21;
+	m[2][2] = m22;
+	m[2][3] = m23;
+
+	m[3][0] = m30;
+	m[3][1] = m31;
+	m[3][2] = m32;
+	m[3][3] = m33;
+}
+
 inline VMatrix::VMatrix(
 	vec_t m00, vec_t m01, vec_t m02, vec_t m03,
 	vec_t m10, vec_t m11, vec_t m12, vec_t m13,
@@ -153,6 +184,19 @@ inline VMatrix::VMatrix(
 		m30, m31, m32, m33
 	);
 }
+
+
+inline VMatrix VMatrix::Transpose() const
+{
+	return VMatrix(
+		m[0][0], m[1][0], m[2][0], m[3][0],
+		m[0][1], m[1][1], m[2][1], m[3][1],
+		m[0][2], m[1][2], m[2][2], m[3][2],
+		m[0][3], m[1][3], m[2][3], m[3][3]);
+}
+
+
+
 //using matrix3x4_t = float[3][4];
 //using VMatrix = float[4][4];
 

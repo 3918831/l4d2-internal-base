@@ -310,6 +310,7 @@ void __fastcall ModelRender::DrawModelExecute::Detour(void* ecx, void* edx, cons
         G::G_L4D2Portal.g_BluePortal.angles.x = pInfo.angles.x;
         G::G_L4D2Portal.g_BluePortal.angles.y = pInfo.angles.y;
         G::G_L4D2Portal.g_BluePortal.angles.z = pInfo.angles.z;
+        G::G_L4D2Portal.g_BluePortal.bIsActive = true;
     }
 
     if (isOrangePortal) {
@@ -317,6 +318,7 @@ void __fastcall ModelRender::DrawModelExecute::Detour(void* ecx, void* edx, cons
         G::G_L4D2Portal.g_OrangePortal.angles.x = pInfo.angles.x;
         G::G_L4D2Portal.g_OrangePortal.angles.y = pInfo.angles.y;
         G::G_L4D2Portal.g_OrangePortal.angles.z = pInfo.angles.z;
+        G::G_L4D2Portal.g_OrangePortal.bIsActive = true;
     }
 
     if (isBluePortal || isOrangePortal)

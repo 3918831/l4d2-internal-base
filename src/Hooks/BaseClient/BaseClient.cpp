@@ -9,8 +9,8 @@
 #include "../../SDK/L4D2/Includes/const.h"
 //#include "../../Portal/public/mathlib.h"
 
-CViewSetup g_ViewSetup;
-CViewSetup g_hudViewSetup;
+//CViewSetup g_ViewSetup;
+//CViewSetup g_hudViewSetup;
 void* g_pClient_this_ptr = nullptr; // 用于存储 RenderView 的真实 this 指针
 
 #ifndef RAD2DEG
@@ -378,8 +378,48 @@ void AngleVectors(const QAngle& angles, Vector* forward, Vector* right, Vector* 
 	}
 }
 
+
+FORCEINLINE vec_t DotProduct(const Vector& a, const Vector& b)
+{
+	return(a.x * b.x + a.y * b.y + a.z * b.z);
+}
+
+
+struct PortalViewResult_t
+{
+	CViewSetup viewSetup;
+	VMatrix    viewMatrix;
+};
+
+void VectorTransform(const float* in1, const matrix3x4_t& in2, float* out)
+{
+	assert(in1 != out);
+	out[0] = DotProduct(in1, in2[0]) + in2[0][3];
+	out[1] = DotProduct(in1, in2[1]) + in2[1][3];
+	out[2] = DotProduct(in1, in2[2]) + in2[2][3];
+}
+
+inline void VectorTransform(const Vector& in1, const matrix3x4_t& in2, Vector& out)
+{
+	VectorTransform(&in1.x, in2, &out.x);
+}
+
+float VectorNormalize(Vector& vec)
+{
+	float radius = sqrtf(vec.x * vec.x + vec.y * vec.y + vec.z * vec.z);
+
+	// FLT_EPSILON is added to the radius to eliminate the possibility of divide by zero.
+	float iradius = 1.f / (radius + FLT_EPSILON);
+
+	vec.x *= iradius;
+	vec.y *= iradius;
+	vec.z *= iradius;
+
+	return radius;
+}
+
 // 在你的代码顶部或常量定义文件中，定义一个偏移量
-const float PORTAL_CAMERA_OFFSET = 200.0f; // 你可以调整这个值，比如1.0, 2.0, 5.0等，找到最合适的大小
+const float PORTAL_CAMERA_OFFSET = 0.0f; // 你可以调整这个值，比如1.0, 2.0, 5.0等，找到最合适的大小
 
 /*
  * 计算传送门虚拟摄像机的视角
@@ -390,59 +430,49 @@ const float PORTAL_CAMERA_OFFSET = 200.0f; // 你可以调整这个值，比如1
  */
 CViewSetup CalculatePortalView(const CViewSetup& playerView, const PortalInfo_t* pEntrancePortal, const PortalInfo_t* pExitPortal)
 {
-	// --- 1. 获取所有参与者的世界变换矩阵 ---
-	matrix3x4_t playerMatrix, entranceMatrix, exitMatrix;
-	AngleMatrix(playerView.angles, playerView.origin, playerMatrix);
+	// 1. 预计算“入口到出口”的变换矩阵
+	matrix3x4_t entranceMatrix, exitMatrix, entranceMatrixInverse, thisToLinkedMatrix;
+	matrix3x4_t mat_180_Z_Rot;
+	SetIdentityMatrix(mat_180_Z_Rot);
+	mat_180_Z_Rot[0][0] = -1.0f;
+	mat_180_Z_Rot[1][1] = -1.0f;
+
 	AngleMatrix(pEntrancePortal->angles, pEntrancePortal->origin, entranceMatrix);
 	AngleMatrix(pExitPortal->angles, pExitPortal->origin, exitMatrix);
 
-	// --- 2. 计算入口传送门矩阵的逆矩阵 ---
-	matrix3x4_t entranceMatrixInverse;
 	MatrixInverse(entranceMatrix, entranceMatrixInverse);
 
-	// --- 3. 定义一个围绕Z轴旋转180度的“镜像”矩阵 ---
-	matrix3x4_t flipMatrix;
-	SetIdentityMatrix(flipMatrix);
-	flipMatrix[0][0] = -1.0f;
-	flipMatrix[1][1] = -1.0f;
+	matrix3x4_t tempMatrix;
+	ConcatTransforms(mat_180_Z_Rot, entranceMatrixInverse, tempMatrix);
+	ConcatTransforms(exitMatrix, tempMatrix, thisToLinkedMatrix);
 
-	// --- 4. 核心矩阵运算： Final = Exit * Flip * Entrance_Inverse * Player ---
-	matrix3x4_t tempMatrix, finalMatrix;
-	ConcatTransforms(entranceMatrixInverse, playerMatrix, tempMatrix); // temp = Entrance_Inverse * Player
-	ConcatTransforms(flipMatrix, tempMatrix, tempMatrix);              // temp = Flip * temp
-	ConcatTransforms(exitMatrix, tempMatrix, finalMatrix);             // final = Exit * temp
+	// 2. 直接复制 playerView，以此为基础进行修改
+	CViewSetup portalView = playerView;
 
-	// --- 5. 从零开始构建一个纯净的 CViewSetup，防止任何状态污染 ---
-	CViewSetup portalView;
-	memset(&portalView, 0, sizeof(CViewSetup));
+	// 3. 变换 origin
+	VectorTransform(playerView.origin, thisToLinkedMatrix, portalView.origin);
 
-	// 从原始玩家视角中复制绝对安全的参数
-	portalView.width = playerView.width;
-	portalView.height = playerView.height;
-	portalView.fov = playerView.fov;
-	portalView.zNear = playerView.zNear;
-	portalView.zFar = playerView.zFar;
-	portalView.m_flAspectRatio = (float)portalView.width / (float)portalView.height;
+	// 4. 变换 angles
+	matrix3x4_t playerAnglesMatrix, newAnglesMatrix;
+	AngleMatrix(playerView.angles, playerAnglesMatrix);
+	ConcatTransforms(thisToLinkedMatrix, playerAnglesMatrix, newAnglesMatrix);
+	MatrixAngles(newAnglesMatrix, portalView.angles);
 
-	// 从我们最终计算出的矩阵中提取新的位置和角度
-	MatrixGetColumn(finalMatrix, 3, portalView.origin);
-	MatrixAngles(finalMatrix, portalView.angles);
+	// 5. 确保 zNear 不小于引擎允许的最小值
+	if (portalView.zNear < 1.0f) {
+		portalView.zNear = 1.0f;
+	}
 
-	// ============================ 新增的位置偏移修正 ============================
-	// 1. 获取出口传送门的前进方向向量
-	Vector exitForward;
-	AngleVectors(pExitPortal->angles, &exitForward, nullptr, nullptr);
+	// 6. 【核心修正】将虚拟摄像机沿出口法线方向稍微向前推，以进入有效的Visleaf
+	// 这是解决黑天、全亮模型和渲染缺失问题的关键
+	Vector exitPortalNormal;
+	AngleVectors(pExitPortal->angles, &exitPortalNormal, nullptr, nullptr);
 
-	// 2. 将计算出的摄像机位置，沿着出口方向向前推一小段距离
-	//    这使得摄像机刚好“离开”墙壁，进入到可渲染的区域内
-	portalView.origin += exitForward * PORTAL_CAMERA_OFFSET;
-	// ==========================================================================
-
+	// 将摄像机向前推动一个很小的单位（例如 1.0f），确保它在传送门“外面”
+	portalView.origin += exitPortalNormal * 1.0f;
 
 	return portalView;
 }
-
-
 
 using namespace Hooks;
 
@@ -476,76 +506,114 @@ void __fastcall BaseClient::FrameStageNotify::Detour(void* ecx, void* edx, Clien
 //extern bool g_bIsRenderingPortalTexture;
 void __fastcall BaseClient::RenderView::Detour(void* ecx, void* edx, CViewSetup& setup, CViewSetup& hudViewSetup, int nClearFlags, int whatToDraw)
 {
-	// 如果我们还没有捕获过这个指针，就现在捕获它
-	// 这个操作只会在游戏过程中发生一次
-
 	if (!g_pClient_this_ptr) {
 		g_pClient_this_ptr = ecx;
 	}
-
-	g_ViewSetup = setup;
-	g_hudViewSetup = hudViewSetup;
-
-#ifdef PLAN_B //PLAN_B: 指在RenderView中绘制纹理，在DrawModelExecute中使用模板测试和纹理来绘制传送门内的场景
-	// 检查是否在游戏中且需要渲染portal
-	if (I::EngineClient->IsInGame() && G::G_L4D2Portal.m_pMaterialSystem 
-		&& G::G_L4D2Portal.m_pPortalTexture && G::G_L4D2Portal.m_pPortalTexture_2)
+#ifdef PLAN_B
+	// 只有在游戏内且传送门系统初始化后才执行
+	if (I::EngineClient->IsInGame() && G::G_L4D2Portal.m_pMaterialSystem
+		&& G::G_L4D2Portal.m_pPortalTexture && G::G_L4D2Portal.m_pPortalTexture_2
+		&& G::G_L4D2Portal.g_BluePortal.bIsActive && G::G_L4D2Portal.g_OrangePortal.bIsActive)
 	{
-
-		// 获取渲染上下文
 		IMatRenderContext* pRenderContext = G::G_L4D2Portal.m_pMaterialSystem->GetRenderContext();
 		if (pRenderContext)
 		{
-			// ==================== 渲染第一个传送门 (例如蓝色) ====================
-			//pRenderContext->PushRenderTargetAndViewport(G::G_L4D2Portal.m_pPortalTexture);
-			pRenderContext->PushRenderTargetAndViewport();			
-			pRenderContext->SetRenderTarget(G::G_L4D2Portal.m_pPortalTexture);
-			//pRenderContext->CopyRenderTargetToTextureEx(G::G_L4D2Portal.m_pPortalTexture, 0, NULL, NULL);
-			pRenderContext->Viewport(0, 0, setup.width, setup.height);
-			pRenderContext->ClearColor4ub(0, 0, 255, 255);
-			pRenderContext->ClearBuffers(true, false, false);
-
-			//CViewSetup portalView = g_ViewSetup; // 创建一个副本进行修改
-			//portalView.angles.y -= 90.0f; // 仅修改副本
-			//portalView.origin = Vector(0.0f, -1000.0f, -57.96875f);
-
-			// 动态计算视角：玩家 -> 看向蓝门 -> 从橙门看出去
-			CViewSetup portalView = CalculatePortalView(setup, &G::G_L4D2Portal.g_BluePortal, &G::G_L4D2Portal.g_OrangePortal);
-
-			Func.Original<FN>()(ecx, edx, portalView, hudViewSetup, nClearFlags, whatToDraw & (~RENDERVIEW_DRAWVIEWMODEL) & (~RENDERVIEW_DRAWHUD));
-
-			// 恢复渲染状态
-			pRenderContext->PopRenderTargetAndViewport();
-			//return; // 直接返回，不执行原函数的完整渲染
-			//pRenderContext->DrawScreenSpaceQuad(G::G_L4D2Portal.m_pPortalMaterial);
-
-
-			// ==================== 渲染第二个传送门 (例如橙色) ====================
+			// --- 渲染蓝门内的场景 (裁剪平面在橙门) ---
 			{
-				pRenderContext->PushRenderTargetAndViewport();
-				pRenderContext->SetRenderTarget(G::G_L4D2Portal.m_pPortalTexture_2);
+				// 边界条件检查: 玩家必须在蓝门前方且大致朝向蓝门
+				// (这部分逻辑是好的优化，保持)
+				Vector vPlayerFwd, vBluePortalFwd, vToPlayer;
+				AngleVectors(setup.angles, &vPlayerFwd, nullptr, nullptr);
+				AngleVectors(G::G_L4D2Portal.g_BluePortal.angles, &vBluePortalFwd, nullptr, nullptr);
+				vToPlayer = setup.origin - G::G_L4D2Portal.g_BluePortal.origin;
+				VectorNormalize(vToPlayer); // 归一化以获得纯方向
 
-				pRenderContext->Viewport(0, 0, setup.width, setup.height);
-				pRenderContext->ClearBuffers(true, true, true);
+				if (/*DotProduct(vToPlayer, vBluePortalFwd) >= 0.0f*/ true)
+				{
+					pRenderContext->PushRenderTargetAndViewport();
+					pRenderContext->SetRenderTarget(G::G_L4D2Portal.m_pPortalTexture);
+					pRenderContext->Viewport(0, 0, setup.width, setup.height);
+					pRenderContext->ClearBuffers(true, true, true);
 
-				// 【核心修正】同样基于当前的、实时的 setup
-				//CViewSetup portalView2 = setup;
-				// TODO: 将这里的临时代码替换为我们之前设计的 CalculatePortalView 函数
-				//portalView2.angles.y += 90.0f;
-				//portalView2.origin = Vector(0.0f, 1000.0f, -57.96875f);
+					// --- 定义出口（橙门）的裁剪平面 ---
+					Vector exitNormal_O;
+					AngleVectors(G::G_L4D2Portal.g_OrangePortal.angles, &exitNormal_O, nullptr, nullptr);
 
-				// 动态计算视角：玩家 -> 看向橙门 -> 从蓝门看出去
-				CViewSetup portalView2 = CalculatePortalView(setup, &G::G_L4D2Portal.g_OrangePortal, &G::G_L4D2Portal.g_BluePortal);
+					float clipPlane_O[4];
+					clipPlane_O[0] = exitNormal_O.x;
+					clipPlane_O[1] = exitNormal_O.y;
+					clipPlane_O[2] = exitNormal_O.z;
 
-				Func.Original<FN>()(ecx, edx, portalView2, hudViewSetup, nClearFlags, whatToDraw & (~RENDERVIEW_DRAWVIEWMODEL) & (~RENDERVIEW_DRAWHUD));
-				pRenderContext->PopRenderTargetAndViewport();
+					// 【核心修正】修正 D 值的计算，遵循 n·p - d = 0 的形式
+					// d = n·p，并加入一个小的偏移量防止瑕疵
+					clipPlane_O[3] = DotProduct(G::G_L4D2Portal.g_OrangePortal.origin, exitNormal_O) - 0.5f;
+
+					CViewSetup portalView = CalculatePortalView(setup, &G::G_L4D2Portal.g_BluePortal, &G::G_L4D2Portal.g_OrangePortal);
+
+					pRenderContext->PushCustomClipPlane(clipPlane_O);
+					pRenderContext->EnableClipping(true);
+
+
+					//I::RenderView->Push3DView(pRenderContext, &portalView, 0, G::G_L4D2Portal.m_pPortalTexture, &G::G_L4D2Portal.m_Frustum);
+					// 递归调用原函数进行渲染, 不渲染玩家模型和HUD
+					Func.Original<FN>()(ecx, edx, portalView, hudViewSetup, nClearFlags, whatToDraw & (~RENDERVIEW_DRAWVIEWMODEL) & (~RENDERVIEW_DRAWHUD));
+					//I::RenderView->PopView(pRenderContext, &G::G_L4D2Portal.m_Frustum);
+
+
+					pRenderContext->EnableClipping(false);
+					pRenderContext->PopCustomClipPlane();
+					pRenderContext->PopRenderTargetAndViewport();
+				}
 			}
-			
-		}		
+
+			// --- 渲染橙门内的场景 (裁剪平面在蓝门) ---
+			{
+				// 对橙门执行相同的边界条件检查
+				Vector vPlayerFwd, vOrangePortalFwd, vToPlayer;
+				AngleVectors(setup.angles, &vPlayerFwd, nullptr, nullptr);
+				AngleVectors(G::G_L4D2Portal.g_OrangePortal.angles, &vOrangePortalFwd, nullptr, nullptr);
+				vToPlayer = setup.origin - G::G_L4D2Portal.g_OrangePortal.origin;
+				VectorNormalize(vToPlayer);
+
+				if (/*DotProduct(vToPlayer, vOrangePortalFwd) >= 0.0f*/ true)
+				{
+					pRenderContext->PushRenderTargetAndViewport();
+					pRenderContext->SetRenderTarget(G::G_L4D2Portal.m_pPortalTexture_2);
+					pRenderContext->Viewport(0, 0, setup.width, setup.height);
+					pRenderContext->ClearBuffers(true, true, true);
+
+					// --- 定义出口（蓝门）的裁剪平面 ---
+					Vector exitNormal_B;
+					AngleVectors(G::G_L4D2Portal.g_BluePortal.angles, &exitNormal_B, nullptr, nullptr);
+
+					float clipPlane_B[4];
+					clipPlane_B[0] = exitNormal_B.x;
+					clipPlane_B[1] = exitNormal_B.y;
+					clipPlane_B[2] = exitNormal_B.z;
+
+					// 【核心修正】修正 D 值的计算
+					clipPlane_B[3] = DotProduct(G::G_L4D2Portal.g_BluePortal.origin, exitNormal_B) - 0.5f;
+
+					CViewSetup portalView2 = CalculatePortalView(setup, &G::G_L4D2Portal.g_OrangePortal, &G::G_L4D2Portal.g_BluePortal);
+
+
+					pRenderContext->PushCustomClipPlane(clipPlane_B);
+					pRenderContext->EnableClipping(true);
+
+
+					//I::RenderView->Push3DView(pRenderContext, &portalView2, 0, G::G_L4D2Portal.m_pPortalTexture_2, &G::G_L4D2Portal.m_Frustum);
+					Func.Original<FN>()(ecx, edx, portalView2, hudViewSetup, nClearFlags, whatToDraw & (~RENDERVIEW_DRAWVIEWMODEL) & (~RENDERVIEW_DRAWHUD));
+					//I::RenderView->PopView(pRenderContext, &G::G_L4D2Portal.m_Frustum);
+
+					pRenderContext->EnableClipping(false);
+					pRenderContext->PopCustomClipPlane();
+					pRenderContext->PopRenderTargetAndViewport();
+				}
+			}
+		}
 	}
 #endif
-
-	// 正常情况下调用原函数
+	// 正常情况下调用原函数，渲染玩家的主视角
 	Func.Original<FN>()(ecx, edx, setup, hudViewSetup, nClearFlags, whatToDraw);
 }
 
