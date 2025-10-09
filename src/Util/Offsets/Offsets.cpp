@@ -1,4 +1,7 @@
+
+#include <iostream>
 #include "Offsets.h"
+#include "../../Portal/CustomRender.h"
 
 void CUtil_Offsets::Init()
 {
@@ -57,7 +60,21 @@ void CUtil_Offsets::Init()
 	XASSERT(m_dwMoveHelper == 0x0);
 	XASSERT(m_dwRandomSeed == 0x0);
 
-	//自行添加的hook
+	//自行添加的Hook
 	m_dwRenderView = U::Pattern.Find(_("client.dll"), _("55 8B EC 81 EC ? ? ? ? 53 56 57 8B D9"));
 	XASSERT(m_dwRenderView == 0x0);
+
+	//自行再次添加的Hook
+	I::CustomRender = *(IRender**)*(DWORD*)(U::Pattern.Find("client.dll", Sigs_RenderInstance) + 0x2);	
+	if (I::CustomRender) {
+		std::cout << "[Offsets]CustomRender: " << I::CustomRender << std::endl;
+		I::CustomRender->Init();
+	}	
+
+	I::CustomView = *(ITerrorViewRender**)*(DWORD*)(U::Pattern.Find("client.dll", Sigs_TerrorViewRenderInstance) + 0x2);
+	if (I::CustomView) {
+		std::cout << "[Offsets]CustomView: " << I::CustomView << std::endl;
+		I::CustomView->Init();
+	}
+
 }

@@ -13,55 +13,6 @@ enum
     FRUSTUM_NUMPLANES = 6
 };
 
-//inline int SignbitsForPlane(cplane_t* out)
-//{
-//    int	bits, j;
-//
-//    // for fast box on planeside test
-//
-//    bits = 0;
-//    for (j = 0; j < 3; j++)
-//    {
-//        if (out->normal[j] < 0)
-//            bits |= 1 << j;
-//    }
-//    return bits;
-//}
-//
-//class Frustum_t
-//{
-//public:
-//    void SetPlane(int i, int nType, const Vector& vecNormal, float dist)
-//    {
-//        m_Plane[i].normal = vecNormal;
-//        m_Plane[i].dist = dist;
-//        m_Plane[i].type = nType;
-//        m_Plane[i].signbits = SignbitsForPlane(&m_Plane[i]);
-//        m_AbsNormal[i].Init(fabs(vecNormal.x), fabs(vecNormal.y), fabs(vecNormal.z));
-//    }
-//
-//    inline const cplane_t* GetPlane(int i) const { return &m_Plane[i]; }
-//    inline const Vector& GetAbsNormal(int i) const { return m_AbsNormal[i]; }
-//
-//private:
-//    cplane_t	m_Plane[FRUSTUM_NUMPLANES];
-//    Vector		m_AbsNormal[FRUSTUM_NUMPLANES];
-//};
-
-// 1. 定义 cplane_t 结构体
-//struct cplane_t
-//{
-//    Vector	normal;
-//    float	dist;
-//    byte	type;
-//    byte	signbits;
-//    byte	pad[2];
-//};
-
-// 2. 定义 Frustum_t 为一个 cplane_t 数组的类型别名
-typedef cplane_t Frustum_t[FRUSTUM_NUMPLANES];
-
-
 struct PortalInfo_t
 {
     bool bIsActive = false; // 传送门是否已激活
@@ -108,7 +59,7 @@ public:
     PortalInfo_t g_BluePortal;
     PortalInfo_t g_OrangePortal;
 
-    Frustum_t m_Frustum;
+    //Frustum_t m_Frustum;
 };
 
 namespace G { inline L4D2_Portal G_L4D2Portal; }

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <assert.h>
 #include "Vector2D.h"
 
 #define M_RADPI		57.295779513082f

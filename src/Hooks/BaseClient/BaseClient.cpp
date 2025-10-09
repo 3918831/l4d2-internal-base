@@ -469,7 +469,7 @@ CViewSetup CalculatePortalView(const CViewSetup& playerView, const PortalInfo_t*
 	AngleVectors(pExitPortal->angles, &exitPortalNormal, nullptr, nullptr);
 
 	// 将摄像机向前推动一个很小的单位（例如 1.0f），确保它在传送门“外面”
-	portalView.origin += exitPortalNormal * 1.0f;
+	portalView.origin += exitPortalNormal * 2.0f;
 
 	return portalView;
 }
@@ -554,10 +554,20 @@ void __fastcall BaseClient::RenderView::Detour(void* ecx, void* edx, CViewSetup&
 					pRenderContext->EnableClipping(true);
 
 
+					VisibleFogVolumeInfo_t fog_1;
+					I::CustomRender->GetVisibleFogVolumeInfo(G::G_L4D2Portal.g_OrangePortal.origin, fog_1);
+					WaterRenderInfo_t water_1;
+					I::CustomView->DetermineWaterRenderInfo(&fog_1, &water_1);
+
+
 					//I::RenderView->Push3DView(pRenderContext, &portalView, 0, G::G_L4D2Portal.m_pPortalTexture, &G::G_L4D2Portal.m_Frustum);
+					I::CustomRender->Push3DView(portalView, 0, G::G_L4D2Portal.m_pPortalTexture, I::CustomView->GetFrustum(), nullptr);
 					// 递归调用原函数进行渲染, 不渲染玩家模型和HUD
-					Func.Original<FN>()(ecx, edx, portalView, hudViewSetup, nClearFlags, whatToDraw & (~RENDERVIEW_DRAWVIEWMODEL) & (~RENDERVIEW_DRAWHUD));
+					//Func.Original<FN>()(ecx, edx, portalView, hudViewSetup, nClearFlags, whatToDraw & (~RENDERVIEW_DRAWVIEWMODEL) & (~RENDERVIEW_DRAWHUD));
+					//Func.Original<FN>()(ecx, edx, portalView, hudViewSetup, 0, RENDERVIEW_UNSPECIFIED);
+					I::CustomView->DrawWorldAndEntities(true, portalView, nClearFlags, &fog_1, &water_1);
 					//I::RenderView->PopView(pRenderContext, &G::G_L4D2Portal.m_Frustum);
+					I::CustomRender->PopView(I::CustomView->GetFrustum());
 
 
 					pRenderContext->EnableClipping(false);
@@ -600,10 +610,18 @@ void __fastcall BaseClient::RenderView::Detour(void* ecx, void* edx, CViewSetup&
 					pRenderContext->PushCustomClipPlane(clipPlane_B);
 					pRenderContext->EnableClipping(true);
 
+					VisibleFogVolumeInfo_t fog_2;
+					I::CustomRender->GetVisibleFogVolumeInfo(G::G_L4D2Portal.g_OrangePortal.origin, fog_2);
+					WaterRenderInfo_t water_2;
+					I::CustomView->DetermineWaterRenderInfo(&fog_2, &water_2);
 
 					//I::RenderView->Push3DView(pRenderContext, &portalView2, 0, G::G_L4D2Portal.m_pPortalTexture_2, &G::G_L4D2Portal.m_Frustum);
-					Func.Original<FN>()(ecx, edx, portalView2, hudViewSetup, nClearFlags, whatToDraw & (~RENDERVIEW_DRAWVIEWMODEL) & (~RENDERVIEW_DRAWHUD));
+					I::CustomRender->Push3DView(portalView2, 0, G::G_L4D2Portal.m_pPortalTexture_2, I::CustomView->GetFrustum(), nullptr);
+					//Func.Original<FN>()(ecx, edx, portalView2, hudViewSetup, nClearFlags, whatToDraw & (~RENDERVIEW_DRAWVIEWMODEL) & (~RENDERVIEW_DRAWHUD));
+					//Func.Original<FN>()(ecx, edx, portalView2, hudViewSetup, 0, RENDERVIEW_UNSPECIFIED);
+					I::CustomView->DrawWorldAndEntities(true, portalView2, nClearFlags, &fog_2, &water_2);
 					//I::RenderView->PopView(pRenderContext, &G::G_L4D2Portal.m_Frustum);
+					I::CustomRender->PopView(I::CustomView->GetFrustum());
 
 					pRenderContext->EnableClipping(false);
 					pRenderContext->PopCustomClipPlane();

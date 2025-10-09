@@ -209,6 +209,7 @@
     <ClInclude Include="Hooks\TerrorGameRules\TerrorGameRules.h" />
     <ClInclude Include="Hooks\TerrorPlayer\TerrorPlayer.h" />
     <ClInclude Include="Hooks\WndProc\WndProc.h" />
+    <ClInclude Include="Portal\CustomRender.h" />
     <ClInclude Include="Portal\L4D2_Portal.h" />
     <ClInclude Include="SDK\DrawManager\DrawManager.h" />
     <ClInclude Include="SDK\GameUtil\GameUtil.h" />
