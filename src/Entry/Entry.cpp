@@ -1,6 +1,6 @@
+#include <iostream>
 #include "Entry.h"
 #include "../SDK/L4D2/Interfaces/ICvar.h"
-#include <iostream>
 #include "../Portal/L4D2_Portal.h"
 
 void CGlobal_ModuleEntry::Run()

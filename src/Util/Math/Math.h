@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <assert.h>
 
@@ -11,6 +11,47 @@
 #ifdef max
 #undef max
 #endif
+
+#ifndef RAD2DEG
+#define RAD2DEG( x  )  ( (float)(x) * (float)(180.f / M_PI_F) )
+#endif
+
+#ifndef DEG2RAD
+#define DEG2RAD( x  )  ( (float)(x) * (float)(M_PI_F / 180.f) )
+#endif
+
+enum
+{
+	PITCH = 0,	// up / down
+	YAW,		// left / right
+	ROLL		// fall over
+};
+
+// From L4D2VR
+class CViewSetup
+{
+public:
+	int32_t x; //0x0000
+	int32_t m_nUnscaledX; //0x0004
+	int32_t y; //0x0008
+	int32_t m_nUnscaledY; //0x000C
+	int32_t width; //0x0010
+	int32_t m_nUnscaledWidth; //0x0014
+	int32_t height; //0x0018
+	int32_t m_nUnscaledHeight; //0x001C
+	char pad_0020[20]; //0x0020
+	float fov; //0x0034
+	float fovViewmodel; //0x0038
+	Vector origin; //0x003C
+	QAngle angles; //0x0048
+	float zNear; //0x0054
+	float zFar; //0x0058
+	float zNearViewmodel; //0x005C
+	float zFarViewmodel; //0x0060
+	float m_flAspectRatio; //0x0064
+	char pad_0068[1660]; //0x0068
+}; //Size: 0x06E4
+static_assert(sizeof(CViewSetup) == 0x6E4);
 
 
 struct matrix3x4_t
@@ -50,16 +91,6 @@ struct matrix3x4_t
 		Init(xAxis, yAxis, zAxis, vecOrigin);
 	}
 
-	//inline void Invalidate(void)
-	//{
-	//	for (int i = 0; i < 3; i++)
-	//	{
-	//		for (int j = 0; j < 4; j++)
-	//		{
-	//			m_flMatVal[i][j] = VEC_T_NAN;
-	//		}
-	//	}
-	//}
 
 	float* operator[](int i) { assert((i >= 0) && (i < 3)); return m_flMatVal[i]; }
 	const float* operator[](int i) const { assert((i >= 0) && (i < 3)); return m_flMatVal[i]; }
@@ -195,7 +226,25 @@ inline VMatrix VMatrix::Transpose() const
 		m[0][3], m[1][3], m[2][3], m[3][3]);
 }
 
+void inline SinCos(float radians, float* sine, float* cosine)
+{
+	_asm
+	{
+		fld	DWORD PTR[radians]
+		fsincos
 
+		mov edx, DWORD PTR[cosine]
+		mov eax, DWORD PTR[sine]
+
+		fstp DWORD PTR[edx]
+		fstp DWORD PTR[eax]
+	}
+}
+
+FORCEINLINE vec_t DotProduct(const Vector& a, const Vector& b)
+{
+	return(a.x * b.x + a.y * b.y + a.z * b.z);
+}
 
 //using matrix3x4_t = float[3][4];
 //using VMatrix = float[4][4];
@@ -216,6 +265,39 @@ public:
 
 	Vector GetAngleToPosition(const Vector vFrom, const Vector vTo);
 
+	// ==============================================================================
+	// 自行添加的Math相关函数
+	float FloatMakePositive(vec_t f);
+	bool MatrixInverseGeneral(const VMatrix& src, VMatrix& dst);
+
+	// 这是一个我们自己实现的 "包装" 函数，提供了我们需要的签名
+	bool MatrixInverse(const matrix3x4_t& src, matrix3x4_t& dst);
+
+	void MatrixGetColumn(const matrix3x4_t& in, int column, Vector& out);
+	void MatrixAngles(const matrix3x4_t& matrix, float* angles);
+	inline void MatrixAngles(const matrix3x4_t& matrix, QAngle& angles)
+	{
+		MatrixAngles(matrix, &angles.x);
+	}
+	void MatrixCopy(const matrix3x4_t& in, matrix3x4_t& out);
+	void ConcatTransforms(const matrix3x4_t& in1, const matrix3x4_t& in2, matrix3x4_t& out);
+	void AngleMatrix(const QAngle& angles, matrix3x4_t& matrix);
+	void MatrixSetColumn(const Vector& in, int column, matrix3x4_t& out);
+	void AngleMatrix(const QAngle& angles, const Vector& position, matrix3x4_t& matrix);
+	void SetIdentityMatrix(matrix3x4_t& matrix);
+	void AngleVectors(const QAngle& angles, Vector* forward, Vector* right, Vector* up);
+	void VectorTransform(const float* in1, const matrix3x4_t& in2, float* out);
+	//inline void VectorTransform(const Vector& in1, const matrix3x4_t& in2, Vector& out)
+	//{
+	//	VectorTransform(&in1.x, in2, &out.x);
+	//}
+	float VectorNormalize(Vector& vec);
+
+
+
+	// 自行添加的Math相关函数
+	// ==============================================================================
+	
 public:
 	template<typename T>
 	inline T Clamp(const T val, const T min, const T max) {

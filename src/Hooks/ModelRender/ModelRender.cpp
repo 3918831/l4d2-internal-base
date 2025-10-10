@@ -373,10 +373,30 @@ void __fastcall ModelRender::DrawModelExecute::Detour(void* ecx, void* edx, cons
             // 绘制边框前禁用模板测试，以免互相影响
             stencilState.m_bEnable = false;
             pRenderContext->SetStencilState(stencilState);
+
+            //pRenderContext->OverrideDepthEnable(true, true);
+
             if (pPortalFrameMaterial)
             {
+
+                // 复制当前的变换矩阵
+                matrix3x4_t modifiedMatrix = *pCustomBoneToWorld;
+                // 从角度计算出法线向量 (通常是 'forward' 前向向量)
+                Vector forward, right, up;
+                U::Math.AngleVectors(pInfo.angles, &forward, &right, &up);
+
+                // 获取当前位置
+                Vector position;
+                U::Math.MatrixGetColumn(*pCustomBoneToWorld, 3, position);
+
+                // 将位置沿着法线方向稍微向前推一点
+                position += forward * 0.1; // 0.1f 是一个需要微调的小距离,如果仍然有z-fighting的问题,尝试调大这个值
+
+                // 将新的位置设置回矩阵
+                U::Math.MatrixSetColumn(position, 3, modifiedMatrix);
+
                 I::ModelRender->ForcedMaterialOverride(pPortalFrameMaterial);
-                Table.Original<FN>(Index)(ecx, edx, state, pInfo, pCustomBoneToWorld);
+                Table.Original<FN>(Index)(ecx, edx, state, pInfo, &modifiedMatrix);
                 I::ModelRender->ForcedMaterialOverride(nullptr);
             }
         }

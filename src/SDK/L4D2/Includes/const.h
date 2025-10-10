@@ -904,7 +904,7 @@ struct DrawModelState_t {
 
 struct ModelRenderInfo_t {
 	Vector origin;
-	Vector angles;
+	QAngle angles;
 	IClientRenderable* pRenderable;
 	const void* pModel;
 	const matrix3x4_t* pModelToWorld;
