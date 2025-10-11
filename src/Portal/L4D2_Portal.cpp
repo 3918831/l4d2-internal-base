@@ -197,3 +197,87 @@ void L4D2_Portal::PortalShutdown()
     
     printf("[Portal] Shutdown completed\n");
 }
+
+/*
+ * 计算传送门虚拟摄像机的视角
+ * @param playerView      - 当前玩家的原始CViewSetup
+ * @param pEntrancePortal - 玩家正在“看向”的传送门 (入口)
+ * @param pExitPortal     - 应该从哪个传送门“看出去” (出口)
+ * @return                - 一个新的、计算好的CViewSetup，用于渲染
+ */
+CViewSetup L4D2_Portal::CalculatePortalView(const CViewSetup& playerView, const PortalInfo_t* pEntrancePortal, const PortalInfo_t* pExitPortal)
+{
+    // 1. 预计算“入口到出口”的变换矩阵
+    matrix3x4_t entranceMatrix, exitMatrix, entranceMatrixInverse, thisToLinkedMatrix;
+    matrix3x4_t mat_180_Z_Rot;
+    U::Math.SetIdentityMatrix(mat_180_Z_Rot);
+    mat_180_Z_Rot[0][0] = -1.0f;
+    mat_180_Z_Rot[1][1] = -1.0f;
+
+    U::Math.AngleMatrix(pEntrancePortal->angles, pEntrancePortal->origin, entranceMatrix);
+    U::Math.AngleMatrix(pExitPortal->angles, pExitPortal->origin, exitMatrix);
+
+    U::Math.MatrixInverse(entranceMatrix, entranceMatrixInverse);
+
+    matrix3x4_t tempMatrix;
+    U::Math.ConcatTransforms(mat_180_Z_Rot, entranceMatrixInverse, tempMatrix);
+    U::Math.ConcatTransforms(exitMatrix, tempMatrix, thisToLinkedMatrix);
+
+    // 2. 直接复制 playerView，以此为基础进行修改
+    CViewSetup portalView = playerView;
+
+    // 3. 变换 origin
+    U::Math.VectorTransform(playerView.origin, thisToLinkedMatrix, portalView.origin);
+
+    // 4. 变换 angles
+    matrix3x4_t playerAnglesMatrix, newAnglesMatrix;
+    U::Math.AngleMatrix(playerView.angles, playerAnglesMatrix);
+    U::Math.ConcatTransforms(thisToLinkedMatrix, playerAnglesMatrix, newAnglesMatrix);
+    U::Math.MatrixAngles(newAnglesMatrix, portalView.angles);
+
+    // 5. 确保 zNear 不小于引擎允许的最小值
+    if (portalView.zNear < 1.0f) {
+        portalView.zNear = 1.0f;
+    }
+
+    // 6. 【核心修正】将虚拟摄像机沿出口法线方向稍微向前推，以进入有效的Visleaf
+    // 这是解决黑天、全亮模型和渲染缺失问题的关键
+    Vector exitPortalNormal;
+    U::Math.AngleVectors(pExitPortal->angles, &exitPortalNormal, nullptr, nullptr);
+
+    // 将摄像机向前推动一个很小的单位（例如 1.0f），确保它在传送门“外面”
+    portalView.origin += exitPortalNormal * 1.0f;
+
+    return portalView;
+}
+
+#ifdef RECURSIVE_RENDERING
+void L4D2_Portal::RenderPortalViewRecursive(const CViewSetup& previousView, Portal* entryPortal, Portal* exitPortal)
+{
+    // 检查递归深度是否超限
+    if (g_nPortalRenderDepth >= MAX_PORTAL_RECURSION_DEPTH) {
+        return;
+    }
+
+    // --- 核心逻辑：入栈 ---
+    g_nPortalRenderDepth++;
+    CViewSetup newPortalView = CalculatePortalView(previousView, entryPortal, exitPortal);
+    g_vViewStack.push_back(newPortalView);
+
+    // ... 设置渲染目标为 g_vPortalTextures[g_nPortalRenderDepth - 1] ...
+    // ... 设置裁剪平面等 ...
+
+    // 调用引擎的渲染函数。
+    // 如果这个调用中又遇到了传送门，它触发的 DrawModelExecute
+    // 将会从栈顶读取到我们刚刚 push 进去的 newPortalView，从而实现正确的递归。
+    I::CustomView->DrawWorldAndEntities(true, newPortalView, ...);
+
+    // ... 清理渲染目标和裁剪平面 ...
+
+    // --- 核心逻辑：出栈 ---
+    // 当前深度的渲染任务已完成，必须将自己的状态从栈中移除，
+    // 以便上层递归或其他同级渲染任务能够正确工作。
+    g_vViewStack.pop_back();
+    g_nPortalRenderDepth--;
+}
+#endif

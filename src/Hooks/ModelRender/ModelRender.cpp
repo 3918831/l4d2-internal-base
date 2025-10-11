@@ -290,7 +290,7 @@ void __fastcall ModelRender::DrawModelExecute::Detour(void* ecx, void* edx, cons
 }
 #endif
 
-#ifdef PLAN_B
+#ifdef PRE_RENDERING
 void __fastcall ModelRender::DrawModelExecute::Detour(void* ecx, void* edx, const DrawModelState_t& state, const ModelRenderInfo_t& pInfo, matrix3x4_t* pCustomBoneToWorld)
 {
     // 基础检查和递归保护
@@ -390,7 +390,7 @@ void __fastcall ModelRender::DrawModelExecute::Detour(void* ecx, void* edx, cons
                 U::Math.MatrixGetColumn(*pCustomBoneToWorld, 3, position);
 
                 // 将位置沿着法线方向稍微向前推一点
-                position += forward * 0.1; // 0.1f 是一个需要微调的小距离,如果仍然有z-fighting的问题,尝试调大这个值
+                position += forward * 0.1f; // 0.1f 是一个需要微调的小距离,如果仍然有z-fighting的问题,尝试调大这个值
 
                 // 将新的位置设置回矩阵
                 U::Math.MatrixSetColumn(position, 3, modifiedMatrix);

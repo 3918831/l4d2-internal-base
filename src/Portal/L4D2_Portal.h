@@ -1,4 +1,6 @@
 #pragma once
+
+#include <vector>
 #include "../SDK/L4D2/Interfaces/MaterialSystem.h"
 //#include "../Portal/public/vector.h"
 
@@ -41,6 +43,16 @@ public:
 };
 class L4D2_Portal {
 public:
+
+    /*
+     * 计算传送门虚拟摄像机的视角
+     * @param playerView      - 当前玩家的原始CViewSetup
+     * @param pEntrancePortal - 玩家正在“看向”的传送门 (入口)
+     * @param pExitPortal     - 应该从哪个传送门“看出去” (出口)
+     * @return                - 一个新的、计算好的CViewSetup，用于渲染
+     */
+    CViewSetup CalculatePortalView(const CViewSetup& playerView, const PortalInfo_t* pEntrancePortal, const PortalInfo_t* pExitPortal);
+
     ITexture* m_pPortalTexture;
     ITexture* m_pPortalTexture_2;
 
@@ -59,7 +71,21 @@ public:
     PortalInfo_t g_BluePortal;
     PortalInfo_t g_OrangePortal;
 
-    //Frustum_t m_Frustum;
+#ifdef RECURSIVE_RENDERING
+    void RenderPortalViewRecursive(const CViewSetup& previousView, Portal* entryPortal, Portal* exitPortal);
+
+    // 视图栈
+    std::vector<CViewSetup> g_vViewStack;
+    // 纹理池
+    std::vector<ITexture*> g_vPortalTextures;
+    // 对应的材质也需要动态修改
+    IMaterial* g_pDynamicPortalMaterial;
+
+    // 全局或类成员变量，用于跟踪当前递归深度
+    int g_nPortalRenderDepth = 0;
+    const int MAX_PORTAL_RECURSION_DEPTH = 5; // 设置一个合理的递归上限
+
+#endif
 };
 
 namespace G { inline L4D2_Portal G_L4D2Portal; }
