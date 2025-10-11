@@ -41,6 +41,8 @@ public:
         ((DWORD*)this)[2734] = true;//m_bDisableRenderTargetAllocationForever
     }
 };
+
+
 class L4D2_Portal {
 public:
 
@@ -72,18 +74,27 @@ public:
     PortalInfo_t g_OrangePortal;
 
 #ifdef RECURSIVE_RENDERING
-    void RenderPortalViewRecursive(const CViewSetup& previousView, Portal* entryPortal, Portal* exitPortal);
+    int screenWidth, screenHeight;
+    int m_nClearFlags;
+    PortalInfo_t* m_pCurrentExitPortal;
+
+    // 递归渲染传送门
+    // 这个核心函数现在要承担起管理栈状态的责任，在它进入递归前，将新计算出的视角入栈；在它完成工作后，必须将自己的视角出栈。
+    bool RenderPortalViewRecursive(const CViewSetup& previousView, PortalInfo_t* entryPortal, PortalInfo_t* exitPortal);
 
     // 视图栈
-    std::vector<CViewSetup> g_vViewStack;
+    std::vector<CViewSetup> m_vViewStack;
     // 纹理池
-    std::vector<ITexture*> g_vPortalTextures;
+    std::vector<ITexture*> m_vPortalTextures;
     // 对应的材质也需要动态修改
-    IMaterial* g_pDynamicPortalMaterial;
+    IMaterial* m_pDynamicPortalMaterial = nullptr;
+
+    // 新增：用于递归终止的材质
+    IMaterial* m_pBlackoutMaterial = nullptr;
 
     // 全局或类成员变量，用于跟踪当前递归深度
-    int g_nPortalRenderDepth = 0;
-    const int MAX_PORTAL_RECURSION_DEPTH = 5; // 设置一个合理的递归上限
+    int m_nPortalRenderDepth = 0;
+    const int MAX_PORTAL_RECURSION_DEPTH = 8; // 设置一个合理的递归上限
 
 #endif
 };

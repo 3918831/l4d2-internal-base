@@ -8,8 +8,9 @@
 #include "../SDK/L4D2/Interfaces/ModelRender.h"
 //#include "../SDK/L4D2/KeyValues/KeyValues.h"
 #include "../SDK/L4D2/Entities/C_BasePlayer.h"
-//#include "public/qAngle.h"
+#include "../Util/Math/Math.h"
 #include "L4D2_Portal.h"
+#include "CustomRender.h"
 
 // ITexture* g_pPortalTexture = nullptr;
 //IMaterialSystem* g_pPortalMaterialSystem = nullptr;
@@ -28,7 +29,6 @@ void L4D2_Portal::CreatePortalTexture()
 
     m_pCustomMaterialSystem->UnLockRTAllocation();
     m_pMaterialSystem->BeginRenderTargetAllocation();
-    // m_LeftEyeTexture = m_Game->m_MaterialSystem->CreateNamedRenderTargetTextureEx("leftEye0", m_RenderWidth, m_RenderHeight, RT_SIZE_NO_CHANGE, m_Game->m_MaterialSystem->GetBackBufferFormat(), MATERIAL_RT_DEPTH_SHARED, TEXTUREFLAGS_NOMIP);
     m_pPortalTexture = m_pMaterialSystem->CreateNamedRenderTargetTextureEx("_rt_Portal1Texture",
         1, 1,
         RT_SIZE_FULL_FRAME_BUFFER,
@@ -44,17 +44,38 @@ void L4D2_Portal::CreatePortalTexture()
         MATERIAL_RT_DEPTH_SHARED,
         0,//TEXTUREFLAGS_NOMIP,
         CREATERENDERTARGETFLAGS_HDR);
+
+#ifdef RECURSIVE_RENDERING
+    // 预分配内存
+    m_vPortalTextures.reserve(MAX_PORTAL_RECURSION_DEPTH);
+
+    for (int i = 0; i < MAX_PORTAL_RECURSION_DEPTH; ++i)
+    {
+        // 创建一个唯一的纹理名称
+        char textureName[64];
+        sprintf_s(textureName, "_portal_texture_%d", i);
+
+        // 使用您熟悉的方式创建纹理
+        // 注意：这里的参数可能需要根据您的具体需求微调
+        ITexture* newTexture = I::MaterialSystem->CreateNamedRenderTargetTextureEx(
+            textureName,
+            1, 1,
+            RT_SIZE_FULL_FRAME_BUFFER,
+            I::MaterialSystem->GetBackBufferFormat(), // or IMAGE_FORMAT_RGBA8888, 
+            MATERIAL_RT_DEPTH_SEPARATE,
+            0,//TEXTUREFLAGS_NOMIP,
+            CREATERENDERTARGETFLAGS_HDR);
+
+        if (newTexture) {
+            m_vPortalTextures.push_back(newTexture);
+        } else {
+            // 处理错误，例如打印日志
+            printf("[Portal] Error: Failed to create portal texture %d\n", i);
+        }
+    }
+
+#endif
     m_pMaterialSystem->EndRenderTargetAllocation();
-
-    //m_pPortalTexture = m_pCustomMaterialSystem->CreateNamedRenderTargetEx("_rt_PortalTexture",
-    //        512, 512, 
-    //        RT_SIZE_DEFAULT, 
-    //        IMAGE_FORMAT_RGBA8888, 
-    //        MATERIAL_RT_DEPTH_SHARED, 
-    //        TEXTUREFLAGS_CLAMPS | TEXTUREFLAGS_CLAMPT, 
-    //        CREATERENDERTARGETFLAGS_HDR);
-
-    // m_pPortalTexture = m_pCustomMaterialSystem->CreateNamedRenderTargetEx("rt_test1", 4096, 4096, 0, 1, 0, true, false);
 
     if (!m_pPortalTexture || !m_pPortalTexture_2)
     {
@@ -79,6 +100,16 @@ void L4D2_Portal::CreatePortalMaterial()
     g_pPortalMaterial = m_pMaterialSystem->FindMaterial("models/zimu/zimu1_hd/zimu1_hd", TEXTURE_GROUP_MODEL, true, nullptr);
     g_pPortalMaterial_2 = m_pMaterialSystem->FindMaterial("models/zimu/zimu2_hd/zimu2_hd", TEXTURE_GROUP_MODEL, true, nullptr);
     g_pPortalMaterial_3 = m_pMaterialSystem->FindMaterial("dev/write_stencil", TEXTURE_GROUP_OTHER);
+#ifdef RECURSIVE_RENDERING
+    m_pWriteStencilMaterial = m_pMaterialSystem->FindMaterial("dev/write_stencil", TEXTURE_GROUP_OTHER);
+    m_pDynamicPortalMaterial = m_pMaterialSystem->FindMaterial("dev/portal_content", TEXTURE_GROUP_OTHER);
+    m_pBlackoutMaterial = m_pMaterialSystem->FindMaterial("dev/portal_blackout", TEXTURE_GROUP_OTHER);
+
+    if (!m_pDynamicPortalMaterial || !m_pWriteStencilMaterial || !m_pBlackoutMaterial) {
+        printf("[Portal] m_pDynamicPortalMaterial::Failed to find dynamic portal material!\n");
+        return;
+    }
+#endif
 
     if (!g_pPortalMaterial || !g_pPortalMaterial_2 || !g_pPortalMaterial_3)
     {
@@ -92,7 +123,11 @@ void L4D2_Portal::CreatePortalMaterial()
     g_pPortalMaterial->IncrementReferenceCount();
     g_pPortalMaterial_2->IncrementReferenceCount();
     g_pPortalMaterial_3->IncrementReferenceCount();
-
+#ifdef RECURSIVE_RENDERING
+    m_pWriteStencilMaterial->IncrementReferenceCount();
+    m_pDynamicPortalMaterial->IncrementReferenceCount();
+    m_pBlackoutMaterial->IncrementReferenceCount();
+#endif
     // 查找并设置基础纹理参数
     IMaterialVar* pBaseTextureVar = g_pPortalMaterial->FindVar("$basetexture", NULL, false);
     IMaterialVar* pBaseTextureVar_2 = g_pPortalMaterial_2->FindVar("$basetexture", NULL, false);
@@ -102,9 +137,14 @@ void L4D2_Portal::CreatePortalMaterial()
             pBaseTextureVar->SetTextureValue(m_pPortalTexture);
             pBaseTextureVar_2->SetTextureValue(m_pPortalTexture_2);
             printf("[Portal] Set base texture to portal render target\n");
+
+            //IMaterialVar* pBaseTextureVarofDynamic = m_pDynamicPortalMaterial->FindVar("$basetexture", NULL, false);
+            //if (pBaseTextureVarofDynamic) {
+            //    pBaseTextureVarofDynamic->SetTextureValue(pBaseTextureVar->GetTextureValue());
+            //}
         } else {
             printf("[Portal] Failed to set base texture because portal texture is null\n");
-        }
+        }        
     }
     else
     {
@@ -175,6 +215,10 @@ void L4D2_Portal::PortalInit()
     printf("[Portal] m_pPortalMaterial: %p\n", m_pPortalMaterial);
     printf("[Portal] m_pCustomMaterialSystem: %p\n", m_pCustomMaterialSystem);
 
+#ifdef RECURSIVE_RENDERING
+    m_nClearFlags = 0;
+    I::EngineClient->GetScreenSize(screenWidth, screenHeight);
+#endif
 }
 
 // 清理函数，在不需要传送门时调用
@@ -191,6 +235,21 @@ void L4D2_Portal::PortalShutdown()
         // Source引擎中的纹理通常由材质系统管理，不需要手动释放
         m_pPortalTexture = nullptr;
     }
+
+#ifdef RECURSIVE_RENDERING
+    if (m_pDynamicPortalMaterial) {
+        m_pDynamicPortalMaterial->DecrementReferenceCount();
+        m_pDynamicPortalMaterial = nullptr;
+    }
+    if (m_pWriteStencilMaterial) {
+        m_pWriteStencilMaterial->DecrementReferenceCount();
+        m_pWriteStencilMaterial = nullptr;
+    }
+    if (m_pBlackoutMaterial) {
+        m_pBlackoutMaterial->DecrementReferenceCount();
+        m_pBlackoutMaterial = nullptr;
+    }
+#endif
     
     m_pMaterialSystem = nullptr;
     m_pCustomMaterialSystem = nullptr;
@@ -252,32 +311,105 @@ CViewSetup L4D2_Portal::CalculatePortalView(const CViewSetup& playerView, const 
 }
 
 #ifdef RECURSIVE_RENDERING
-void L4D2_Portal::RenderPortalViewRecursive(const CViewSetup& previousView, Portal* entryPortal, Portal* exitPortal)
+bool L4D2_Portal::RenderPortalViewRecursive(const CViewSetup& previousView, PortalInfo_t* entryPortal, PortalInfo_t* exitPortal)
 {
     // 检查递归深度是否超限
-    if (g_nPortalRenderDepth >= MAX_PORTAL_RECURSION_DEPTH) {
-        return;
+    if (m_nPortalRenderDepth >= MAX_PORTAL_RECURSION_DEPTH) {
+        // 已经到了最深处，我们不再继续渲染世界，
+        // 而是将这一层的纹理清空为一个指定的颜色。
+
+        //IMatRenderContext* pRenderContext = I::MaterialSystem->GetRenderContext();
+        //if (pRenderContext)
+        //{
+        //    // 获取当前深度对应的纹理
+        //    ITexture* pFinalTexture = m_vPortalTextures[m_nPortalRenderDepth - 1];
+
+        //    pRenderContext->PushRenderTargetAndViewport();
+        //    pRenderContext->SetRenderTarget(pFinalTexture);
+
+        //    // 设置你想要的颜色。例如，半透明的黑色，或者传送门的边框颜色
+        //    // Valve 在《传送门》里用的就是传送门自身的颜色
+        //    if (/*entryPortal->IsBlue()*/ true) // 假设有这样的函数
+        //        pRenderContext->ClearColor4ub(75, 125, 255, 255); // 蓝色
+        //    else
+        //        pRenderContext->ClearColor4ub(255, 150, 0, 255);   // 橙色
+
+        //    // 执行清空操作 (只清空颜色，不需要深度)
+        //    pRenderContext->ClearBuffers(true, false);
+
+        //    pRenderContext->PopRenderTargetAndViewport();
+        //}
+
+        // 工作完成，返回。
+        //return;
+
+
+
+        // 由于我们已经没有更深的纹理可用，这里我们“假装”已经渲染了最深层。
+        // 但我们实际上什么都不做，因为没有纹理可以写入。
+        // 调用者 DrawModelExecute 将会使用一个未被渲染的纹理，
+        // 这个问题我们将在 DrawModelExecute 中处理。
+        return false;
     }
 
     // --- 核心逻辑：入栈 ---
-    g_nPortalRenderDepth++;
+    m_nPortalRenderDepth++;
+    // 【新增】设置当前出口，用于递归保护
+    m_pCurrentExitPortal = exitPortal;
+
     CViewSetup newPortalView = CalculatePortalView(previousView, entryPortal, exitPortal);
-    g_vViewStack.push_back(newPortalView);
+    m_vViewStack.push_back(newPortalView);
 
-    // ... 设置渲染目标为 g_vPortalTextures[g_nPortalRenderDepth - 1] ...
-    // ... 设置裁剪平面等 ...
+    IMatRenderContext* pRenderContext = G::G_L4D2Portal.m_pMaterialSystem->GetRenderContext();
+    if (pRenderContext)
+    {
 
-    // 调用引擎的渲染函数。
-    // 如果这个调用中又遇到了传送门，它触发的 DrawModelExecute
-    // 将会从栈顶读取到我们刚刚 push 进去的 newPortalView，从而实现正确的递归。
-    I::CustomView->DrawWorldAndEntities(true, newPortalView, ...);
+        // 从池中获取当前深度的渲染目标纹理
+        // 此时 m_nPortalRenderDepth 最小为 1, 所以索引是安全的 [0]
+        // 从池中获取当前深度的渲染目标纹理
+        ITexture* pRenderTarget = m_vPortalTextures[m_nPortalRenderDepth - 1];
+        pRenderContext->PushRenderTargetAndViewport();
+        pRenderContext->SetRenderTarget(pRenderTarget);
+        pRenderContext->Viewport(0, 0, screenWidth, screenHeight);
+        pRenderContext->ClearBuffers(true, true, true);
 
-    // ... 清理渲染目标和裁剪平面 ...
+        // --- 定义出口（橙门）的裁剪平面 ---
+        Vector exitNormal;
+        U::Math.AngleVectors(exitPortal->angles, &exitNormal, nullptr, nullptr);
 
-    // --- 核心逻辑：出栈 ---
-    // 当前深度的渲染任务已完成，必须将自己的状态从栈中移除，
-    // 以便上层递归或其他同级渲染任务能够正确工作。
-    g_vViewStack.pop_back();
-    g_nPortalRenderDepth--;
+        float clipPlane[4];
+        clipPlane[0] = exitNormal.x;
+        clipPlane[1] = exitNormal.y;
+        clipPlane[2] = exitNormal.z;
+
+        // 【核心修正】修正 D 值的计算，遵循 n·p - d = 0 的形式
+        // d = n·p，并加入一个小的偏移量防止瑕疵
+        clipPlane[3] = DotProduct(exitPortal->origin, exitNormal) - 0.5f;
+
+        //CViewSetup portalView = G::G_L4D2Portal.CalculatePortalView(previousView, &G::G_L4D2Portal.g_BluePortal, &G::G_L4D2Portal.g_OrangePortal);
+
+        pRenderContext->PushCustomClipPlane(clipPlane);
+        pRenderContext->EnableClipping(true);
+
+        // 【修正 5】Push3DView 和 DrawWorldAndEntities 必须使用 newPortalView
+        // 并且 Push3DView 的纹理参数应该是 pRenderTarget
+        VisibleFogVolumeInfo_t fog_1;
+        I::CustomRender->GetVisibleFogVolumeInfo(exitPortal->origin, fog_1);
+        WaterRenderInfo_t water_1;
+        I::CustomView->DetermineWaterRenderInfo(&fog_1, &water_1);
+
+        I::CustomRender->Push3DView(newPortalView, 0, pRenderTarget, I::CustomView->GetFrustum(), nullptr);
+        // 递归调用原函数进行渲染, 不渲染玩家模型和HUD
+        I::CustomView->DrawWorldAndEntities(true, newPortalView, m_nClearFlags, &fog_1, &water_1);
+        I::CustomRender->PopView(I::CustomView->GetFrustum());
+
+        pRenderContext->EnableClipping(false);
+        pRenderContext->PopCustomClipPlane();
+        pRenderContext->PopRenderTargetAndViewport();
+        
+    }
+    m_vViewStack.pop_back();
+    m_nPortalRenderDepth--;
+    return true;
 }
 #endif
