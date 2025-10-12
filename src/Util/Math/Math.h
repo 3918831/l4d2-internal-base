@@ -28,30 +28,85 @@ enum
 };
 
 // From L4D2VR
+//class CViewSetup
+//{
+//public:
+//	int32_t x; //0x0000
+//	int32_t m_nUnscaledX; //0x0004
+//	int32_t y; //0x0008
+//	int32_t m_nUnscaledY; //0x000C
+//	int32_t width; //0x0010
+//	int32_t m_nUnscaledWidth; //0x0014
+//	int32_t height; //0x0018
+//	int32_t m_nUnscaledHeight; //0x001C
+//	char pad_0020[20]; //0x0020
+//	float fov; //0x0034
+//	float fovViewmodel; //0x0038
+//	Vector origin; //0x003C
+//	QAngle angles; //0x0048
+//	float zNear; //0x0054
+//	float zFar; //0x0058
+//	float zNearViewmodel; //0x005C
+//	float zFarViewmodel; //0x0060
+//	float m_flAspectRatio; //0x0064
+//	char pad_0068[1660]; //0x0068
+//}; //Size: 0x06E4
+//static_assert(sizeof(CViewSetup) == 0x6E4);
+
+// From Gemini
 class CViewSetup
 {
 public:
-	int32_t x; //0x0000
-	int32_t m_nUnscaledX; //0x0004
-	int32_t y; //0x0008
-	int32_t m_nUnscaledY; //0x000C
-	int32_t width; //0x0010
-	int32_t m_nUnscaledWidth; //0x0014
-	int32_t height; //0x0018
-	int32_t m_nUnscaledHeight; //0x001C
-	char pad_0020[20]; //0x0020
-	float fov; //0x0034
-	float fovViewmodel; //0x0038
-	Vector origin; //0x003C
-	QAngle angles; //0x0048
-	float zNear; //0x0054
-	float zFar; //0x0058
-	float zNearViewmodel; //0x005C
-	float zFarViewmodel; //0x0060
-	float m_flAspectRatio; //0x0064
-	char pad_0068[1660]; //0x0068
-}; //Size: 0x06E4
-static_assert(sizeof(CViewSetup) == 0x6E4);
+	int            x;                  // 0x0000
+	int            m_nUnscaledX;       // 0x0004
+	int            y;                  // 0x0008
+	int            m_nUnscaledY;       // 0x000C
+	int            width;              // 0x0010
+	int            m_nUnscaledWidth;   // 0x0014
+	int            height;             // 0x0018
+	int            m_nUnscaledHeight;  // 0x001C
+	bool           m_bOrtho;           // 0x0020
+	char           pad_0021[3];        // 0x0021 (Padding for alignment)
+	float          m_OrthoLeft;        // 0x0024
+	float          m_OrthoTop;         // 0x0028
+	float          m_OrthoRight;       // 0x002C
+	float          m_OrthoBottom;      // 0x0030
+	float          fov;                // 0x0034
+	float          fovViewmodel;       // 0x0038
+	Vector         origin;             // 0x003C
+	QAngle         angles;             // 0x0048
+	float          zNear;              // 0x0054
+	float          zFar;               // 0x0058
+	float          zNearViewmodel;     // 0x005C
+	float          zFarViewmodel;      // 0x0060
+	float          m_flAspectRatio;    // 0x0064
+	float          m_flNearBlurDepth;  // 0x0068
+	float          m_flNearFocusDepth; // 0x006C
+	float          m_flFarFocusDepth;  // 0x0070
+	float          m_flFarBlurDepth;   // 0x0074
+	float          m_flNearBlurRadius; // 0x0078
+	float          m_flFarBlurRadius;  // 0x007C
+	int            m_nDoFQuality;      // 0x0080
+	int            m_nMotionBlurMode;  // 0x0084
+	float          m_flShutterTime;    // 0x0088
+	Vector         m_vShutterOpenPosition; // 0x008C
+	QAngle         m_vShutterOpenAngles;   // 0x0098
+	Vector         m_vShutterClosePosition;// 0x00A4
+	QAngle         m_vShutterCloseAngles;  // 0x00B0
+	float          m_flOffCenterTop;   // 0x00BC
+	float          m_flOffCenterBottom;// 0x00C0
+	float          m_flOffCenterLeft;  // 0x00C4
+	float          m_flOffCenterRight; // 0x00C8
+	bool           m_bOffCenter;       // 0x00CC
+	bool           m_bRenderToSubrectOfLargerScreen; // 0x00CD
+
+	// 【我们需要的关键变量就在这里！】
+	bool           m_bDoBloomAndToneMapping; // 0x00CE
+
+	bool           m_bCacheFullSceneState; // 0x00CF
+	char           pad_00D0[1556];     // 0x00D0
+}; //Size: 0x6E4
+static_assert(sizeof(CViewSetup) == 0x6E4); // 使用 static_assert 再次确认总大小无误
 
 
 struct matrix3x4_t

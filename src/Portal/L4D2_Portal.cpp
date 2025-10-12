@@ -6,6 +6,7 @@
 #include "../SDK/L4D2/Interfaces/MatRenderContext.h"
 #include "../SDK/L4D2/Interfaces/ModelInfo.h"
 #include "../SDK/L4D2/Interfaces/ModelRender.h"
+#include "../SDK/L4D2/Interfaces/IInput.h"
 //#include "../SDK/L4D2/KeyValues/KeyValues.h"
 #include "../SDK/L4D2/Entities/C_BasePlayer.h"
 #include "../Util/Math/Math.h"
@@ -358,11 +359,19 @@ bool L4D2_Portal::RenderPortalViewRecursive(const CViewSetup& previousView, Port
     m_pCurrentExitPortal = exitPortal;
 
     CViewSetup newPortalView = CalculatePortalView(previousView, entryPortal, exitPortal);
+    //newPortalView.m_bDoBloomAndToneMapping = false;
     m_vViewStack.push_back(newPortalView);
 
     IMatRenderContext* pRenderContext = G::G_L4D2Portal.m_pMaterialSystem->GetRenderContext();
     if (pRenderContext)
     {
+        // --- 【核心修正】将第三人称状态切换逻辑移到这里 ---
+        bool* pCameraInThirdPerson = I::IInput->m_fCameraInThirdPerson();
+        // 1. 保存原始的第三人称状态
+        bool bOriginalThirdPerson = *pCameraInThirdPerson;
+        // 2. 强制开启第三人称模式
+        *pCameraInThirdPerson = true;
+
 
         // 从池中获取当前深度的渲染目标纹理
         // 此时 m_nPortalRenderDepth 最小为 1, 所以索引是安全的 [0]
@@ -406,6 +415,9 @@ bool L4D2_Portal::RenderPortalViewRecursive(const CViewSetup& previousView, Port
         pRenderContext->EnableClipping(false);
         pRenderContext->PopCustomClipPlane();
         pRenderContext->PopRenderTargetAndViewport();
+
+        // 3. 【至关重要】在递归调用结束后，立刻恢复原始状态
+        *pCameraInThirdPerson = bOriginalThirdPerson;
         
     }
     m_vViewStack.pop_back();

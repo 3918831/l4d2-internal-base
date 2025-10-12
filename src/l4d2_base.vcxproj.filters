@@ -129,6 +129,7 @@
     <ClInclude Include="SDK\L4D2\Includes\iconvar.h" />
     <ClInclude Include="Portal\L4D2_Portal.h" />
     <ClInclude Include="Portal\CustomRender.h" />
+    <ClInclude Include="SDK\L4D2\Interfaces\IInput.h" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="Docs\DebugLog.txt" />

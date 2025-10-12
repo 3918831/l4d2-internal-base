@@ -4,7 +4,7 @@ using namespace Hooks;
 
 void __fastcall ModelRenderSystem::DrawModels::Detour(void* ecx, void* edx, ModelRenderSystemData_t* pEntities, int nCount, int renderMode)
 {
-	Func.Original<FN>()(ecx, edx, pEntities, nCount, renderMode);
+Func.Original<FN>()(ecx, edx, pEntities, nCount, renderMode);
 }
 
 void ModelRenderSystem::Init()

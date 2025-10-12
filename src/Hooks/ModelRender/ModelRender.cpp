@@ -436,7 +436,16 @@ void __fastcall ModelRender::DrawModelExecute::Detour(void* ecx, void* edx, cons
     }
 
     const char* modelName = I::ModelInfo->GetModelName(pInfo.pModel);
+    //if (modelName && strcmp(modelName, "models/survivors/survivor_coach.mdl") == 0) {
+    //    bool shouldDraw = pInfo.pRenderable->ShouldDraw();
+    //    printf("survivor_coach::shouldDraw: %d\n", shouldDraw);
+    //}
+    //if (modelName && strcmp(modelName, "models/survivors/survivor_gambler.mdl") == 0) {
+    //    bool shouldDraw = pInfo.pRenderable->ShouldDraw();
+    //    printf("survivor_gambler::shouldDraw: %d\n", shouldDraw);
+    //}
 
+    
     // --- 统一的传送门渲染逻辑 ---
     bool isBluePortal = (modelName && strcmp(modelName, "models/blackops/portal.mdl") == 0);
     bool isOrangePortal = (modelName && strcmp(modelName, "models/blackops/portal_og.mdl") == 0);

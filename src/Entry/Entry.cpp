@@ -1,6 +1,7 @@
 #include <iostream>
 #include "Entry.h"
 #include "../SDK/L4D2/Interfaces/ICvar.h"
+#include "../SDK/L4D2/Interfaces/IInput.h"
 #include "../Portal/L4D2_Portal.h"
 
 void CGlobal_ModuleEntry::Run()
@@ -190,6 +191,9 @@ void CGlobal_ModuleEntry::Load()
 
 			I::MoveHelper = **reinterpret_cast<IMoveHelper***>(U::Offsets.m_dwMoveHelper);
 			XASSERT(I::MoveHelper == nullptr);
+
+			I::IInput = **reinterpret_cast<IInput_t***>(U::Offsets.m_dwIInput);
+			XASSERT(I::IInput == nullptr);
 		}
 	}
 

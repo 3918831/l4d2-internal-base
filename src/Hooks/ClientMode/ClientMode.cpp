@@ -8,7 +8,7 @@ using namespace Hooks;
 
 bool __fastcall ClientMode::ShouldDrawFog::Detour(void* ecx, void* edx)
 {
-	return Table.Original<FN>(Index)(ecx, edx);
+	return Table.Original<FN>(Index)(ecx, edx);	
 }
 
 bool __fastcall ClientMode::CreateMove::Detour(void* ecx, void* edx, float input_sample_frametime, CUserCmd* cmd)
