@@ -163,6 +163,7 @@
     <ClCompile Include="Hooks\ClientPrediction\ClientPrediction.cpp" />
     <ClCompile Include="Hooks\CL_Main\CL_Main.cpp" />
     <ClCompile Include="Hooks\EngineVGui\EngineVGui.cpp" />
+    <ClCompile Include="Hooks\GameMovement\CCSGameMovement.cpp" />
     <ClCompile Include="Hooks\Hooks.cpp" />
     <ClCompile Include="Hooks\ModelRenderSystem\ModelRenderSystem.cpp" />
     <ClCompile Include="Hooks\ModelRender\ModelRender.cpp" />
@@ -202,6 +203,7 @@
     <ClInclude Include="Hooks\ClientPrediction\ClientPrediction.h" />
     <ClInclude Include="Hooks\CL_Main\CL_Main.h" />
     <ClInclude Include="Hooks\EngineVGui\EngineVGui.h" />
+    <ClInclude Include="Hooks\GameMovement\CCSGameMovement.h" />
     <ClInclude Include="Hooks\Hooks.h" />
     <ClInclude Include="Hooks\ModelRenderSystem\ModelRenderSystem.h" />
     <ClInclude Include="Hooks\ModelRender\ModelRender.h" />

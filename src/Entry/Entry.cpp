@@ -144,7 +144,7 @@ void CGlobal_ModuleEntry::Load()
         std::cout << "Prediction: " << I::Prediction << std::endl;
 
 		I::GameMovement     = U::Interface.Get<IGameMovement*>("client.dll", "GameMovement001");
-        std::cout << "GameMovement: " << I::GameMovement << std::endl;
+        std::cout << "Client::GameMovement: " << I::GameMovement << std::endl;
 
 		I::EngineClient     = U::Interface.Get<IVEngineClient*>("engine.dll", "VEngineClient013");
         std::cout << "EngineClient: " << I::EngineClient << std::endl;

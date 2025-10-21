@@ -39,6 +39,7 @@
     <ClCompile Include="Hooks\TerrorGameRules\TerrorGameRules.cpp" />
     <ClCompile Include="Features\EnginePrediction\EnginePrediction.cpp" />
     <ClCompile Include="Portal\L4D2_Portal.cpp" />
+    <ClCompile Include="Hooks\GameMovement\CCSGameMovement.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Util\Util.h" />
@@ -130,6 +131,7 @@
     <ClInclude Include="Portal\L4D2_Portal.h" />
     <ClInclude Include="Portal\CustomRender.h" />
     <ClInclude Include="SDK\L4D2\Interfaces\IInput.h" />
+    <ClInclude Include="Hooks\GameMovement\CCSGameMovement.h" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="Docs\DebugLog.txt" />

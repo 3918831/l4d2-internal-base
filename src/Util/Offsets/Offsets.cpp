@@ -68,6 +68,10 @@ void CUtil_Offsets::Init()
 	m_dwRenderView = U::Pattern.Find(_("client.dll"), _("55 8B EC 81 EC ? ? ? ? 53 56 57 8B D9"));
 	XASSERT(m_dwRenderView == 0x0);
 
+	//m_dwTracePlayerBBox = U::Pattern.Find(_("server.dll"), _("53 8B DC 83 EC 08 83 E4 F0 83 C4 04 55 8B 6B 04 89 6C 24 04 8B EC 83 EC 6C 56 8B F1"));//插件方给出的完整签名
+	m_dwTracePlayerBBox = U::Pattern.Find(_("server.dll"), _("53 8B DC 83 EC 08 83 E4 F0 83 C4 04 55 8B 6B ? 89 6C 24 ? 8B EC 83 EC 6C 56 8B F1"));//根据ds建议增加了通配符															  
+	XASSERT(m_dwTracePlayerBBox == 0x0);
+
 	//自行再次添加的Hook
 	I::CustomRender = *(IRender**)*(DWORD*)(U::Pattern.Find("client.dll", Sigs_RenderInstance) + 0x2);	
 	if (I::CustomRender) {

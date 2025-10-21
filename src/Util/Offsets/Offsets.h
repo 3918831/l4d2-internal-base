@@ -28,7 +28,7 @@ public:
 	DWORD m_dwRenderView = 0x0;
 	DWORD m_dwIInput = 0x0;
 
-	//自行再次添加的Hook
+	DWORD m_dwTracePlayerBBox = 0x0;
 
 };
 

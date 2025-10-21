@@ -12,7 +12,7 @@ void CGlobal_Hooks::Init()
 		BaseClient::Init();
 		BasePlayer::Init();
 		CL_Main::Init();
-		ClientMode::Init(); //ÆôÓÃÕâÌõhookÄ¿Ç°µ¼ÖÂÓÎÏ·³öÏÖÒì³£:ÈËÎï²»Í£ÌøÔ¾ºÍÓÒ¼ü
+		ClientMode::Init(); //å¯ç”¨è¿™æ¡hookç›®å‰å¯¼è‡´æ¸¸æˆå‡ºç°å¼‚å¸¸:äººç‰©ä¸åœè·³è·ƒå’Œå³é”®
 		ClientPrediction::Init();
 		EngineVGui::Init();
 		ModelRender::Init();
@@ -21,6 +21,7 @@ void CGlobal_Hooks::Init()
 		TerrorGameRules::Init();
 		TerrorPlayer::Init();
 		WndProc::Init();
+		CCSGameMovement::Init();
 	}
 
 	XASSERT(MH_EnableHook(MH_ALL_HOOKS) != MH_STATUS::MH_OK);

@@ -6,6 +6,7 @@
 #include "ClientMode/ClientMode.h"
 #include "ClientPrediction/ClientPrediction.h"
 #include "EngineVGui/EngineVGui.h"
+#include "GameMovement/CCSGameMovement.h"
 #include "ModelRender/ModelRender.h"
 #include "ModelRenderSystem/ModelRenderSystem.h"
 #include "SequenceTransitioner/SequenceTransitioner.h"
