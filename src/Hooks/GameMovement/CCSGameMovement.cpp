@@ -3,7 +3,7 @@
 
 using namespace Hooks;
 
-void __fastcall CCSGameMovement::TracePlayerBBox::Detour(void* ecx, void* edx, const Vector& start, const Vector& end, unsigned int fMask, int collisionGroup, void* pm)
+void __fastcall CCSGameMovement::TracePlayerBBox::Detour(void* ecx, void* edx, const Vector& start, const Vector& end, unsigned int fMask, int collisionGroup, trace_t* pm)
 {
 	// 打印调试信息
 	//printf("[GameMovement] TracePlayerBBox called!\n");
@@ -13,7 +13,20 @@ void __fastcall CCSGameMovement::TracePlayerBBox::Detour(void* ecx, void* edx, c
 	//printf("[GameMovement] pTrace: %p\n", &pm);
 
 	// 调用原始函数
-	Func.Original<FN>()(ecx, edx, start, end, fMask, collisionGroup, pm);	
+	Func.Original<FN>()(ecx, edx, start, end, fMask, collisionGroup, pm);
+	//pm->fraction = 1.0f;  // 设置为1.0表示射线到达终点，没有发生碰撞
+	//pm->allsolid = true;     // 不是完全固体
+	//pm->startsolid = true;   // 起始点不在固体中
+	//pm->contents = 0;         // 无特殊内容标志
+	//pm->endpos = end;         // 结束位置设为目标位置
+
+	//// 如果想更真实，可以保留原始起点
+	//pm->startpos = start;
+
+	//// 清除命中实体信息
+	//pm->m_pEnt = NULL;
+	pm->startsolid = false;
+	pm->allsolid = false; // 同样清除allsolid标志
 	return;
 }
 

@@ -456,6 +456,7 @@ void __fastcall ModelRender::DrawModelExecute::Detour(void* ecx, void* edx, cons
         G::G_L4D2Portal.g_BluePortal.angles.y = pInfo.angles.y;
         G::G_L4D2Portal.g_BluePortal.angles.z = pInfo.angles.z;
         G::G_L4D2Portal.g_BluePortal.bIsActive = true;
+        //I::ClientEntityList->GetClientEntity(pInfo.entity_index);
     }
 
     if (isOrangePortal) {

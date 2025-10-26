@@ -10,8 +10,8 @@ namespace Hooks
 		namespace TracePlayerBBox
 		{
 			inline Hook::CFunction Func;
-			using FN = void(__fastcall*)(void*, void*, const Vector&, const Vector&, unsigned int, int, void*);
-			void __fastcall Detour(void* ecx, void* edx, const Vector& start, const Vector& end, unsigned int fMask, int collisionGroup, void* pm);
+			using FN = void(__fastcall*)(void*, void*, const Vector&, const Vector&, unsigned int, int, trace_t*);
+			void __fastcall Detour(void* ecx, void* edx, const Vector& start, const Vector& end, unsigned int fMask, int collisionGroup, trace_t* pm);
 		}
 
 		void Init();

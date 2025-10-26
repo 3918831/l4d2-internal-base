@@ -59,7 +59,7 @@ struct Ray_t
 		m_Delta = VectorAligned(vEnd - vStart);
 		m_IsSwept = (m_Delta.LenghtSqr() != 0);
 		m_Extents.Init();
-		m_pWorldAxisTransform = 0;
+		//m_pWorldAxisTransform = 0;
 		m_IsRay = true;
 		m_StartOffset.Init();
 		m_Start = vStart;
@@ -69,7 +69,7 @@ struct Ray_t
 	VectorAligned m_Delta;
 	VectorAligned m_StartOffset;
 	VectorAligned m_Extents;
-	const matrix3x4_t* m_pWorldAxisTransform;
+	//const matrix3x4_t* m_pWorldAxisTransform;
 	bool m_IsRay;
 	bool m_IsSwept;
 
@@ -78,7 +78,7 @@ struct Ray_t
 		m_Delta = VectorAligned(vEnd - vStart);
 		m_IsSwept = (m_Delta.LenghtSqr() != 0);
 		m_Extents.Init();
-		m_pWorldAxisTransform = 0;
+		//m_pWorldAxisTransform = 0;
 		m_IsRay = true;
 		m_StartOffset.Init();
 		m_Start = vStart;
@@ -230,6 +230,10 @@ class CTraceFilter : public ITraceFilter
 public:
 	virtual TraceType_t	GetTraceType() const {
 		return TRACE_EVERYTHING;
+	}
+	virtual bool ShouldHitEntity(IHandleEntity* pServerEntity, int contentsMask)
+	{
+		return true;
 	}
 };
 

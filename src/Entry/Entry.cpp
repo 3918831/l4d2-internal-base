@@ -121,6 +121,35 @@ void CGlobal_ModuleEntry::Run()
 	// l4d2_Portal.PortalInit();
 }
 
+void CGlobal_ModuleEntry::FuncTest()
+{
+	if (!I::EngineClient->IsInGame() || I::EngineVGui->IsGameUIVisible())
+		return;
+
+	bool hit = false;
+
+	C_TerrorPlayer* pLocal = I::ClientEntityList->GetClientEntity(I::EngineClient->GetLocalPlayer())->As<C_TerrorPlayer*>();
+	while (1) {
+		if (pLocal && !pLocal->deadflag())
+		{
+			Vector pos = pLocal->GetAbsOrigin();
+			Ray_t ray;
+			ray.Init(pos, Vector(0, 0, 0));
+			unsigned int fMask = MASK_SHOT | CONTENTS_GRATE;
+			CTraceFilter pTraceFilter;
+			trace_t pTrace;
+			I::EngineTrace->TraceRay(ray, fMask, &pTraceFilter, &pTrace);
+			if (pTrace.fraction < 1.0) {
+					std::cout << "Trace Hit" << std::endl;
+			} else {
+				std::cout << "Trace Not Hit" << std::endl;				
+			}
+			Sleep(1000);
+		}
+	}
+}
+
+
 void CGlobal_ModuleEntry::Load()
 {
 	AllocConsole();
@@ -201,4 +230,5 @@ void CGlobal_ModuleEntry::Load()
 	G::G_L4D2Portal.PortalInit();
 	G::Hooks.Init();
 	//Run();
+	FuncTest();
 }
