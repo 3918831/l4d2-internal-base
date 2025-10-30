@@ -2,7 +2,9 @@
 #include "Entry.h"
 #include "../SDK/L4D2/Interfaces/ICvar.h"
 #include "../SDK/L4D2/Interfaces/IInput.h"
+#include "../SDK/L4D2/Interfaces/Vphysics.h"
 #include "../Portal/L4D2_Portal.h"
+
 
 void CGlobal_ModuleEntry::Run()
 {
@@ -121,7 +123,7 @@ void CGlobal_ModuleEntry::Run()
 	// l4d2_Portal.PortalInit();
 }
 
-void CGlobal_ModuleEntry::FuncTest()
+void CGlobal_ModuleEntry::Func_TraceRay_Test()
 {
 	if (!I::EngineClient->IsInGame() || I::EngineVGui->IsGameUIVisible())
 		return;
@@ -149,6 +151,58 @@ void CGlobal_ModuleEntry::FuncTest()
 	}
 }
 
+class IVPhysicsDebugOverlay
+{
+public:
+	virtual void AddEntityTextOverlay(int ent_index, int line_offset, float duration, int r, int g, int b, int a, const char* format, ...) = 0;
+	virtual void AddBoxOverlay(const Vector& origin, const Vector& mins, const Vector& max, QAngle const& orientation, int r, int g, int b, int a, float duration) = 0;
+	virtual void AddTriangleOverlay(const Vector& p1, const Vector& p2, const Vector& p3, int r, int g, int b, int a, bool noDepthTest, float duration) = 0;
+	virtual void AddLineOverlay(const Vector& origin, const Vector& dest, int r, int g, int b, bool noDepthTest, float duration) = 0;
+	virtual void AddTextOverlay(const Vector& origin, float duration, const char* format, ...) = 0;
+	virtual void AddTextOverlay(const Vector& origin, int line_offset, float duration, const char* format, ...) = 0;
+	virtual void AddScreenTextOverlay(float flXPos, float flYPos, float flDuration, int r, int g, int b, int a, const char* text) = 0;
+	virtual void AddSweptBoxOverlay(const Vector& start, const Vector& end, const Vector& mins, const Vector& max, const QAngle& angles, int r, int g, int b, int a, float flDuration) = 0;
+	virtual void AddTextOverlayRGB(const Vector& origin, int line_offset, float duration, float r, float g, float b, float alpha, const char* format, ...) = 0;
+};
+typedef void* (*CreateInterfaceFn)(const char* pName, int* pReturnCode);
+typedef void* (*InstantiateInterfaceFn)();
+
+class IPhysicsEnvironment
+{
+public:
+	virtual ~IPhysicsEnvironment(void) {}
+
+	virtual void SetDebugOverlay(CreateInterfaceFn debugOverlayFactory) = 0;
+	virtual IVPhysicsDebugOverlay* GetDebugOverlay(void) = 0;
+
+	// gravity is a 3-vector in in/s^2
+	virtual void			SetGravity(const Vector& gravityVector) = 0;
+	virtual void			GetGravity(Vector* pGravityVector) const = 0;
+
+	// air density is in kg / m^3 (water is 1000)
+	// This controls drag, air that is more dense has more drag.
+	virtual void			SetAirDensity(float density) = 0;
+	virtual float			GetAirDensity(void) const = 0;
+
+};
+
+void CGlobal_ModuleEntry::Func_IPhysicsEnvironment_Test()
+{
+	HMODULE hModule = GetModuleHandle(L"server.dll");
+	// 正确计算全局变量地址
+	// 偏移量0x107FE19C是从IDA Pro中获取到的偏移地址，减去0x10000000得到实际的physenv指针地址
+	// 具体原理参考https://www.cnblogs.com/blogwr/p/18725779/how-to-make-your-ida-address-rva-z1az4mx
+	DWORD* physenv_ptr_ptr = (DWORD*)((BYTE*)hModule + 0x107FE19C - 0x10000000);
+
+	// 先读取指针，再调用方法
+	IPhysicsEnvironment* physenv = (IPhysicsEnvironment*)(*physenv_ptr_ptr);
+	if (physenv) {
+		float airDensity = physenv->GetAirDensity();
+		// 使用name...
+		printf("airDensity = %f\n", airDensity);
+	}
+	
+}
 
 void CGlobal_ModuleEntry::Load()
 {
@@ -224,11 +278,15 @@ void CGlobal_ModuleEntry::Load()
 			I::IInput = **reinterpret_cast<IInput_t***>(U::Offsets.m_dwIInput);
 			XASSERT(I::IInput == nullptr);
 		}
+
+		I::PhysicsCollision = U::Interface.Get<IPhysicsCollision*>("vphysics.dll", "VPhysicsCollision007");
+		std::cout << "PhysicsCollision: " << I::PhysicsCollision << std::endl;
 	}
 
 	G::Draw.Init();
 	G::G_L4D2Portal.PortalInit();
 	G::Hooks.Init();
 	//Run();
-	FuncTest();
+	//Func_TraceRay_Test();
+	Func_IPhysicsEnvironment_Test();
 }

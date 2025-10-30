@@ -262,6 +262,7 @@
     <ClInclude Include="SDK\L4D2\Interfaces\RenderView.h" />
     <ClInclude Include="SDK\L4D2\Interfaces\VGuiPanel.h" />
     <ClInclude Include="SDK\L4D2\Interfaces\VGuiSurface.h" />
+    <ClInclude Include="SDK\L4D2\Interfaces\Vphysics.h" />
     <ClInclude Include="SDK\SDK.h" />
     <ClInclude Include="Util\Hook\Hook.h" />
     <ClInclude Include="Util\Hook\MinHook\buffer.h" />

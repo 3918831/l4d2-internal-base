@@ -25,8 +25,6 @@ void __fastcall CCSGameMovement::TracePlayerBBox::Detour(void* ecx, void* edx, c
 
 	//// 清除命中实体信息
 	//pm->m_pEnt = NULL;
-	pm->startsolid = false;
-	pm->allsolid = false; // 同样清除allsolid标志
 	return;
 }
 

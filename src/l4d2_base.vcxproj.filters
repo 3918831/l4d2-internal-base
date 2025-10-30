@@ -132,6 +132,7 @@
     <ClInclude Include="Portal\CustomRender.h" />
     <ClInclude Include="SDK\L4D2\Interfaces\IInput.h" />
     <ClInclude Include="Hooks\GameMovement\CCSGameMovement.h" />
+    <ClInclude Include="SDK\L4D2\Interfaces\Vphysics.h" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="Docs\DebugLog.txt" />
