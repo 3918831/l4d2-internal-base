@@ -59,26 +59,26 @@ struct Ray_t
 		m_Delta = VectorAligned(vEnd - vStart);
 		m_IsSwept = (m_Delta.LenghtSqr() != 0);
 		m_Extents.Init();
-		//m_pWorldAxisTransform = 0;
+		m_pWorldAxisTransform = 0;
 		m_IsRay = true;
 		m_StartOffset.Init();
 		m_Start = vStart;
 	}
 
-	VectorAligned m_Start;
-	VectorAligned m_Delta;
-	VectorAligned m_StartOffset;
-	VectorAligned m_Extents;
-	//const matrix3x4_t* m_pWorldAxisTransform;
-	bool m_IsRay;
-	bool m_IsSwept;
+	VectorAligned  m_Start;	// starting point, centered within the extents
+	VectorAligned  m_Delta;	// direction + length of the ray
+	VectorAligned  m_StartOffset;	// Add this to m_Start to get the actual ray start
+	VectorAligned  m_Extents;	// Describes an axis aligned box extruded along a ray
+	const matrix3x4_t* m_pWorldAxisTransform;
+	bool	m_IsRay;	// are the extents zero?
+	bool	m_IsSwept;	// is delta != 0?
 
 	void Init(const Vector vStart, const Vector vEnd)
 	{
 		m_Delta = VectorAligned(vEnd - vStart);
 		m_IsSwept = (m_Delta.LenghtSqr() != 0);
 		m_Extents.Init();
-		//m_pWorldAxisTransform = 0;
+		m_pWorldAxisTransform = 0;
 		m_IsRay = true;
 		m_StartOffset.Init();
 		m_Start = vStart;
@@ -120,7 +120,10 @@ public:
 	csurface_t surface;
 	int hitgroup;
 	short physicsbone;
-	unsigned short worldSurfaceIndex;
+
+	//不同的SDK此处CGameTrace稍有差异,worldSurfaceIndex不确定在L4D2中是否存在,但是sourcemod官方L4D2分支SDK没有该变量,暂时注释
+	//unsigned short worldSurfaceIndex;
+
 	C_BaseEntity* m_pEnt;
 	int hitbox;
 

@@ -141,6 +141,8 @@ void CGlobal_ModuleEntry::Func_TraceRay_Test()
 			CTraceFilter pTraceFilter;
 			trace_t pTrace;
 			I::EngineTrace->TraceRay(ray, fMask, &pTraceFilter, &pTrace);
+			auto ret1 = pTrace.m_pEnt->ShouldDrawUnderwaterBulletBubbles();
+			auto ret2 = pTrace.m_pEnt->ShouldDrawWaterImpacts();
 			if (pTrace.fraction < 1.0) {
 					std::cout << "Trace Hit" << std::endl;
 			} else {
@@ -287,6 +289,6 @@ void CGlobal_ModuleEntry::Load()
 	G::G_L4D2Portal.PortalInit();
 	G::Hooks.Init();
 	//Run();
-	//Func_TraceRay_Test();
-	Func_IPhysicsEnvironment_Test();
+	Func_TraceRay_Test();
+	//Func_IPhysicsEnvironment_Test();
 }
