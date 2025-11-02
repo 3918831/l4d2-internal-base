@@ -199,11 +199,54 @@ void CGlobal_ModuleEntry::Func_IPhysicsEnvironment_Test()
 	// 先读取指针，再调用方法
 	IPhysicsEnvironment* physenv = (IPhysicsEnvironment*)(*physenv_ptr_ptr);
 	if (physenv) {
-		float airDensity = physenv->GetAirDensity();
+		float airDensity = physenv->GetAirDensity(); //这个调用正确,默认返回值是2.0
 		// 使用name...
 		printf("airDensity = %f\n", airDensity);
 	}
 	
+}
+
+void CGlobal_ModuleEntry::Func_Pistol_Fire_Test()
+{
+	if (!I::EngineClient->IsInGame() || I::EngineVGui->IsGameUIVisible())
+		return;
+
+	C_TerrorPlayer* pLocal = I::ClientEntityList->GetClientEntity(I::EngineClient->GetLocalPlayer())->As<C_TerrorPlayer*>();
+	/*while (1) {*/
+	while (pLocal && !pLocal->deadflag())
+	{
+		C_TerrorWeapon* pWeapon = pLocal->GetActiveWeapon()->As<C_TerrorWeapon*>();
+		if (pWeapon)
+		{
+			const char* weapon_name = pWeapon->GetName();
+			printf("weapon_name = %s\n", weapon_name);
+			//if (strcmp(weapon_name, "weapon_pistol") == 0)
+			if (strcmp(weapon_name, "weapon_shotgun_chrome") == 0)
+			{
+
+				typedef void(__thiscall* PrimaryAttackFn)(void*);
+				typedef void(__thiscall* SecondaryAttackFn)(void*);
+				// 1. 获取虚函数表指针
+				void** vtable_ptr = *reinterpret_cast<void***>(pWeapon);
+
+				// 2. 调用PrimaryAttack (索引270)
+				PrimaryAttackFn primaryFunc = reinterpret_cast<PrimaryAttackFn>(vtable_ptr[270]);
+				primaryFunc(pWeapon);
+				Sleep(1000);
+
+				// 3. 调用SecondaryAttack (索引271)
+				SecondaryAttackFn secondaryFunc = reinterpret_cast<SecondaryAttackFn>(vtable_ptr[271]);
+				secondaryFunc(pWeapon);
+				Sleep(1000);
+
+
+				//pWeapon->PrimaryAttack();
+				//Sleep(1000);
+				//pWeapon->SecondaryAttack();
+                
+			}
+		}
+	}
 }
 
 void CGlobal_ModuleEntry::Load()
@@ -283,12 +326,16 @@ void CGlobal_ModuleEntry::Load()
 
 		I::PhysicsCollision = U::Interface.Get<IPhysicsCollision*>("vphysics.dll", "VPhysicsCollision007");
 		std::cout << "PhysicsCollision: " << I::PhysicsCollision << std::endl;
+
+		auto ret = U::Interface.Get<void*>("server.dll", "VSERVERTOOLS001");
+		printf("%p", ret);
 	}
 
 	G::Draw.Init();
 	G::G_L4D2Portal.PortalInit();
 	G::Hooks.Init();
 	//Run();
-	Func_TraceRay_Test();
+	//Func_TraceRay_Test();
 	//Func_IPhysicsEnvironment_Test();
+	//Func_Pistol_Fire_Test();
 }
