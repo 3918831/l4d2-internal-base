@@ -40,6 +40,7 @@
     <ClCompile Include="Features\EnginePrediction\EnginePrediction.cpp" />
     <ClCompile Include="Portal\L4D2_Portal.cpp" />
     <ClCompile Include="Hooks\GameMovement\CCSGameMovement.cpp" />
+    <ClCompile Include="Hooks\C_Weapon\Weapon_Pistol.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Util\Util.h" />
@@ -133,8 +134,12 @@
     <ClInclude Include="SDK\L4D2\Interfaces\IInput.h" />
     <ClInclude Include="Hooks\GameMovement\CCSGameMovement.h" />
     <ClInclude Include="SDK\L4D2\Interfaces\Vphysics.h" />
+    <ClInclude Include="Hooks\C_Weapon\Weapon_Pistol.h" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="Docs\DebugLog.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="README.md" />
   </ItemGroup>
 </Project>

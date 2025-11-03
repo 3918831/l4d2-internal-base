@@ -13,6 +13,7 @@
 #include "TerrorGameRules/TerrorGameRules.h"
 #include "TerrorPlayer/TerrorPlayer.h"
 #include "WndProc/WndProc.h"
+#include "C_Weapon/Weapon_Pistol.h"
 
 class CGlobal_Hooks
 {

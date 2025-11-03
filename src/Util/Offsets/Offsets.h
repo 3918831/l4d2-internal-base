@@ -30,6 +30,11 @@ public:
 
 	DWORD m_dwTracePlayerBBox = 0x0;
 
+	//Piltol Fire
+	DWORD m_dwReload = 0x0;
+	DWORD m_dwPrimaryAttack = 0x0;
+	DWORD m_dwSecondaryAttack = 0x0;
+
 };
 
 namespace U { inline CUtil_Offsets Offsets; }

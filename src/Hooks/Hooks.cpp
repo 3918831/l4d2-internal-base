@@ -22,6 +22,9 @@ void CGlobal_Hooks::Init()
 		TerrorPlayer::Init();
 		WndProc::Init();
 		CCSGameMovement::Init();
+
+		//增加对Pistol的Hook
+		Pistol::Init();
 	}
 
 	XASSERT(MH_EnableHook(MH_ALL_HOOKS) != MH_STATUS::MH_OK);

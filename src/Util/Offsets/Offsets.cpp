@@ -85,4 +85,12 @@ void CUtil_Offsets::Init()
 		I::CustomView->Init();
 	}
 
+	m_dwReload = U::Pattern.Find(_("client.dll"), _("56 57 8B F1 E8 ? ? ? ? 8B F8 85 FF 0F 84 ? ? ? ? 8B 87 8C 1F 00 00"));
+	XASSERT(m_dwReload == 0x0);
+
+	m_dwPrimaryAttack = U::Pattern.Find(_("client.dll"), _("55 8B EC 51 56 8B F1 E8 ? ? ? ? 8B 06"));
+	XASSERT(m_dwPrimaryAttack == 0x0);
+
+	m_dwSecondaryAttack = U::Pattern.Find(_("client.dll"), _("56 57 8B F9 E8 ? ? ? ? 8B F0 85 F6 0F 84 ? ? ? ? 8B 06 8B 90 3C 02 00 00 8B CE FF D2 84 C0 0F 84 ? ? ? ? 80 BE 47 01 00 00 00"));
+	XASSERT(m_dwSecondaryAttack == 0x0);
 }

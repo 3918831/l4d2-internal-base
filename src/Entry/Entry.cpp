@@ -220,9 +220,13 @@ void CGlobal_ModuleEntry::Func_Pistol_Fire_Test()
 		{
 			const char* weapon_name = pWeapon->GetName();
 			printf("weapon_name = %s\n", weapon_name);
-			//if (strcmp(weapon_name, "weapon_pistol") == 0)
-			if (strcmp(weapon_name, "weapon_shotgun_chrome") == 0)
+			if (strcmp(weapon_name, "weapon_pistol") == 0)
+			//if (strcmp(weapon_name, "weapon_shotgun_chrome") == 0)
 			{
+				// 或者通过代码获取
+				HMODULE hModule = GetModuleHandle(L"client.dll");
+				DWORD baseAddress = (DWORD)hModule;
+				printf("DLL基址: 0x%08X\n", baseAddress);
 
 				typedef void(__thiscall* PrimaryAttackFn)(void*);
 				typedef void(__thiscall* SecondaryAttackFn)(void*);
@@ -231,16 +235,16 @@ void CGlobal_ModuleEntry::Func_Pistol_Fire_Test()
 
 				// 2. 调用PrimaryAttack (索引270)
 				PrimaryAttackFn primaryFunc = reinterpret_cast<PrimaryAttackFn>(vtable_ptr[270]);
-				primaryFunc(pWeapon);
+				//primaryFunc(pWeapon);
 				Sleep(1000);
 
 				// 3. 调用SecondaryAttack (索引271)
 				SecondaryAttackFn secondaryFunc = reinterpret_cast<SecondaryAttackFn>(vtable_ptr[271]);
-				secondaryFunc(pWeapon);
+				//secondaryFunc(pWeapon);
 				Sleep(1000);
 
 
-				//pWeapon->PrimaryAttack();
+				pWeapon->PrimaryAttack();
 				//Sleep(1000);
 				//pWeapon->SecondaryAttack();
                 
