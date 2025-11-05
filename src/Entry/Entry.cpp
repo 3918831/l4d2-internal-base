@@ -3,6 +3,7 @@
 #include "../SDK/L4D2/Interfaces/ICvar.h"
 #include "../SDK/L4D2/Interfaces/IInput.h"
 #include "../SDK/L4D2/Interfaces/Vphysics.h"
+#include "../SDK/L4D2/Interfaces/CServerTools.h"
 #include "../Portal/L4D2_Portal.h"
 
 
@@ -253,6 +254,31 @@ void CGlobal_ModuleEntry::Func_Pistol_Fire_Test()
 	}
 }
 
+void CGlobal_ModuleEntry::Func_CServerTools_Test()
+{
+	class CBaseEntity;
+	CBaseEntity* prop_obj = (CBaseEntity*)I::CServerTools->CreateEntityByName("prop_dynamic");
+	printf("%p\n", prop_obj);
+
+	typedef void(__thiscall* TeleportFn)(void*, Vector const*, QAngle const*, Vector const*);
+	typedef void(__thiscall* SetModelFn)(void*, const char*);
+	// 1. 获取虚函数表指针
+	void** vtable_ptr = *reinterpret_cast<void***>(prop_obj);
+	TeleportFn primaryFunc = reinterpret_cast<TeleportFn>(vtable_ptr[118]);  //118 = CBaseEntity::Teleport(Vector const*, QAngle const*, Vector const*)
+	const Vector* newPosition = new Vector(0, 0, 0);
+	QAngle* newAngles = new QAngle;
+	newAngles->x = newAngles->y = newAngles->z = 0;
+	const Vector* newVelocity = new Vector(0, 0, 0);
+	primaryFunc(prop_obj, newPosition, newAngles, newVelocity);
+
+	const char* model_name = "models/blackops/portal.mdl";
+	SetModelFn setModelFunc = reinterpret_cast<SetModelFn>(vtable_ptr[27]); //27 = CBaseEntity::SetModel(char const*)
+	setModelFunc(prop_obj, model_name);
+
+	I::CServerTools->DispatchSpawn(prop_obj);
+
+}
+
 void CGlobal_ModuleEntry::Load()
 {
 	AllocConsole();
@@ -331,8 +357,9 @@ void CGlobal_ModuleEntry::Load()
 		I::PhysicsCollision = U::Interface.Get<IPhysicsCollision*>("vphysics.dll", "VPhysicsCollision007");
 		std::cout << "PhysicsCollision: " << I::PhysicsCollision << std::endl;
 
-		auto ret = U::Interface.Get<void*>("server.dll", "VSERVERTOOLS001");
-		printf("%p", ret);
+		I::CServerTools = U::Interface.Get<IServerTools*>("server.dll", "VSERVERTOOLS001");
+		std::cout << "CServerTools: " << I::CServerTools << std::endl;
+
 	}
 
 	G::Draw.Init();
@@ -342,4 +369,5 @@ void CGlobal_ModuleEntry::Load()
 	//Func_TraceRay_Test();
 	//Func_IPhysicsEnvironment_Test();
 	//Func_Pistol_Fire_Test();
+	Func_CServerTools_Test();
 }

@@ -135,6 +135,7 @@
     <ClInclude Include="Hooks\GameMovement\CCSGameMovement.h" />
     <ClInclude Include="SDK\L4D2\Interfaces\Vphysics.h" />
     <ClInclude Include="Hooks\C_Weapon\Weapon_Pistol.h" />
+    <ClInclude Include="SDK\L4D2\Interfaces\CServerTools.h" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="Docs\DebugLog.txt" />
