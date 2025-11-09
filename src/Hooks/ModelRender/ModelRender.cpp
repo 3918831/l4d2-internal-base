@@ -463,7 +463,7 @@ void __fastcall ModelRender::DrawModelExecute::Detour(void* ecx, void* edx, cons
             float* pScale = (float*)((uintptr_t)pEntity + 0x728); // 0x728 是C_BaseAnimating的m_flModelScale值(client.dll)
             if (pScale) {
                 //*pScale = 2.0f;
-                printf("[DrawModelExecute] pScale: %f\n", *pScale);
+                //printf("[DrawModelExecute] pScale: %f\n", *pScale);
             }
         }
 
