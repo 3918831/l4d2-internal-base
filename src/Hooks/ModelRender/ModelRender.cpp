@@ -457,6 +457,16 @@ void __fastcall ModelRender::DrawModelExecute::Detour(void* ecx, void* edx, cons
         G::G_L4D2Portal.g_BluePortal.angles.z = pInfo.angles.z;
         G::G_L4D2Portal.g_BluePortal.bIsActive = true;
         //I::ClientEntityList->GetClientEntity(pInfo.entity_index);
+        int model_index = pInfo.entity_index;
+        C_BaseAnimating* pEntity = reinterpret_cast<C_BaseAnimating*>(I::ClientEntityList->GetClientEntity(model_index));
+        if (pEntity) {
+            float* pScale = (float*)((uintptr_t)pEntity + 0x728); // 0x728 是C_BaseAnimating的m_flModelScale值(client.dll)
+            if (pScale) {
+                //*pScale = 2.0f;
+                printf("[DrawModelExecute] pScale: %f\n", *pScale);
+            }
+        }
+
     }
 
     if (isOrangePortal) {
