@@ -41,6 +41,8 @@
     <ClCompile Include="Portal\L4D2_Portal.cpp" />
     <ClCompile Include="Hooks\GameMovement\CCSGameMovement.cpp" />
     <ClCompile Include="Hooks\C_Weapon\Weapon_Pistol.cpp" />
+    <ClCompile Include="Portal\server\prop_portal.cpp" />
+    <ClCompile Include="Portal\client\weapon_portalgun.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Util\Util.h" />
@@ -136,6 +138,10 @@
     <ClInclude Include="SDK\L4D2\Interfaces\Vphysics.h" />
     <ClInclude Include="Hooks\C_Weapon\Weapon_Pistol.h" />
     <ClInclude Include="SDK\L4D2\Interfaces\CServerTools.h" />
+    <ClInclude Include="Portal\server\prop_portal.h" />
+    <ClInclude Include="Portal\server\portal_shareddefs.h" />
+    <ClInclude Include="Portal\public\worldsize.h" />
+    <ClInclude Include="Portal\client\weapon_portalgun.h" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="Docs\DebugLog.txt" />

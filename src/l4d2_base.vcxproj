@@ -172,7 +172,9 @@
     <ClCompile Include="Hooks\TerrorGameRules\TerrorGameRules.cpp" />
     <ClCompile Include="Hooks\TerrorPlayer\TerrorPlayer.cpp" />
     <ClCompile Include="Hooks\WndProc\WndProc.cpp" />
+    <ClCompile Include="Portal\client\weapon_portalgun.cpp" />
     <ClCompile Include="Portal\L4D2_Portal.cpp" />
+    <ClCompile Include="Portal\server\prop_portal.cpp" />
     <ClCompile Include="SDK\DrawManager\DrawManager.cpp" />
     <ClCompile Include="SDK\GameUtil\GameUtil.cpp" />
     <ClCompile Include="SDK\KeyValues\KeyValues.cpp" />
@@ -213,8 +215,12 @@
     <ClInclude Include="Hooks\TerrorGameRules\TerrorGameRules.h" />
     <ClInclude Include="Hooks\TerrorPlayer\TerrorPlayer.h" />
     <ClInclude Include="Hooks\WndProc\WndProc.h" />
+    <ClInclude Include="Portal\client\weapon_portalgun.h" />
     <ClInclude Include="Portal\CustomRender.h" />
     <ClInclude Include="Portal\L4D2_Portal.h" />
+    <ClInclude Include="Portal\public\worldsize.h" />
+    <ClInclude Include="Portal\server\portal_shareddefs.h" />
+    <ClInclude Include="Portal\server\prop_portal.h" />
     <ClInclude Include="SDK\DrawManager\DrawManager.h" />
     <ClInclude Include="SDK\GameUtil\GameUtil.h" />
     <ClInclude Include="SDK\KeyValues\KeyValues.h" />

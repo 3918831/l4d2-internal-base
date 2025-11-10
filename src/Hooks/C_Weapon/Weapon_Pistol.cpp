@@ -11,6 +11,44 @@ void __fastcall Pistol::Reload::Detour(C_TerrorWeapon* pThis, void* edx)
 void __fastcall Pistol::PrimaryAttack::Detour(C_TerrorWeapon* pThis, void* edx)
 {
 	printf("Pistol::PrimaryAttack::Detour is called.\n");
+
+	C_TerrorPlayer* pLocal = I::ClientEntityList->GetClientEntity(I::EngineClient->GetLocalPlayer())->As<C_TerrorPlayer*>();
+
+	if (pLocal && !pLocal->deadflag())
+	{
+		Vector eyePosition = pLocal->EyePosition();
+
+		// 计算主视角目前角度对应的向量坐标
+		Vector forward, right, up;
+
+		Vector eyeAngles = pLocal->EyeAngles();
+		U::Math.AngleVectors(reinterpret_cast<QAngle&>(eyeAngles), &forward, &right, &up);
+
+		Vector vTracerOrigin = eyePosition
+			+ forward * 30.0f
+			+ right * 4.0f
+			+ up * (-5.0f);
+		Vector vTracerEnd;
+		float z_distance = 500.0f;
+		vTracerEnd.x = vTracerOrigin.x + forward.x * z_distance;
+		vTracerEnd.y = vTracerOrigin.y + forward.y * z_distance;
+		vTracerEnd.z = vTracerOrigin.z + forward.z * z_distance;
+
+		Ray_t ray;
+		ray.Init(vTracerOrigin, vTracerEnd);
+		unsigned int fMask = MASK_SHOT | CONTENTS_GRATE;
+		CTraceFilter pTraceFilter;
+		trace_t pTrace;
+		I::EngineTrace->TraceRay(ray, fMask, &pTraceFilter, &pTrace);
+		if (pTrace.DidHit()) {
+			int index = pTrace.m_pEnt->entindex(); //为0的话就是worldspawn
+			printf("hit index: %d\n", index);
+		} else {
+			printf("Hit nothing\n");
+		}
+		
+	}
+
 	Func.Original<FN>()(pThis, edx);
 }
 

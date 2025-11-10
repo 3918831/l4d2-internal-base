@@ -132,9 +132,11 @@ void CGlobal_ModuleEntry::Func_TraceRay_Test()
 	bool hit = false;
 
 	C_TerrorPlayer* pLocal = I::ClientEntityList->GetClientEntity(I::EngineClient->GetLocalPlayer())->As<C_TerrorPlayer*>();
-	while (1) {
+	if (1) {
 		if (pLocal && !pLocal->deadflag())
 		{
+			Vector eyeAngles =  pLocal->EyeAngles();
+			Vector eyePosition = pLocal->EyePosition();
 			Vector pos = pLocal->GetAbsOrigin();
 			Ray_t ray;
 			ray.Init(pos, Vector(0, 0, 0));
@@ -369,5 +371,5 @@ void CGlobal_ModuleEntry::Load()
 	//Func_TraceRay_Test();
 	//Func_IPhysicsEnvironment_Test();
 	//Func_Pistol_Fire_Test();
-	Func_CServerTools_Test();
+	//Func_CServerTools_Test();
 }
