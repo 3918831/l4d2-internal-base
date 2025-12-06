@@ -82,6 +82,31 @@ void CUtil_Math::VectorAngles(const Vector& forward, Vector& angles)
 	angles[2] = 0.0f;
 }
 
+void CUtil_Math::VectorAngles(const Vector& forward, QAngle& angles)
+{
+	float yaw, pitch;
+
+	if (forward.y == 0.0f && forward.x == 0.0f)
+	{
+		yaw = 0.0f;
+		pitch = (forward.z > 0.0f) ? 270.0f : 90.0f;
+	}
+	else
+	{
+		yaw = RAD2DEGF(::atan2f(forward.y, forward.x));
+		yaw += (360.0f * (yaw < 0.0f));
+
+		const float tmp = forward.Lenght2D();
+
+		pitch = RAD2DEGF(::atan2f(-forward.z, tmp));
+		pitch += (360.0f * (pitch < 0.0f));
+	}
+
+	angles[0] = pitch;
+	angles[1] = yaw;
+	angles[2] = 0.0f;
+}
+
 void CUtil_Math::AngleVectors(const Vector vAngles, Vector* vForward)
 {
 	float sp, sy, cp, cy;

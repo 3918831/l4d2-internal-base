@@ -29,7 +29,7 @@ void __fastcall Pistol::PrimaryAttack::Detour(C_TerrorWeapon* pThis, void* edx)
 			+ right * 4.0f
 			+ up * (-5.0f);
 		Vector vTracerEnd;
-		float z_distance = 500.0f;
+		float z_distance = 4096.0f;
 		vTracerEnd.x = vTracerOrigin.x + forward.x * z_distance;
 		vTracerEnd.y = vTracerOrigin.y + forward.y * z_distance;
 		vTracerEnd.z = vTracerOrigin.z + forward.z * z_distance;

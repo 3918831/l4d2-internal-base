@@ -16,7 +16,7 @@ inline void UTIL_TraceLine(const Vector& vecAbsStart, const Vector& vecAbsEnd, u
 }
 
 
-float CWeaponPortalgun::TraceFirePortal(bool bPortal2, const Vector& vTraceStart, const Vector& vDirection, trace_t& tr, Vector& vFinalPosition, QAngle& qFinalAngles, int iPlacedBy, bool bTest /*= false*/)
+void CWeaponPortalgun::TraceFirePortal(bool bPortal2, const Vector& vTraceStart, const Vector& vDirection, trace_t& tr, Vector& vFinalPosition, Vector& vNormal, QAngle& qFinalAngles, int iPlacedBy, bool bTest /*= false*/)
 {
     // 近处检测才用到，主要场景下的trace在UTIL_TraceLine中自行定义Ray_t，故先不定义
     /*Ray_t rayEyeArea;
@@ -42,13 +42,31 @@ float CWeaponPortalgun::TraceFirePortal(bool bPortal2, const Vector& vTraceStart
             vFinalPosition = pPortal->m_vDelayedPosition;
             qFinalAngles = pPortal->m_qDelayedAngles;*/
         }
+        printf("Hit nothing\n");
+        return;
+    }
+    
+    int hitEntityIndex = tr.m_pEnt->entindex();
+    if (hitEntityIndex != 0) {
+        printf("hit index: %d\n", hitEntityIndex);
+    } else { //为0的话就是worldspawn
 
-        return PORTAL_ANALOG_SUCCESS_PASSTHROUGH_SURFACE;
+        // 传送门源码在此处做了一次额外检查：
+        //Vector vUp(0.0f, 0.0f, 1.0f);
+        //if ((tr.plane.normal.x > -0.001f && tr.plane.normal.x < 0.001f) && (tr.plane.normal.y > -0.001f && tr.plane.normal.y < 0.001f))
+        //{
+        //    //plane is a level floor/ceiling
+        //    vUp = vDirection;
+        //}
+
+        printf("hit worldspawn success.");
+        U::Math.VectorAngles(tr.plane.normal, qFinalAngles);
+        vFinalPosition = tr.endpos;
     }
 
 }
 
-float CWeaponPortalgun::FirePortal(bool bPortal2, Vector* pVector /*= 0*/, bool bTest /*= false*/)
+void CWeaponPortalgun::FirePortal(bool bPortal2, Vector* pVector /*= 0*/, bool bTest /*= false*/)
 {
     Vector vEye;
     Vector vDirection;
@@ -83,19 +101,20 @@ float CWeaponPortalgun::FirePortal(bool bPortal2, Vector* pVector /*= 0*/, bool 
     Vector vTraceStart = vEye + (vDirection * m_fMinRange1);
 
     Vector vFinalPosition;
+    Vector vNormal;
     QAngle qFinalAngles;
 
     PortalPlacedByType ePlacedBy = PORTAL_PLACED_BY_PLAYER;
     trace_t tr;
 
-    // TODO: TraceFirePortal待补全实现
-    float fPlacementSuccess = TraceFirePortal(bPortal2, vTraceStart, vDirection, tr, vFinalPosition, qFinalAngles, ePlacedBy, bTest);
+    TraceFirePortal(bPortal2, vTraceStart, vDirection, tr, vFinalPosition, vNormal, qFinalAngles, ePlacedBy, bTest);
 
     // sv_portal_placement_never_fail是传送门的一条指令，允许在允许玩家在传送门放置失败时，仍然可以放置传送门
     /*if (sv_portal_placement_never_fail.GetBool())
     {
         fPlacementSuccess = 1.0f;
     }*/
+    float fPlacementSuccess = 1.0f;
 
     if (!bTest)
     {
@@ -103,14 +122,14 @@ float CWeaponPortalgun::FirePortal(bool bPortal2, Vector* pVector /*= 0*/, bool 
         CProp_Portal* pPortal = CProp_Portal::FindPortal(bPortal2, true);
 
         // If it was a failure, put the effect at exactly where the player shot instead of where the portal bumped to
-        if (fPlacementSuccess < 0.5f)
-            vFinalPosition = tr.endpos;
+        /*if (fPlacementSuccess < 0.5f)
+            vFinalPosition = tr.endpos;*/
 
         // TODO: PlacePortal待补全实现
-        pPortal->PlacePortal(vFinalPosition, qFinalAngles, fPlacementSuccess, true);
+        pPortal->PlacePortal(vFinalPosition, qFinalAngles, fPlacementSuccess, false);
     }
 
-    return fPlacementSuccess;
+    /*return fPlacementSuccess;*/
 }
 
 void CWeaponPortalgun::FirePortal1()

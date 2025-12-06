@@ -8,8 +8,8 @@ class CWeaponPortalgun
 public:
     void    FirePortal1();
     void    FirePortal2();
-    float   FirePortal(bool bPortal2, Vector* pVector = 0, bool bTest = false);
-    float   TraceFirePortal(bool bPortal2, const Vector& vTraceStart, const Vector& vDirection, trace_t& tr, Vector& vFinalPosition, QAngle& qFinalAngles, int iPlacedBy, bool bTest /*= false*/);
+    void    FirePortal(bool bPortal2, Vector* pVector = 0, bool bTest = false);
+    void    TraceFirePortal(bool bPortal2, const Vector& vTraceStart, const Vector& vDirection, trace_t& tr, Vector& vFinalPosition, Vector& vNormal, QAngle& qFinalAngles, int iPlacedBy, bool bTest /*= false*/);
     
 
     float   m_flModelScale;
