@@ -220,6 +220,7 @@ void L4D2_Portal::PortalInit()
     m_nClearFlags = 0;
     I::EngineClient->GetScreenSize(screenWidth, screenHeight);
 #endif
+    m_pWeaponPortalgun = std::make_unique<CWeaponPortalgun>();
 }
 
 // 清理函数，在不需要传送门时调用
@@ -254,7 +255,6 @@ void L4D2_Portal::PortalShutdown()
     
     m_pMaterialSystem = nullptr;
     m_pCustomMaterialSystem = nullptr;
-    
     printf("[Portal] Shutdown completed\n");
 }
 

@@ -1,4 +1,5 @@
 #include "Weapon_Pistol.h"
+#include "../../Portal/L4D2_Portal.h"
 
 using namespace Hooks;
 
@@ -12,6 +13,7 @@ void __fastcall Pistol::PrimaryAttack::Detour(C_TerrorWeapon* pThis, void* edx)
 {
 	printf("Pistol::PrimaryAttack::Detour is called.\n");
 
+	///*
 	C_TerrorPlayer* pLocal = I::ClientEntityList->GetClientEntity(I::EngineClient->GetLocalPlayer())->As<C_TerrorPlayer*>();
 
 	if (pLocal && !pLocal->deadflag())
@@ -42,19 +44,21 @@ void __fastcall Pistol::PrimaryAttack::Detour(C_TerrorWeapon* pThis, void* edx)
 		I::EngineTrace->TraceRay(ray, fMask, &pTraceFilter, &pTrace);
 		if (pTrace.DidHit()) {
 			int index = pTrace.m_pEnt->entindex(); //为0的话就是worldspawn
-			printf("hit index: %d\n", index);
+			printf("[Hook] Hit index: %d\n", index);
 		} else {
-			printf("Hit nothing\n");
+			printf("[Hook] Hit nothing\n");
 		}
 		
 	}
-
+	//*/
+	G::G_L4D2Portal.m_pWeaponPortalgun->FirePortal1();
 	Func.Original<FN>()(pThis, edx);
 }
 
 void __fastcall Pistol::SecondaryAttack::Detour(C_TerrorWeapon* pThis, void* edx)
 {
 	printf("Pistol::SecondaryAttack::Detour is called.\n");
+	G::G_L4D2Portal.m_pWeaponPortalgun->FirePortal2();
 	Func.Original<FN>()(pThis, edx);
 }
 
