@@ -13,7 +13,7 @@ void __fastcall Pistol::PrimaryAttack::Detour(C_TerrorWeapon* pThis, void* edx)
 {
 	printf("Pistol::PrimaryAttack::Detour is called.\n");
 
-	///*
+	/*
 	C_TerrorPlayer* pLocal = I::ClientEntityList->GetClientEntity(I::EngineClient->GetLocalPlayer())->As<C_TerrorPlayer*>();
 
 	if (pLocal && !pLocal->deadflag())

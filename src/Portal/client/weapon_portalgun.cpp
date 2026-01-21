@@ -135,6 +135,7 @@ void CWeaponPortalgun::FirePortal(bool bPortal2, Vector* pVector /*= 0*/, bool b
     if (!bTest)
     {
         // TODO: FindPortal待补全实现
+        // 这里补充传送门的状态管理，如果传送门已经被创建，下次直接TP而不是再次走FindPortal -> CreateEntityByName这个逻辑
         CProp_Portal* pPortal = CProp_Portal::FindPortal(bPortal2, true);
         if (pPortal) {
             pPortal->SetModel(bPortal2 ? "models/blackops/portal_og.mdl" : "models/blackops/portal.mdl");
