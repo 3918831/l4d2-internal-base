@@ -23,6 +23,13 @@ struct PortalInfo_t
     Vector origin;          // 传送门在世界中的位置
     QAngle angles;          // 传送门在世界中的朝向
     CProp_Portal* pPortalEntity = nullptr; // 传送门实体指针
+
+    // 平滑缩放动画相关
+    Vector lastOrigin = Vector(0, 0, 0); // 上一次的位置，用于检测位置变化
+    float currentScale = 1.0f;           // 当前缩放比例 (0.0f ~ 1.0f)
+    bool isAnimating = false;            // 是否正在播放缩放动画
+    float lastTime = 0.0f;               // 上一次的时间戳，用于计算实际帧时间
+    const float SCALE_SPEED = 2.0f;      // 缩放速度（每秒增加的比例）
 };
 
 class Custom_IMaterialSystem {

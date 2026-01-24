@@ -15,19 +15,36 @@ This is a DLL injection-based game mod for Left 4 Dead 2 that implements a Porta
 
 ### Building from Command Line
 
-Find MSBuild location (VS2022 typically at `D:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe`):
-
+**Step 1: Find MSBuild location** (if not in PATH)
 ```powershell
-# 32-bit Debug (main development config)
-powershell.exe -Command "& 'D:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe' 'src\l4d2_base.sln' /p:Configuration=Debug /p:Platform=x86"
+# Using vswhere.exe (recommended)
+powershell.exe -Command "& 'C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe' -latest -products * -requires Microsoft.Component.MSBuild -property installationPath"
 
-# 32-bit Release
-powershell.exe -Command "& 'D:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe' 'src\l4d2_base.sln' /p:Configuration=Release /p:Platform=x86"
+# Or search directly
+powershell.exe -Command "Get-ChildItem 'C:\Program Files*' -Recurse -Filter MSBuild.exe -ErrorAction SilentlyContinue | Select-Object -First 3 FullName"
 ```
 
-**Important**: Use `/p:Platform=x86` NOT `/p:Platform=Win32` - the solution file defines platforms as `x86` not `Win32`.
+**Step 2: Build**
+```powershell
+# 32-bit Debug (main development config)
+powershell.exe -Command "& 'D:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe' 'g:\Code_Project\Visual Studio 2022 Project\3918831\Github\l4d2-internal-base\src\l4d2_base.sln' /p:Configuration=Debug /p:Platform=x86"
 
-Output: `src/Debug/Lak3_l4d2_hack.dll` or `src/Release/Lak3_l4d2_hack.dll`
+# 32-bit Release
+powershell.exe -Command "& 'D:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe' 'g:\Code_Project\Visual Studio 2022 Project\3918831\Github\l4d2-internal-base\src\l4d2_base.sln' /p:Configuration=Release /p:Platform=x86"
+```
+
+**Important**:
+- Use `/p:Platform=x86` NOT `/p:Platform=Win32` - the solution file defines platforms as `x86`
+- Adjust the path to match your actual workspace location
+
+**Output**: `src/Debug/Lak3_l4d2_hack.dll` or `src/Release/Lak3_l4d2_hack.dll`
+
+### Common MSBuild Locations
+| Visual Studio Version | MSBuild Path |
+|----------------------|--------------|
+| VS2022 Community | `D:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe` |
+| VS2022 Professional | `C:\Program Files\Microsoft Visual Studio\2022\Professional\MSBuild\Current\Bin\MSBuild.exe` |
+| VS2022 Enterprise | `C:\Program Files\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin\MSBuild.exe` |
 
 ### Alternative Build Methods
 If MSBuild 12.0 is the only available version, modify `l4d2_base.vcxproj`:

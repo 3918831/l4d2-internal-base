@@ -451,30 +451,93 @@ void __fastcall ModelRender::DrawModelExecute::Detour(void* ecx, void* edx, cons
     bool isOrangePortal = (modelName && strcmp(modelName, "models/blackops/portal_og.mdl") == 0);
 
     if (isBluePortal) {
+        // 检测位置是否发生变化（用于触发缩放动画）
+        float flDistToLast = pInfo.origin.DistTo(G::G_L4D2Portal.g_BluePortal.lastOrigin);
+
+        // 如果位置变化超过阈值（传送门被移动），重置缩放动画
+        if (flDistToLast > 1.0f) {
+            G::G_L4D2Portal.g_BluePortal.isAnimating = true;
+            G::G_L4D2Portal.g_BluePortal.currentScale = 0.0f;
+            G::G_L4D2Portal.g_BluePortal.lastTime = I::EngineClient->OBSOLETE_Time();
+        }
+
+        // 更新缩放动画
+        if (G::G_L4D2Portal.g_BluePortal.isAnimating) {
+            float flCurrentTime = I::EngineClient->OBSOLETE_Time();
+            float flFrameTime = flCurrentTime - G::G_L4D2Portal.g_BluePortal.lastTime;
+            G::G_L4D2Portal.g_BluePortal.lastTime = flCurrentTime;
+
+            G::G_L4D2Portal.g_BluePortal.currentScale += G::G_L4D2Portal.g_BluePortal.SCALE_SPEED * flFrameTime;
+
+            // 达到目标缩放比例，停止动画
+            if (G::G_L4D2Portal.g_BluePortal.currentScale >= 1.0f) {
+                G::G_L4D2Portal.g_BluePortal.currentScale = 1.0f;
+                G::G_L4D2Portal.g_BluePortal.isAnimating = false;
+            }
+        }
+
+        // 保存当前位置作为下一次比较的基准
+        G::G_L4D2Portal.g_BluePortal.lastOrigin = pInfo.origin;
         G::G_L4D2Portal.g_BluePortal.origin = pInfo.origin;
         G::G_L4D2Portal.g_BluePortal.angles.x = pInfo.angles.x;
         G::G_L4D2Portal.g_BluePortal.angles.y = pInfo.angles.y;
         G::G_L4D2Portal.g_BluePortal.angles.z = pInfo.angles.z;
         G::G_L4D2Portal.g_BluePortal.bIsActive = true;
-        //I::ClientEntityList->GetClientEntity(pInfo.entity_index);
+
+        // 应用缩放到模型
         int model_index = pInfo.entity_index;
         C_BaseAnimating* pEntity = reinterpret_cast<C_BaseAnimating*>(I::ClientEntityList->GetClientEntity(model_index));
         if (pEntity) {
             float* pScale = (float*)((uintptr_t)pEntity + 0x728); // 0x728 是C_BaseAnimating的m_flModelScale值(client.dll)
             if (pScale) {
-                //*pScale = 2.0f;
-                //printf("[DrawModelExecute] pScale: %f\n", *pScale);
+                *pScale = G::G_L4D2Portal.g_BluePortal.currentScale;
             }
         }
-
     }
 
     if (isOrangePortal) {
+        // 检测位置是否发生变化（用于触发缩放动画）
+        float flDistToLast = pInfo.origin.DistTo(G::G_L4D2Portal.g_OrangePortal.lastOrigin);
+
+        // 如果位置变化超过阈值（传送门被移动），重置缩放动画
+        if (flDistToLast > 1.0f) {
+            G::G_L4D2Portal.g_OrangePortal.isAnimating = true;
+            G::G_L4D2Portal.g_OrangePortal.currentScale = 0.0f;
+            G::G_L4D2Portal.g_OrangePortal.lastTime = I::EngineClient->OBSOLETE_Time();
+        }
+
+        // 更新缩放动画
+        if (G::G_L4D2Portal.g_OrangePortal.isAnimating) {
+            float flCurrentTime = I::EngineClient->OBSOLETE_Time();
+            float flFrameTime = flCurrentTime - G::G_L4D2Portal.g_OrangePortal.lastTime;
+            G::G_L4D2Portal.g_OrangePortal.lastTime = flCurrentTime;
+
+            G::G_L4D2Portal.g_OrangePortal.currentScale += G::G_L4D2Portal.g_OrangePortal.SCALE_SPEED * flFrameTime;
+
+            // 达到目标缩放比例，停止动画
+            if (G::G_L4D2Portal.g_OrangePortal.currentScale >= 1.0f) {
+                G::G_L4D2Portal.g_OrangePortal.currentScale = 1.0f;
+                G::G_L4D2Portal.g_OrangePortal.isAnimating = false;
+            }
+        }
+
+        // 保存当前位置作为下一次比较的基准
+        G::G_L4D2Portal.g_OrangePortal.lastOrigin = pInfo.origin;
         G::G_L4D2Portal.g_OrangePortal.origin = pInfo.origin;
         G::G_L4D2Portal.g_OrangePortal.angles.x = pInfo.angles.x;
         G::G_L4D2Portal.g_OrangePortal.angles.y = pInfo.angles.y;
         G::G_L4D2Portal.g_OrangePortal.angles.z = pInfo.angles.z;
         G::G_L4D2Portal.g_OrangePortal.bIsActive = true;
+
+        // 应用缩放到模型
+        int model_index = pInfo.entity_index;
+        C_BaseAnimating* pEntity = reinterpret_cast<C_BaseAnimating*>(I::ClientEntityList->GetClientEntity(model_index));
+        if (pEntity) {
+            float* pScale = (float*)((uintptr_t)pEntity + 0x728); // 0x728 是C_BaseAnimating的m_flModelScale值(client.dll)
+            if (pScale) {
+                *pScale = G::G_L4D2Portal.g_OrangePortal.currentScale;
+            }
+        }
     }
 
     if (isBluePortal || isOrangePortal)

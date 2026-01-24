@@ -54,6 +54,8 @@
 - C++17 支持（如果使用较新工具集）
 
 ### 编译过程详解
+- 编译指令举例：powershell.exe -Command "& 'D:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe' 'g:\Code_Project\Visual Studio 2022 Project\3918831\Github\l4d2-internal-base\src\l4d2_base.sln' /p:Configuration=Debug /p:Platform=x86"
+
 
 #### 环境兼容性处理
 项目原始配置使用 v142 工具集（VS2019），但在某些环境中可能只有旧版本的 MSBuild。以下是环境适配的编译方法：
