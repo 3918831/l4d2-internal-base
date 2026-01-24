@@ -20,7 +20,7 @@ inline void UTIL_TraceLine(const Vector& vecAbsStart, const Vector& vecAbsEnd, u
 
 void CWeaponPortalgun::TraceFirePortal(bool bPortal2, const Vector& vTraceStart, const Vector& vTraceEnd, trace_t& tr, Vector& vFinalPosition, Vector& vNormal, QAngle& qFinalAngles, int iPlacedBy, bool bTest /*= false*/)
 {
-    // ���������õ�����Ҫ�����µ�trace��UTIL_TraceLine�����ж���Ray_t�����Ȳ�����
+    // 近处检测才用到，主要场景下的trace在UTIL_TraceLine中自行定义Ray_t，故先不定义
     /*Ray_t rayEyeArea;
     rayEyeArea.Init(vTraceStart + vDirection * 24.0f, vTraceStart + vDirection * -24.0f);*/
 
@@ -30,11 +30,11 @@ void CWeaponPortalgun::TraceFirePortal(bool bPortal2, const Vector& vTraceStart,
 
     if (!tr.DidHit() || tr.startsolid)
     {
-        // �������ʲô��û���У���ֱ�ӷ���
+        // 射线如果什么都没打中，则直接返回
         // If it didn't hit anything, fizzle
         if (!bTest)
         {
-            // һ�Ѳ�֪����ɶ�ģ���ע��
+            // 一堆不知道干啥的，先注释
             /*CProp_Portal* pPortal = CProp_Portal::FindPortal(bPortal2, true);
 
             pPortal->m_iDelayedFailure = PORTAL_FIZZLE_NONE;
@@ -51,9 +51,9 @@ void CWeaponPortalgun::TraceFirePortal(bool bPortal2, const Vector& vTraceStart,
     int hitEntityIndex = tr.m_pEnt->entindex();
     if (hitEntityIndex != 0) {
         printf("[CWeaponPortalgun] Hit index: %d.\n", hitEntityIndex);
-    } else { //Ϊ0�Ļ�����worldspawn
+    } else { //为0的话就是worldspawn
 
-        // ������Դ���ڴ˴�����һ�ζ����飺
+        // 传送门源码在此处做了一次额外检查：
         //Vector vUp(0.0f, 0.0f, 1.0f);
         //if ((tr.plane.normal.x > -0.001f && tr.plane.normal.x < 0.001f) && (tr.plane.normal.y > -0.001f && tr.plane.normal.y < 0.001f))
         //{
@@ -79,7 +79,7 @@ void CWeaponPortalgun::FirePortal(bool bPortal2, Vector* pVector /*= 0*/, bool b
     Vector vDirection;
     Vector vTracerOrigin;
 
-    // �������ӽ�Ŀǰ�Ƕȶ�Ӧ����������
+    // 计算主视角目前角度对应的向量坐标
     Vector forward, right, up;
 
     Vector eyePosition = pLocalPlayer->EyePosition();
@@ -96,7 +96,7 @@ void CWeaponPortalgun::FirePortal(bool bPortal2, Vector* pVector /*= 0*/, bool b
     vTracerEnd.y = vTracerOrigin.y + forward.y * m_fMaxRange1;
     vTracerEnd.z = vTracerOrigin.z + forward.z * m_fMaxRange1;
 
-    vDirection = forward; //Դ���뾭����(������һЩ�������)����ʵ���ǰ�forward��ֵ��vDirection
+    vDirection = forward; //源代码经过简化(不考虑一些特殊情况)后，其实就是把forward赋值给vDirection
 
     if (pVector)
     {
@@ -105,7 +105,7 @@ void CWeaponPortalgun::FirePortal(bool bPortal2, Vector* pVector /*= 0*/, bool b
 
     PortalPlacedByType ePlacedBy = PORTAL_PLACED_BY_PLAYER;
     trace_t tr;
-    Vector vNormal; // TODO: �Ȱѷ����õ�, ��û���ú�����˵
+    Vector vNormal; // TODO: 先把法线拿到, 有没有用后面再说
     QAngle qFinalAngles;
     Vector vFinalPosition;
     TraceFirePortal(bPortal2, vTracerOrigin, vTracerEnd, tr, vFinalPosition, vNormal, qFinalAngles, ePlacedBy, bTest);
@@ -116,7 +116,7 @@ void CWeaponPortalgun::FirePortal(bool bPortal2, Vector* pVector /*= 0*/, bool b
     //trace_t pTrace;
     //I::EngineTrace->TraceRay(ray, fMask, &pTraceFilter, &pTrace);
     //if (pTrace.DidHit()) {
-    //    int index = pTrace.m_pEnt->entindex(); //Ϊ0�Ļ�����worldspawn
+    //    int index = pTrace.m_pEnt->entindex(); //为0的话就是worldspawn
     //    printf("[Hook] Hit index: %d\n", index);
     //}
     //else {
@@ -126,7 +126,7 @@ void CWeaponPortalgun::FirePortal(bool bPortal2, Vector* pVector /*= 0*/, bool b
 
     
 
-    // sv_portal_placement_never_fail�Ǵ����ŵ�һ��ָ���������������ڴ����ŷ���ʧ��ʱ����Ȼ���Է��ô�����
+    // sv_portal_placement_never_fail是传送门的一条指令，允许在允许玩家在传送门放置失败时，仍然可以放置传送门
     /*if (sv_portal_placement_never_fail.GetBool())
     {
         fPlacementSuccess = 1.0f;
@@ -135,8 +135,8 @@ void CWeaponPortalgun::FirePortal(bool bPortal2, Vector* pVector /*= 0*/, bool b
 
     if (!bTest)
     {
-        // TODO: FindPortal����ȫʵ��
-        // ���ﲹ�䴫���ŵ�״̬����������������Ѿ����������´�ֱ��TP�������ٴ���FindPortal -> CreateEntityByName����߼�
+        // TODO: FindPortal待补全实现
+        // 这里补充传送门的状态管理，如果传送门已经被创建，下次直接TP而不是再次走FindPortal -> CreateEntityByName这个逻辑
         // 获取对应颜色的传送门信息，检查是否已存在
         PortalInfo_t& portalInfo = bPortal2 ? G::G_L4D2Portal.g_OrangePortal : G::G_L4D2Portal.g_BluePortal;
         bool bAlreadyExists = (portalInfo.pPortalEntity != nullptr);
