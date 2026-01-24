@@ -3,6 +3,7 @@
 #include "../server/portal_shareddefs.h"
 #include "../../Util/Math/Math.h"
 #include "../../SDK/L4D2/Interfaces/CServerTools.h"
+#include "../L4D2_Portal.h"
 
 // hits solids (not grates) and passes through everything else
 #define MASK_SHOT_PORTAL            (CONTENTS_SOLID|CONTENTS_MOVEABLE|CONTENTS_WINDOW|CONTENTS_MONSTER)
@@ -19,7 +20,7 @@ inline void UTIL_TraceLine(const Vector& vecAbsStart, const Vector& vecAbsEnd, u
 
 void CWeaponPortalgun::TraceFirePortal(bool bPortal2, const Vector& vTraceStart, const Vector& vTraceEnd, trace_t& tr, Vector& vFinalPosition, Vector& vNormal, QAngle& qFinalAngles, int iPlacedBy, bool bTest /*= false*/)
 {
-    // Ω¸¥¶ºÏ≤‚≤≈”√µΩ£¨÷˜“™≥°æ∞œ¬µƒtrace‘⁄UTIL_TraceLine÷–◊‘––∂®“ÂRay_t£¨π œ»≤ª∂®“Â
+    // ÔøΩÔøΩÔøΩÔøΩÔøΩÔøΩÔøΩÔøΩÔøΩ√µÔøΩÔøΩÔøΩÔøΩÔøΩ“™ÔøΩÔøΩÔøΩÔøΩÔøΩ¬µÔøΩtraceÔøΩÔøΩUTIL_TraceLineÔøΩÔøΩÔøΩÔøΩÔøΩ–∂ÔøΩÔøΩÔøΩRay_tÔøΩÔøΩÔøΩÔøΩÔøΩ»≤ÔøΩÔøΩÔøΩÔøΩÔøΩ
     /*Ray_t rayEyeArea;
     rayEyeArea.Init(vTraceStart + vDirection * 24.0f, vTraceStart + vDirection * -24.0f);*/
 
@@ -29,11 +30,11 @@ void CWeaponPortalgun::TraceFirePortal(bool bPortal2, const Vector& vTraceStart,
 
     if (!tr.DidHit() || tr.startsolid)
     {
-        // …‰œﬂ»Áπ˚ ≤√¥∂º√ª¥Ú÷–£¨‘Ú÷±Ω”∑µªÿ
+        // ÔøΩÔøΩÔøΩÔøΩÔøΩÔøΩÔøΩ ≤√¥ÔøΩÔøΩ√ªÔøΩÔøΩÔøΩ–£ÔøΩÔøΩÔøΩ÷±ÔøΩ”∑ÔøΩÔøΩÔøΩ
         // If it didn't hit anything, fizzle
         if (!bTest)
         {
-            // “ª∂—≤ª÷™µ¿∏……∂µƒ£¨œ»◊¢ Õ
+            // “ªÔøΩ—≤ÔøΩ÷™ÔøΩÔøΩÔøΩÔøΩ…∂ÔøΩƒ£ÔøΩÔøΩÔøΩ◊¢ÔøΩÔøΩ
             /*CProp_Portal* pPortal = CProp_Portal::FindPortal(bPortal2, true);
 
             pPortal->m_iDelayedFailure = PORTAL_FIZZLE_NONE;
@@ -50,9 +51,9 @@ void CWeaponPortalgun::TraceFirePortal(bool bPortal2, const Vector& vTraceStart,
     int hitEntityIndex = tr.m_pEnt->entindex();
     if (hitEntityIndex != 0) {
         printf("[CWeaponPortalgun] Hit index: %d.\n", hitEntityIndex);
-    } else { //Œ™0µƒª∞æÕ «worldspawn
+    } else { //Œ™0ÔøΩƒªÔøΩÔøΩÔøΩÔøΩÔøΩworldspawn
 
-        // ¥´ÀÕ√≈‘¥¬Î‘⁄¥À¥¶◊ˆ¡À“ª¥Œ∂ÓÕ‚ºÏ≤È£∫
+        // ÔøΩÔøΩÔøΩÔøΩÔøΩÔøΩ‘¥ÔøΩÔøΩÔøΩ⁄¥À¥ÔøΩÔøΩÔøΩÔøΩÔøΩ“ªÔøΩŒ∂ÔøΩÔøΩÔøΩÔøΩÈ£∫
         //Vector vUp(0.0f, 0.0f, 1.0f);
         //if ((tr.plane.normal.x > -0.001f && tr.plane.normal.x < 0.001f) && (tr.plane.normal.y > -0.001f && tr.plane.normal.y < 0.001f))
         //{
@@ -78,7 +79,7 @@ void CWeaponPortalgun::FirePortal(bool bPortal2, Vector* pVector /*= 0*/, bool b
     Vector vDirection;
     Vector vTracerOrigin;
 
-    // º∆À„÷˜ ”Ω«ƒø«∞Ω«∂»∂‘”¶µƒœÚ¡ø◊¯±Í
+    // ÔøΩÔøΩÔøΩÔøΩÔøΩÔøΩÔøΩ”ΩÔøΩƒø«∞ÔøΩ«∂»∂ÔøΩ”¶ÔøΩÔøΩÔøΩÔøΩÔøΩÔøΩÔøΩÔøΩÔøΩÔøΩ
     Vector forward, right, up;
 
     Vector eyePosition = pLocalPlayer->EyePosition();
@@ -95,7 +96,7 @@ void CWeaponPortalgun::FirePortal(bool bPortal2, Vector* pVector /*= 0*/, bool b
     vTracerEnd.y = vTracerOrigin.y + forward.y * m_fMaxRange1;
     vTracerEnd.z = vTracerOrigin.z + forward.z * m_fMaxRange1;
 
-    vDirection = forward; //‘¥¥˙¬Îæ≠π˝ºÚªØ(≤ªøº¬«“ª–©Ãÿ ‚«Èøˆ)∫Û£¨∆‰ µæÕ «∞—forward∏≥÷µ∏¯vDirection
+    vDirection = forward; //‘¥ÔøΩÔøΩÔøΩÎæ≠ÔøΩÔøΩÔøΩÔøΩ(ÔøΩÔøΩÔøΩÔøΩÔøΩÔøΩ“ª–©ÔøΩÔøΩÔøΩÔøΩÔøΩÔøΩÔøΩ)ÔøΩÔøΩÔøΩÔøΩ µÔøΩÔøΩÔøΩ«∞ÔøΩforwardÔøΩÔøΩ÷µÔøΩÔøΩvDirection
 
     if (pVector)
     {
@@ -104,7 +105,7 @@ void CWeaponPortalgun::FirePortal(bool bPortal2, Vector* pVector /*= 0*/, bool b
 
     PortalPlacedByType ePlacedBy = PORTAL_PLACED_BY_PLAYER;
     trace_t tr;
-    Vector vNormal; // TODO: œ»∞—∑®œﬂƒ√µΩ, ”–√ª”–”√∫Û√Ê‘ŸÀµ
+    Vector vNormal; // TODO: ÔøΩ»∞—∑ÔøΩÔøΩÔøΩÔøΩ√µÔøΩ, ÔøΩÔøΩ√ªÔøΩÔøΩÔøΩ√∫ÔøΩÔøΩÔøΩÔøΩÔøΩÀµ
     QAngle qFinalAngles;
     Vector vFinalPosition;
     TraceFirePortal(bPortal2, vTracerOrigin, vTracerEnd, tr, vFinalPosition, vNormal, qFinalAngles, ePlacedBy, bTest);
@@ -115,7 +116,7 @@ void CWeaponPortalgun::FirePortal(bool bPortal2, Vector* pVector /*= 0*/, bool b
     //trace_t pTrace;
     //I::EngineTrace->TraceRay(ray, fMask, &pTraceFilter, &pTrace);
     //if (pTrace.DidHit()) {
-    //    int index = pTrace.m_pEnt->entindex(); //Œ™0µƒª∞æÕ «worldspawn
+    //    int index = pTrace.m_pEnt->entindex(); //Œ™0ÔøΩƒªÔøΩÔøΩÔøΩÔøΩÔøΩworldspawn
     //    printf("[Hook] Hit index: %d\n", index);
     //}
     //else {
@@ -125,7 +126,7 @@ void CWeaponPortalgun::FirePortal(bool bPortal2, Vector* pVector /*= 0*/, bool b
 
     
 
-    // sv_portal_placement_never_fail «¥´ÀÕ√≈µƒ“ªÃı÷∏¡Ó£¨‘ –Ì‘⁄‘ –ÌÕÊº“‘⁄¥´ÀÕ√≈∑≈÷√ ß∞‹ ±£¨»‘»ªø…“‘∑≈÷√¥´ÀÕ√≈
+    // sv_portal_placement_never_failÔøΩ«¥ÔøΩÔøΩÔøΩÔøΩ≈µÔøΩ“ªÔøΩÔøΩ÷∏ÔøΩÓ£¨ÔøΩÔøΩÔøΩÔøΩÔøΩÔøΩÔøΩÔøΩÔøΩÔøΩÔøΩÔøΩÔøΩÔøΩ⁄¥ÔøΩÔøΩÔøΩÔøΩ≈∑ÔøΩÔøΩÔøΩ ßÔøΩÔøΩ ±ÔøΩÔøΩÔøΩÔøΩ»ªÔøΩÔøΩÔøΩ‘∑ÔøΩÔøΩ√¥ÔøΩÔøΩÔøΩÔøΩÔøΩ
     /*if (sv_portal_placement_never_fail.GetBool())
     {
         fPlacementSuccess = 1.0f;
@@ -134,14 +135,34 @@ void CWeaponPortalgun::FirePortal(bool bPortal2, Vector* pVector /*= 0*/, bool b
 
     if (!bTest)
     {
-        // TODO: FindPortal¥˝≤π»´ µœ÷
-        // ’‚¿Ô≤π≥‰¥´ÀÕ√≈µƒ◊¥Ã¨π‹¿Ì£¨»Áπ˚¥´ÀÕ√≈“—æ≠±ª¥¥Ω®£¨œ¬¥Œ÷±Ω”TP∂¯≤ª «‘Ÿ¥Œ◊ﬂFindPortal -> CreateEntityByName’‚∏ˆ¬ﬂº≠
+        // TODO: FindPortalÔøΩÔøΩÔøΩÔøΩ»´ µÔøΩÔøΩ
+        // ÔøΩÔøΩÔøΩÔ≤πÔøΩ‰¥´ÔøΩÔøΩÔøΩ≈µÔøΩ◊¥Ã¨ÔøΩÔøΩÔøΩÔøΩÔøΩÔøΩÔøΩÔøΩÔøΩÔøΩÔøΩÔøΩÔøΩÔøΩÔøΩÔøΩ—æÔøΩÔøΩÔøΩÔøΩÔøΩÔøΩÔøΩÔøΩÔøΩÔøΩ¬¥ÔøΩ÷±ÔøΩÔøΩTPÔøΩÔøΩÔøΩÔøΩÔøΩÔøΩÔøΩŸ¥ÔøΩÔøΩÔøΩFindPortal -> CreateEntityByNameÔøΩÔøΩÔøΩÔøΩﬂºÔøΩ
+        // Ëé∑ÂèñÂØπÂ∫îÈ¢úËâ≤ÁöÑ‰º†ÈÄÅÈó®‰ø°ÊÅØÔºåÊ£ÄÊü•ÊòØÂê¶Â∑≤Â≠òÂú®
+        PortalInfo_t& portalInfo = bPortal2 ? G::G_L4D2Portal.g_OrangePortal : G::G_L4D2Portal.g_BluePortal;
+        bool bAlreadyExists = (portalInfo.pPortalEntity != nullptr);
+
+        // FindPortal Áé∞Âú®‰ºöÂ§çÁî®Â∑≤Â≠òÂú®ÁöÑ‰º†ÈÄÅÈó®ÂÆû‰ΩìÔºåÊàñÂàõÂª∫Êñ∞ÁöÑ
         CProp_Portal* pPortal = CProp_Portal::FindPortal(bPortal2, true);
         if (pPortal) {
-            pPortal->SetModel(bPortal2 ? "models/blackops/portal_og.mdl" : "models/blackops/portal.mdl");
+            // Âè™Âú®Á¨¨‰∏ÄÊ¨°ÂàõÂª∫Êó∂ËÆæÁΩÆÊ®°ÂûãÂíåÁîüÊàêÂÆû‰Ωì
+            if (!bAlreadyExists)
+            {
+                pPortal->SetModel(bPortal2 ? "models/blackops/portal_og.mdl" : "models/blackops/portal.mdl");
+                I::CServerTools->DispatchSpawn(pPortal);
+                printf("[CWeaponPortalgun]: Created new %s portal entity.\n", bPortal2 ? "orange" : "blue");
+            }
+            else
+            {
+                printf("[CWeaponPortalgun]: Moving existing %s portal to new location.\n", bPortal2 ? "orange" : "blue");
+            }
+
+            // ÊÄªÊòØÊõ¥Êñ∞‰º†ÈÄÅÈó®‰ΩçÁΩÆÔºàÊó†ËÆ∫Êñ∞ÊóßÔºâ
             pPortal->Teleport(&vFinalPosition, &qFinalAngles, nullptr);
-            I::CServerTools->DispatchSpawn(pPortal);
-            printf("[CWeaponPortalgun]: Created portal spawned.\n");
+
+            // Êõ¥Êñ∞‰º†ÈÄÅÈó®‰ø°ÊÅØ
+            portalInfo.bIsActive = true;
+            portalInfo.origin = vFinalPosition;
+            portalInfo.angles = qFinalAngles;
         } else {
             printf("[CWeaponPortalgun]: pPortal is nullptr.\n");
         }
@@ -150,7 +171,7 @@ void CWeaponPortalgun::FirePortal(bool bPortal2, Vector* pVector /*= 0*/, bool b
         /*if (fPlacementSuccess < 0.5f)
             vFinalPosition = tr.endpos;*/
 
-        // TODO: PlacePortal¥˝≤π»´ µœ÷
+        // TODO: PlacePortalÊú™ÂÆåÂÖ®ÂÆûÁé∞
         pPortal->PlacePortal(vFinalPosition, qFinalAngles, fPlacementSuccess, false);
     }
 

@@ -15,11 +15,14 @@ enum
     FRUSTUM_NUMPLANES = 6
 };
 
+class CProp_Portal; // 前置声明
+
 struct PortalInfo_t
 {
     bool bIsActive = false; // 传送门是否已激活
     Vector origin;          // 传送门在世界中的位置
     QAngle angles;          // 传送门在世界中的朝向
+    CProp_Portal* pPortalEntity = nullptr; // 传送门实体指针
 };
 
 class Custom_IMaterialSystem {
