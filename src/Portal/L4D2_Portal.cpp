@@ -226,19 +226,40 @@ void L4D2_Portal::PortalInit()
 // 清理函数，在不需要传送门时调用
 void L4D2_Portal::PortalShutdown()
 {
+    // 1. 释放全局材质引用
     if (g_pPortalMaterial)
     {
         g_pPortalMaterial->DecrementReferenceCount();
         g_pPortalMaterial = nullptr;
     }
-    
-    if (m_pPortalTexture)
+
+    if (g_pPortalMaterial_2)
     {
-        // Source引擎中的纹理通常由材质系统管理，不需要手动释放
-        m_pPortalTexture = nullptr;
+        g_pPortalMaterial_2->DecrementReferenceCount();
+        g_pPortalMaterial_2 = nullptr;
+    }
+
+    if (g_pPortalMaterial_3)
+    {
+        g_pPortalMaterial_3->DecrementReferenceCount();
+        g_pPortalMaterial_3 = nullptr;
+    }
+
+    // 2. 释放类成员材质引用
+    if (m_pPortalMaterial)
+    {
+        m_pPortalMaterial->DecrementReferenceCount();
+        m_pPortalMaterial = nullptr;
+    }
+
+    if (m_pPortalMaterial_2)
+    {
+        m_pPortalMaterial_2->DecrementReferenceCount();
+        m_pPortalMaterial_2 = nullptr;
     }
 
 #ifdef RECURSIVE_RENDERING
+    // 3. 释放递归渲染材质
     if (m_pDynamicPortalMaterial) {
         m_pDynamicPortalMaterial->DecrementReferenceCount();
         m_pDynamicPortalMaterial = nullptr;
@@ -251,10 +272,58 @@ void L4D2_Portal::PortalShutdown()
         m_pBlackoutMaterial->DecrementReferenceCount();
         m_pBlackoutMaterial = nullptr;
     }
+
+    // 4. 清理纹理池
+    if (!m_vPortalTextures.empty())
+    {
+        for (ITexture* pTexture : m_vPortalTextures)
+        {
+            // 纹理由材质系统管理，置空即可
+            if (pTexture)
+            {
+                pTexture = nullptr;
+            }
+        }
+        m_vPortalTextures.clear();
+    }
+
+    // 5. 清理视图栈
+    if (!m_vViewStack.empty())
+    {
+        m_vViewStack.clear();
+    }
 #endif
-    
+
+    // 6. 释放传送门纹理
+    if (m_pPortalTexture)
+    {
+        // 纹理由材质系统管理，置空即可
+        m_pPortalTexture = nullptr;
+    }
+
+    if (m_pPortalTexture_2)
+    {
+        m_pPortalTexture_2 = nullptr;
+    }
+
+    // 7. 清理传送门实体指针
+    // 注意：实体由游戏引擎管理，我们只需要清空指针，不需要手动删除
+    if (g_BluePortal.pPortalEntity)
+    {
+        g_BluePortal.pPortalEntity = nullptr;
+        g_BluePortal.bIsActive = false;
+    }
+
+    if (g_OrangePortal.pPortalEntity)
+    {
+        g_OrangePortal.pPortalEntity = nullptr;
+        g_OrangePortal.bIsActive = false;
+    }
+
+    // 8. 清理材质系统接口（不需要释放，只是清空指针）
     m_pMaterialSystem = nullptr;
     m_pCustomMaterialSystem = nullptr;
+
     printf("[Portal] Shutdown completed\n");
 }
 
