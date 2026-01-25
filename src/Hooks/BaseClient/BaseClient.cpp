@@ -18,17 +18,38 @@ using namespace Hooks;
 
 void __fastcall BaseClient::LevelInitPreEntity::Detour(void* ecx, void* edx, char const* pMapName)
 {
+	// 先调用原始函数
 	Table.Original<FN>(Index)(ecx, edx, pMapName);
+
+	printf("[BaseClient] LevelInitPreEntity: %s\n", pMapName);
 }
 
 void __fastcall BaseClient::LevelInitPostEntity::Detour(void* ecx, void* edx)
 {
+	// 先调用原始函数
 	Table.Original<FN>(Index)(ecx, edx);
+
+	printf("[BaseClient] LevelInitPostEntity: Initializing portal system...\n");
+
+	// 地图加载完成后初始化传送门系统
+	// 这样每次切换地图都会重新初始化
+	G::G_L4D2Portal.PortalInit();
+
+	printf("[BaseClient] Portal system initialized.\n");
 }
 
 void __fastcall BaseClient::LevelShutdown::Detour(void* ecx, void* edx)
 {
+	printf("[BaseClient] LevelShutdown: Cleaning up portal system...\n");
+
+	// 地图退出前清理传送门资源
+	// 这样可以释放旧地图的资源，避免泄漏
+	G::G_L4D2Portal.PortalShutdown();
+
+	// 调用原始函数
 	Table.Original<FN>(Index)(ecx, edx);
+
+	printf("[BaseClient] Portal system cleaned up.\n");
 }
 
 void __fastcall BaseClient::FrameStageNotify::Detour(void* ecx, void* edx, ClientFrameStage_t curStage)
@@ -198,12 +219,16 @@ void __fastcall BaseClient::RenderView::Detour(void* ecx, void* edx, CViewSetup&
 
 void BaseClient::Init()
 {
+	printf("[BaseClient] Initializing BaseClient hooks...\n");
+
 	XASSERT(Table.Init(I::BaseClient) == false);
 	XASSERT(Table.Hook(&LevelInitPreEntity::Detour, LevelInitPreEntity::Index) == false);
 	XASSERT(Table.Hook(&LevelInitPostEntity::Detour, LevelInitPostEntity::Index) == false);
 	XASSERT(Table.Hook(&LevelShutdown::Detour, LevelShutdown::Index) == false);
 	XASSERT(Table.Hook(&FrameStageNotify::Detour, FrameStageNotify::Index) == false);
 	//XASSERT(Table.Hook(&RenderView::Detour, RenderView::Index) == false);
+
+	printf("[BaseClient] Hooks installed successfully.\n");
 
 	//RenderView
 	{
@@ -215,5 +240,27 @@ void BaseClient::Init()
 
 		if (pfRenderView)
 			XASSERT(Func.Init(pfRenderView, &Detour) == false);
+	}
+
+	// 【关键修复】检查游戏是否已经在地图中
+	// 如果 DLL 是在游戏运行时注入的，LevelInitPostEntity 已经不会被调用了
+	// 所以需要检查并手动初始化传送门系统
+	if (I::EngineClient)
+	{
+		if (I::EngineClient->IsInGame())
+		{
+			printf("[BaseClient] Detected injection during gameplay. Manually initializing portal system...\n");
+			printf("[BaseClient] Current map: %s\n", I::EngineClient->GetLevelName());
+			G::G_L4D2Portal.PortalInit();
+			printf("[BaseClient] Portal system manually initialized.\n");
+		}
+		else
+		{
+			printf("[BaseClient] Not in game. Portal system will be initialized when map loads.\n");
+		}
+	}
+	else
+	{
+		printf("[BaseClient] WARNING: EngineClient not available during Init().\n");
 	}
 }

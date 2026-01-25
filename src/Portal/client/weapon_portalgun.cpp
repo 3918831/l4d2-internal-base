@@ -71,9 +71,46 @@ void CWeaponPortalgun::TraceFirePortal(bool bPortal2, const Vector& vTraceStart,
 
 void CWeaponPortalgun::FirePortal(bool bPortal2, Vector* pVector /*= 0*/, bool bTest /*= false*/)
 {
-    C_TerrorPlayer* pLocalPlayer = I::ClientEntityList->GetClientEntity(I::EngineClient->GetLocalPlayer())->As<C_TerrorPlayer*>();
+    // 【安全检查 1】检查 EngineClient 是否可用
+    if (!I::EngineClient)
+    {
+        printf("[CWeaponPortalgun] ERROR: I::EngineClient is nullptr!\n");
+        return;
+    }
+
+    // 【安全检查 2】检查 ClientEntityList 是否可用
+    if (!I::ClientEntityList)
+    {
+        printf("[CWeaponPortalgun] ERROR: I::ClientEntityList is nullptr!\n");
+        return;
+    }
+
+    // 【安全检查 3】检查传送门系统是否已初始化
+    if (!G::G_L4D2Portal.m_pMaterialSystem)
+    {
+        printf("[CWeaponPortalgun] ERROR: Portal system not initialized! MaterialSystem is null.\n");
+        printf("[CWeaponPortalgun] HINT: Make sure LevelInitPostEntity has been called.\n");
+        return;
+    }
+
+    // 【安全检查 4】检查 CServerTools 是否可用
+    if (!I::CServerTools)
+    {
+        printf("[CWeaponPortalgun] ERROR: I::CServerTools is nullptr! Map may not be fully loaded.\n");
+        return;
+    }
+
+    int localPlayerIndex = I::EngineClient->GetLocalPlayer();
+    if (localPlayerIndex == -1)
+    {
+        printf("[CWeaponPortalgun] ERROR: GetLocalPlayer returned -1!\n");
+        return;
+    }
+
+    C_TerrorPlayer* pLocalPlayer = I::ClientEntityList->GetClientEntity(localPlayerIndex)->As<C_TerrorPlayer*>();
     if (!pLocalPlayer || pLocalPlayer->deadflag()) {
         printf("[CWeaponPortalgun] pLocalPlayer is nullptr or deadflag is true.\n");
+        return;
     }
 
     Vector vDirection;
@@ -141,38 +178,61 @@ void CWeaponPortalgun::FirePortal(bool bPortal2, Vector* pVector /*= 0*/, bool b
         PortalInfo_t& portalInfo = bPortal2 ? G::G_L4D2Portal.g_OrangePortal : G::G_L4D2Portal.g_BluePortal;
         bool bAlreadyExists = (portalInfo.pPortalEntity != nullptr);
 
+        printf("[CWeaponPortalgun] Calling FindPortal for %s portal...\n", bPortal2 ? "orange" : "blue");
+
         // FindPortal 现在会复用已存在的传送门实体，或创建新的
         CProp_Portal* pPortal = CProp_Portal::FindPortal(bPortal2, true);
-        if (pPortal) {
-            // 只在第一次创建时设置模型和生成实体
-            if (!bAlreadyExists)
-            {
-                pPortal->SetModel(bPortal2 ? "models/blackops/portal_og.mdl" : "models/blackops/portal.mdl");
-                I::CServerTools->DispatchSpawn(pPortal);
-                printf("[CWeaponPortalgun]: Created new %s portal entity.\n", bPortal2 ? "orange" : "blue");
-            }
-            else
-            {
-                printf("[CWeaponPortalgun]: Moving existing %s portal to new location.\n", bPortal2 ? "orange" : "blue");
-            }
 
-            // 总是更新传送门位置（无论新旧）
-            pPortal->Teleport(&vFinalPosition, &qFinalAngles, nullptr);
-
-            // 更新传送门信息
-            portalInfo.bIsActive = true;
-            portalInfo.origin = vFinalPosition;
-            portalInfo.angles = qFinalAngles;
-        } else {
-            printf("[CWeaponPortalgun]: pPortal is nullptr.\n");
+        // 【安全检查 5】检查 FindPortal 是否成功返回
+        if (!pPortal)
+        {
+            printf("[CWeaponPortalgun] ERROR: FindPortal returned nullptr! Aborting portal creation.\n");
+            return;
         }
+
+        printf("[CWeaponPortalgun] FindPortal succeeded, pPortal = %p\n", pPortal);
+
+        // 只在第一次创建时设置模型和生成实体
+        if (!bAlreadyExists)
+        {
+            printf("[CWeaponPortalgun] First time creating portal, setting model...\n");
+            const char* modelName = bPortal2 ? "models/blackops/portal_og.mdl" : "models/blackops/portal.mdl";
+            pPortal->SetModel(modelName);
+
+            // 【安全检查 6】再次检查 CServerTools（防止在 SetModel 过程中失效）
+            if (!I::CServerTools)
+            {
+                printf("[CWeaponPortalgun] ERROR: I::CServerTools became nullptr after SetModel!\n");
+                return;
+            }
+
+            I::CServerTools->DispatchSpawn(pPortal);
+            printf("[CWeaponPortalgun]: Created new %s portal entity.\n", bPortal2 ? "orange" : "blue");
+        }
+        else
+        {
+            printf("[CWeaponPortalgun]: Moving existing %s portal to new location.\n", bPortal2 ? "orange" : "blue");
+        }
+
+        // 总是更新传送门位置（无论新旧）
+        printf("[CWeaponPortalgun] Calling Teleport to position (%.2f, %.2f, %.2f)\n",
+               vFinalPosition.x, vFinalPosition.y, vFinalPosition.z);
+        pPortal->Teleport(&vFinalPosition, &qFinalAngles, nullptr);
+
+        // 更新传送门信息
+        portalInfo.bIsActive = true;
+        portalInfo.origin = vFinalPosition;
+        portalInfo.angles = qFinalAngles;
+        printf("[CWeaponPortalgun] Portal %s updated successfully.\n", bPortal2 ? "orange" : "blue");
 
         // If it was a failure, put the effect at exactly where the player shot instead of where the portal bumped to
         /*if (fPlacementSuccess < 0.5f)
             vFinalPosition = tr.endpos;*/
 
         // TODO: PlacePortal未完全实现
+        printf("[CWeaponPortalgun] Calling PlacePortal...\n");
         pPortal->PlacePortal(vFinalPosition, qFinalAngles, fPlacementSuccess, false);
+        printf("[CWeaponPortalgun] FirePortal completed.\n");
     }
 
     /*return fPlacementSuccess;*/

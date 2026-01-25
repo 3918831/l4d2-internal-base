@@ -57,7 +57,7 @@ void CGlobal_ModuleEntry::Run()
 					std::cout << "iMaterialVar->GetTextureValue->name: " << iMaterialVar->GetTextureValue()->GetName() << std::endl;
 
 
-					// ²éÕÒmaterial
+					// æŸ¥æ‰¾material
 					IMaterial* zimu2 = I::MaterialSystem->FindMaterial("models/zimu/zimu2_hd/zimu2_hd", TEXTURE_GROUP_MODEL, false);
 					IMaterial* zimu3 = I::MaterialSystem->FindMaterial("models/zimu/zimu3_hd/zimu3_hd", TEXTURE_GROUP_MODEL, false);
 					ITexture* zimu2_texture = nullptr;
@@ -85,7 +85,7 @@ void CGlobal_ModuleEntry::Run()
 					//}
 
 
-					//iMaterialVar->SetStringValue("zimu/zimu2_hd"); //Ö±½ÓÕâÃ´ÉèÖÃ»á°×ÆÁ
+					//iMaterialVar->SetStringValue("zimu/zimu2_hd"); //ç›´æ¥è¿™ä¹ˆè®¾ç½®ä¼šç™½å±
 					//std::cout << "materialvar_string_new_value: " << iMaterialVar->GetStringValue() << std::endl;
 				} else {
 					std::cout << "iMaterialVar not found" << std::endl;
@@ -98,7 +98,7 @@ void CGlobal_ModuleEntry::Run()
 			//{
 			//	//pMaterial->AlphaModulate(alpha);
 			//}
-			////20220905, ¿ÕÆøÇ½²ÄÖÊäÖÈ¾Îª°ëÍ¸Ã÷
+			////20220905, ç©ºæ°”å¢™æè´¨æ¸²æŸ“ä¸ºåŠé€æ˜
 			//if (strstr(TEXTURE_GROUP_OTHER, pMaterial->GetTextureGroupName()))
 			//{
 			//	pMaterial->AlphaModulate(0.5);
@@ -119,7 +119,7 @@ void CGlobal_ModuleEntry::Run()
 
 	
 
-	//´«ËÍÃÅÊµÑé´úÂë
+	//ä¼ é€é—¨å®éªŒä»£ç 
 	// L4D2_Portal l4d2_Portal;
 	// l4d2_Portal.PortalInit();
 }
@@ -194,16 +194,16 @@ public:
 void CGlobal_ModuleEntry::Func_IPhysicsEnvironment_Test()
 {
 	HMODULE hModule = GetModuleHandle(L"server.dll");
-	// ÕıÈ·¼ÆËãÈ«¾Ö±äÁ¿µØÖ·
-	// Æ«ÒÆÁ¿0x107FE19CÊÇ´ÓIDA ProÖĞ»ñÈ¡µ½µÄÆ«ÒÆµØÖ·£¬¼õÈ¥0x10000000µÃµ½Êµ¼ÊµÄphysenvÖ¸ÕëµØÖ·
-	// ¾ßÌåÔ­Àí²Î¿¼https://www.cnblogs.com/blogwr/p/18725779/how-to-make-your-ida-address-rva-z1az4mx
+	// æ­£ç¡®è®¡ç®—å…¨å±€å˜é‡åœ°å€
+	// åç§»é‡0x107FE19Cæ˜¯ä»IDA Proä¸­è·å–åˆ°çš„åç§»åœ°å€ï¼Œå‡å»0x10000000å¾—åˆ°å®é™…çš„physenvæŒ‡é’ˆåœ°å€
+	// å…·ä½“åŸç†å‚è€ƒhttps://www.cnblogs.com/blogwr/p/18725779/how-to-make-your-ida-address-rva-z1az4mx
 	DWORD* physenv_ptr_ptr = (DWORD*)((BYTE*)hModule + 0x107FE19C - 0x10000000);
 
-	// ÏÈ¶ÁÈ¡Ö¸Õë£¬ÔÙµ÷ÓÃ·½·¨
+	// å…ˆè¯»å–æŒ‡é’ˆï¼Œå†è°ƒç”¨æ–¹æ³•
 	IPhysicsEnvironment* physenv = (IPhysicsEnvironment*)(*physenv_ptr_ptr);
 	if (physenv) {
-		float airDensity = physenv->GetAirDensity(); //Õâ¸öµ÷ÓÃÕıÈ·,Ä¬ÈÏ·µ»ØÖµÊÇ2.0
-		// Ê¹ÓÃname...
+		float airDensity = physenv->GetAirDensity(); //è¿™ä¸ªè°ƒç”¨æ­£ç¡®,é»˜è®¤è¿”å›å€¼æ˜¯2.0
+		// ä½¿ç”¨name...
 		printf("airDensity = %f\n", airDensity);
 	}
 	
@@ -226,22 +226,22 @@ void CGlobal_ModuleEntry::Func_Pistol_Fire_Test()
 			if (strcmp(weapon_name, "weapon_pistol") == 0)
 			//if (strcmp(weapon_name, "weapon_shotgun_chrome") == 0)
 			{
-				// »òÕßÍ¨¹ı´úÂë»ñÈ¡
+				// æˆ–è€…é€šè¿‡ä»£ç è·å–
 				HMODULE hModule = GetModuleHandle(L"client.dll");
 				DWORD baseAddress = (DWORD)hModule;
-				printf("DLL»ùÖ·: 0x%08X\n", baseAddress);
+				printf("DLLåŸºå€: 0x%08X\n", baseAddress);
 
 				typedef void(__thiscall* PrimaryAttackFn)(void*);
 				typedef void(__thiscall* SecondaryAttackFn)(void*);
-				// 1. »ñÈ¡Ğéº¯Êı±íÖ¸Õë
+				// 1. è·å–è™šå‡½æ•°è¡¨æŒ‡é’ˆ
 				void** vtable_ptr = *reinterpret_cast<void***>(pWeapon);
 
-				// 2. µ÷ÓÃPrimaryAttack (Ë÷Òı270)
+				// 2. è°ƒç”¨PrimaryAttack (ç´¢å¼•270)
 				PrimaryAttackFn primaryFunc = reinterpret_cast<PrimaryAttackFn>(vtable_ptr[270]);
 				//primaryFunc(pWeapon);
 				Sleep(1000);
 
-				// 3. µ÷ÓÃSecondaryAttack (Ë÷Òı271)
+				// 3. è°ƒç”¨SecondaryAttack (ç´¢å¼•271)
 				SecondaryAttackFn secondaryFunc = reinterpret_cast<SecondaryAttackFn>(vtable_ptr[271]);
 				//secondaryFunc(pWeapon);
 				Sleep(1000);
@@ -264,7 +264,7 @@ void CGlobal_ModuleEntry::Func_CServerTools_Test()
 
 	typedef void(__thiscall* TeleportFn)(void*, Vector const*, QAngle const*, Vector const*);
 	typedef void(__thiscall* SetModelFn)(void*, const char*);
-	// 1. »ñÈ¡Ğéº¯Êı±íÖ¸Õë
+	// 1. è·å–è™šå‡½æ•°è¡¨æŒ‡é’ˆ
 	void** vtable_ptr = *reinterpret_cast<void***>(prop_obj);
 	TeleportFn primaryFunc = reinterpret_cast<TeleportFn>(vtable_ptr[118]);  //118 = CBaseEntity::Teleport(Vector const*, QAngle const*, Vector const*)
 	const Vector* newPosition = new Vector(0, 0, 0);
@@ -365,7 +365,9 @@ void CGlobal_ModuleEntry::Load()
 	}
 
 	G::Draw.Init();
-	G::G_L4D2Portal.PortalInit();
+	// PortalInit() å·²ç§»è‡³ LevelInitPostEntityï¼Œåœ¨åœ°å›¾åŠ è½½æ—¶è°ƒç”¨
+	// è¿™æ ·å¯ä»¥æ”¯æŒåœ°å›¾åˆ‡æ¢æ—¶é‡æ–°åˆå§‹åŒ–
+	// G::G_L4D2Portal.PortalInit();
 	G::Hooks.Init();
 	//Run();
 	//Func_TraceRay_Test();

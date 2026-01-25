@@ -451,6 +451,20 @@ void __fastcall ModelRender::DrawModelExecute::Detour(void* ecx, void* edx, cons
     bool isOrangePortal = (modelName && strcmp(modelName, "models/blackops/portal_og.mdl") == 0);
 
     if (isBluePortal) {
+        // 【安全检查】检查传送门系统是否已初始化
+        if (!G::G_L4D2Portal.m_pMaterialSystem) {
+            printf("[ModelRender] Blue portal: MaterialSystem not initialized, skipping animation.\n");
+            Table.Original<FN>(Index)(ecx, edx, state, pInfo, pCustomBoneToWorld);
+            return;
+        }
+
+        // 【安全检查】检查 EngineClient 是否可用（用于时间函数）
+        if (!I::EngineClient) {
+            printf("[ModelRender] Blue portal: EngineClient is nullptr, skipping animation.\n");
+            Table.Original<FN>(Index)(ecx, edx, state, pInfo, pCustomBoneToWorld);
+            return;
+        }
+
         // 检测位置是否发生变化（用于触发缩放动画）
         float flDistToLast = pInfo.origin.DistTo(G::G_L4D2Portal.g_BluePortal.lastOrigin);
 
@@ -496,6 +510,20 @@ void __fastcall ModelRender::DrawModelExecute::Detour(void* ecx, void* edx, cons
     }
 
     if (isOrangePortal) {
+        // 【安全检查】检查传送门系统是否已初始化
+        if (!G::G_L4D2Portal.m_pMaterialSystem) {
+            printf("[ModelRender] Orange portal: MaterialSystem not initialized, skipping animation.\n");
+            Table.Original<FN>(Index)(ecx, edx, state, pInfo, pCustomBoneToWorld);
+            return;
+        }
+
+        // 【安全检查】检查 EngineClient 是否可用（用于时间函数）
+        if (!I::EngineClient) {
+            printf("[ModelRender] Orange portal: EngineClient is nullptr, skipping animation.\n");
+            Table.Original<FN>(Index)(ecx, edx, state, pInfo, pCustomBoneToWorld);
+            return;
+        }
+
         // 检测位置是否发生变化（用于触发缩放动画）
         float flDistToLast = pInfo.origin.DistTo(G::G_L4D2Portal.g_OrangePortal.lastOrigin);
 
@@ -542,6 +570,13 @@ void __fastcall ModelRender::DrawModelExecute::Detour(void* ecx, void* edx, cons
 
     if (isBluePortal || isOrangePortal)
     {
+        // 【安全检查】检查传送门系统是否已初始化
+        if (!G::G_L4D2Portal.m_pMaterialSystem) {
+            printf("[ModelRender] Portal system not initialized, calling original function.\n");
+            Table.Original<FN>(Index)(ecx, edx, state, pInfo, pCustomBoneToWorld);
+            return;
+        }
+
         // 0. 决定入口和出口
         PortalInfo_t* entryPortal = isBluePortal ? &G::G_L4D2Portal.g_BluePortal : &G::G_L4D2Portal.g_OrangePortal;
         PortalInfo_t* exitPortal = isBluePortal ? &G::G_L4D2Portal.g_OrangePortal : &G::G_L4D2Portal.g_BluePortal;
@@ -560,7 +595,15 @@ void __fastcall ModelRender::DrawModelExecute::Detour(void* ecx, void* edx, cons
 
             // 2. 动态绑定纹理到材质
             if (!G::G_L4D2Portal.m_pDynamicPortalMaterial) {
-                printf("[DrawModelExecute] G::G_L4D2Portal::m_pDynamicPortalMaterial is bullptr\n");
+                printf("[DrawModelExecute] G::G_L4D2Portal::m_pDynamicPortalMaterial is nullptr\n");
+                return;
+            }
+
+            // 【安全检查】检查数组索引是否有效
+            if (G::G_L4D2Portal.m_nPortalRenderDepth < 0 ||
+                G::G_L4D2Portal.m_nPortalRenderDepth >= static_cast<int>(G::G_L4D2Portal.m_vPortalTextures.size())) {
+                printf("[DrawModelExecute] ERROR: m_nPortalRenderDepth=%d out of bounds [0, %zu)! Skipping texture bind.\n",
+                       G::G_L4D2Portal.m_nPortalRenderDepth, G::G_L4D2Portal.m_vPortalTextures.size());
                 return;
             }
 
@@ -568,7 +611,12 @@ void __fastcall ModelRender::DrawModelExecute::Detour(void* ecx, void* edx, cons
             IMaterialVar* pBaseTextureVar = G::G_L4D2Portal.m_pDynamicPortalMaterial->FindVar("$basetexture", nullptr);
             if (pBaseTextureVar) {
                 // 将刚刚渲染好的纹理设置给材质
-                pBaseTextureVar->SetTextureValue(G::G_L4D2Portal.m_vPortalTextures[G::G_L4D2Portal.m_nPortalRenderDepth]);
+                ITexture* pTexture = G::G_L4D2Portal.m_vPortalTextures[G::G_L4D2Portal.m_nPortalRenderDepth];
+                if (pTexture) {
+                    pBaseTextureVar->SetTextureValue(pTexture);
+                } else {
+                    printf("[DrawModelExecute] WARNING: m_vPortalTextures[%d] is nullptr!\n", G::G_L4D2Portal.m_nPortalRenderDepth);
+                }
             }
 
             IMatRenderContext* pRenderContext = G::G_L4D2Portal.m_pMaterialSystem->GetRenderContext();
