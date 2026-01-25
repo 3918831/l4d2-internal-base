@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is a DLL injection-based game mod for Left 4 Dead 2 that implements a Portal gun feature along with various game modifications (ESP, EnginePrediction, NoSpread). The DLL injects into the L4D2 process and uses function hooking to modify game behavior.
 
+**NEW**: The project now includes an auto-loading launcher program (`L4D2_Portal.exe`) that automatically injects the DLL, eliminating the need for manual injection tools.
+
 ## Build Commands
 
 ### Prerequisites
@@ -37,7 +39,17 @@ powershell.exe -Command "& 'D:\Program Files\Microsoft Visual Studio\2022\Commun
 - Use `/p:Platform=x86` NOT `/p:Platform=Win32` - the solution file defines platforms as `x86`
 - Adjust the path to match your actual workspace location
 
-**Output**: `src/Debug/Lak3_l4d2_hack.dll` or `src/Release/Lak3_l4d2_hack.dll`
+**Output**: `src/Debug/` or `src/Release/`
+- `L4D2_Portal.dll` - Mod DLL (390 KB)
+- `L4D2_Portal.exe` - Launcher program (58 KB)
+
+### Solution Structure
+
+```
+l4d2_base.sln
+├── l4d2_base.vcxproj    # Mod DLL project (outputs L4D2_Portal.dll)
+└── Launcher.vcxproj      # Launcher project (outputs L4D2_Portal.exe)
+```
 
 ### Common MSBuild Locations
 | Visual Studio Version | MSBuild Path |
@@ -52,6 +64,59 @@ If MSBuild 12.0 is the only available version, modify `l4d2_base.vcxproj`:
 - Remove `<LanguageStandard>stdcpp17</LanguageStandard>`
 - Remove `<ConformanceMode>true</ConformanceMode>`
 
+## Auto-Loading System
+
+### Overview
+
+The project now includes an auto-loading launcher that:
+1. Detects if L4D2 is running
+2. Launches the game with custom parameters if not running
+3. Automatically injects the mod DLL
+4. Supports injecting into already-running game instances
+
+### Launcher Implementation
+
+**Key File**: `Launcher/Launcher.cpp`
+
+**Process Flow**:
+```
+L4D2_Portal.exe
+    │
+    ├── Check if L4D2 is running
+    │   ├─ Yes → Inject DLL directly
+    │   └─ No → Launch L4D2 with args → Wait 10s → Inject DLL
+    │
+    └── Exit
+```
+
+**Game Launch Parameters**:
+- `-insecure` - Disable VAC anti-cheat (for testing)
+- `-steam` - Enable Steam authentication
+- `-novid` - Skip intro video
+
+**DLL Injection Method**:
+- Uses `CreateRemoteThread` and `LoadLibrary` technique
+- Allocates memory in target process
+- Writes DLL path to target memory
+- Creates remote thread that calls `LoadLibraryA`
+
+### Modifying Launch Parameters
+
+Edit `Launcher/Launcher.cpp:189`:
+```cpp
+const char* cmdArgs = "-insecure -steam -novid -console -windowed";
+```
+
+### Console Behavior
+
+**Debug Build**:
+- Allocates console window for debugging
+- Automatically minimizes console to background
+- Use `ShowWindow(GetConsoleWindow(), SW_MINIMIZE)` in `Entry/Entry.cpp:291`
+
+**Release Build**:
+- No console allocation (cleaner experience)
+
 ## Architecture
 
 ### Entry Point Flow
@@ -62,7 +127,7 @@ The DLL waits for `serverbrowser.dll` to load (ensuring game is fully initialize
 1. Initializes SDK interfaces via pattern scanning
 2. Sets up all hooks
 3. Initializes features
-4. Allocates debug console
+4. Allocates debug console (and minimizes it in Debug builds)
 
 ### Hooking System
 
@@ -154,9 +219,94 @@ The Portal system integrates tightly with the rendering pipeline. When modifying
 
 ### Debugging
 
-Debug console is allocated at `Entry/Entry.cpp:92`. Use `ConsolePrint()` or standard `printf` for output.
+Debug console is allocated at `Entry/Entry.cpp:286`. It automatically minimizes to keep the view clean. Use `ConsolePrint()` or standard `printf` for output.
 
 Key test functions for development:
 - `Func_TraceRay_Test` - Ray tracing validation
 - `Func_Pistol_Fire_Test` - Portal gun firing logic
 - `Func_IPhysicsEnvironment_Test` - Physics environment checks
+
+## Recent Changes (2026-01-26)
+
+### Auto-Loading Implementation
+
+**Problem**: Manual DLL injection using tools like Extreme Injector was not user-friendly.
+
+**Solution**: Implemented an auto-loading launcher program.
+
+**Attempts**:
+1. **DLL Proxy Approach (tier0_s.dll)** - Failed
+   - L4D2 uses `tier0.dll` not `tier0_s.dll`
+   - Replacing `tier0.dll` caused game to not start
+   - Too many exported functions to forward correctly
+   - High risk of breaking game updates
+
+2. **Launcher Program** - Success
+   - Created standalone launcher application
+   - Uses `CreateRemoteThread` for DLL injection
+   - Automatically detects and launches game
+   - Supports injecting into already-running instances
+
+### File Name Changes
+
+| Old Name | New Name | Reason |
+|----------|----------|--------|
+| `Lak3_l4d2_hack.dll` | `L4D2_Portal.dll` | Better naming consistency |
+| `Launcher.exe` | `L4D2_Portal.exe` | Unified naming |
+
+### Console Behavior
+
+**Debug Build**:
+- Console allocated but auto-minimized
+- Use `ShowWindow(GetConsoleWindow(), SW_MINIMIZE)` at `Entry/Entry.cpp:291`
+- Can be restored from taskbar for debugging
+
+### Project Structure Changes
+
+**New Files**:
+- `Launcher/Launcher.cpp` - Launcher program source
+- `Launcher/Launcher.vcxproj` - Launcher project file
+- `docs/dll-auto-loading-implementation.md` - Technical documentation
+
+**Modified Files**:
+- `DllMain.cpp` - Simplified (removed proxy logic)
+- `Entry/Entry.cpp` - Added console minimization
+- `l4d2_base.vcxproj` - Changed output name to `L4D2_Portal`
+- `l4d2_base.sln` - Added Launcher project
+
+## Usage Instructions
+
+### For End Users
+
+1. Copy `L4D2_Portal.exe` and `L4D2_Portal.dll` to L4D2 game directory
+2. Run `L4D2_Portal.exe`
+3. Game will launch automatically
+4. Enter any map to use portal features
+
+### For Developers
+
+1. Build the solution using MSBuild
+2. Copy outputs from `src/Debug/` to game directory
+3. Test by running launcher
+4. Debug console is minimized but accessible from taskbar
+
+## Known Issues
+
+### Injection Timing
+
+**Issue**: Injecting during gameplay may cause portal features to not initialize properly.
+
+**Workaround**: Always inject at main menu. The launcher handles this automatically by waiting for full initialization.
+
+### Game Updates
+
+**Issue**: Game updates may break pattern scanning or offset values.
+
+**Solution**: Update patterns in `Util/Pattern/Pattern.cpp` and offsets in `Util/Offsets/Offsets.cpp`.
+
+## Technical Documentation
+
+For detailed technical information about the auto-loading implementation, see:
+- `docs/dll-auto-loading-implementation.md` - Complete technical documentation
+- `docs/portal-development-summary.md` - Portal feature development
+- `docs/portal-injection-timing-fix.md` - Injection timing fixes

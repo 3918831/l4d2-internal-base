@@ -18,4 +18,5 @@ src/.vs/*
 .vs/*
 .vscode/
 src/Debug/
+src/Launcher/Debug
 

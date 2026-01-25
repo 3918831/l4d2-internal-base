@@ -287,6 +287,9 @@ void CGlobal_ModuleEntry::Load()
 	freopen("CONIN$", "r", stdin); // makes it possible to output to output to console with cout.
 	freopen("CONOUT$", "w", stdout);
 
+	// 最小化控制台窗口到后台
+	ShowWindow(GetConsoleWindow(), SW_MINIMIZE);
+
 	while (!GetModuleHandleA("serverbrowser.dll"))
 	    std::this_thread::sleep_for(std::chrono::seconds(1));
 

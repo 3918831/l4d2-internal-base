@@ -19,6 +19,9 @@
 - **Features**: 游戏功能实现 (ESP, EnginePrediction, NoSpread)
 - **Portal**: 传送门系统实现（核心功能）
 - **Util**: 工具类和辅助功能
+- **Launcher**: 自动加载器程序（新）
+
+---
 
 ## 核心功能
 
@@ -64,23 +67,79 @@
 - `Weapon`: 武器开火拦截
 - 输入处理和窗口过程拦截
 
-## 构建和运行
+---
+
+## 快速开始
+
+### 自动加载方案（推荐）✨
+
+**新方案**：项目现已支持自动加载，无需手动注入DLL！
+
+#### 使用步骤
+
+1. **复制文件到游戏目录**
+   ```
+   left4dead2/
+   ├── left4dead2.exe
+   ├── L4D2_Portal.exe        ← 复制到这里
+   ├── L4D2_Portal.dll        ← 复制到这里
+   └── ...
+   ```
+
+2. **运行加载器**
+   ```
+   双击运行 L4D2_Portal.exe
+   ```
+
+3. **自动完成**
+   - 加载器自动启动L4D2游戏
+   - 等待游戏初始化（约10秒）
+   - 自动注入Mod DLL
+   - 控制台自动最小化到后台
+   - 进入游戏即可使用传送门功能
+
+#### 游戏启动参数
+
+加载器默认使用以下启动参数：
+- `-insecure` - 禁用VAC反作弊（测试用）
+- `-steam` - 启用Steam认证
+- `-novid` - 跳过开场视频
+
+**注意**：如果游戏已运行，加载器会直接注入DLL，不会重新启动游戏。
+
+### 手动注入方式（传统方式）
+
+如果您更喜欢使用注入工具：
+
+1. 启动 L4D2 游戏到主菜单
+2. 使用 DLL 注入工具注入 `L4D2_Portal.dll`
+3. 进入任意地图测试
+
+---
+
+## 构建和编译
 
 ### 构建要求
 - Visual Studio 2022 (v142 工具集)
 - Windows 10 SDK (10.0.26100.0)
 - C++17 支持
 
-### 快速编译
+### 查找 MSBuild 位置
 
-**查找 MSBuild 位置**：
 ```powershell
 powershell.exe -Command "& 'C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe' -latest -products * -requires Microsoft.Component.MSBuild -property installationPath"
 ```
 
-**编译命令**（32位 Debug）：
+### 编译命令
+
+**Debug 版本**：
 ```powershell
-powershell.exe -Command "& 'D:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe' 'g:\Code_Project\Visual Studio 2022 Project\3918831\Github\l4d2-internal-base\src\l4d2_base.sln' /p:Configuration=Debug /p:Platform=x86"
+powershell.exe -Command "& 'D:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe' 'src\l4d2_base.sln' /p:Configuration=Debug /p:Platform=x86"
+```
+
+**Release 版本**：
+```powershell
+powershell.exe -Command "& 'D:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe' 'src\l4d2_base.sln' /p:Configuration=Release /p:Platform=x86"
 ```
 
 **重要提示**：
@@ -90,40 +149,52 @@ powershell.exe -Command "& 'D:\Program Files\Microsoft Visual Studio\2022\Commun
 
 ### 编译输出
 
-成功编译后将在 `src/Debug/` 目录生成：
-- `Lak3_l4d2_hack.dll` - 主程序文件
-- `Lak3_l4d2_hack.pdb` - 调试符号
+成功编译后将在 `src/Debug/` 或 `src/Release/` 目录生成：
 
-### 运行方式
+| 文件 | 大小 (Debug) | 说明 |
+|------|-------------|------|
+| `L4D2_Portal.dll` | 390 KB | Mod DLL |
+| `L4D2_Portal.exe` | 58 KB | 加载器程序 |
 
-#### DLL 注入时机
+### 解决方案结构
 
-⚠️ **重要**：请在 **主菜单** 注入 DLL，以获得最佳体验。
+```
+l4d2_base.sln
+├── l4d2_base.vcxproj    # Mod DLL项目
+└── Launcher.vcxproj      # 加载器项目
+```
 
-| 注入时机 | 状态 | 说明 |
-|----------|------|------|
-| 主菜单 | ✅ 推荐 | 系统会在加载地图时自动初始化 |
-| 游戏运行中 | ⚠️ 受限 | 传送门功能可能无法正常工作 |
-| 地图切换后 | ✅ 正常 | 系统会自动重新初始化 |
+---
 
-#### 注入步骤
+## 控制台输出
 
-1. 启动 L4D2 游戏到主菜单
-2. 使用 DLL 注入工具将 `Lak3_l4d2_hack.dll` 注入到游戏进程
-3. 进入任意地图
-4. 控制台应显示初始化成功信息
-5. 使用手枪开枪测试传送门功能
+### 控制台行为
 
-#### 控制台输出
+Debug版本会自动分配控制台窗口，但会自动最小化到后台。您可以在任务栏找到控制台窗口查看调试信息。
 
-注入成功后会看到类似输出：
+### 典型输出示例
+
+**加载器启动**：
+```
+========================================
+L4D2 Internal Base - Launcher
+========================================
+
+Launching L4D2...
+Game launched. Waiting for initialization...
+Injecting DLL...
+DLL injected successfully!
+
+Done! You can now close this window.
+```
+
+**Mod初始化（主菜单）**：
 ```
 [BaseClient] Initializing BaseClient hooks...
 [BaseClient] Hooks installed successfully.
-[BaseClient] Not in game. Portal system will be initialized when map loads.
 ```
 
-加载地图后：
+**进入地图后**：
 ```
 [BaseClient] LevelInitPostEntity: Initializing portal system...
 [Portal] Created portal texture successfully
@@ -131,15 +202,20 @@ powershell.exe -Command "& 'D:\Program Files\Microsoft Visual Studio\2022\Commun
 [BaseClient] Portal system initialized.
 ```
 
+---
+
 ## 项目文档
 
 详细的技术文档位于 `docs/` 目录：
 
 | 文档 | 内容 |
 |------|------|
-| [portal-development-summary.md](docs/portal-development-summary.md) | 传送门功能开发总结（重复创建修复、动画实现） |
-| [portal-injection-timing-fix.md](docs/portal-injection-timing-fix.md) | DLL注入时机问题修复（地图切换支持） |
+| [dll-auto-loading-implementation.md](docs/dll-auto-loading-implementation.md) | DLL自动加载方案实现文档（新） |
+| [portal-development-summary.md](docs/portal-development-summary.md) | 传送门功能开发总结 |
+| [portal-injection-timing-fix.md](docs/portal-injection-timing-fix.md) | DLL注入时机问题修复 |
 | [CLAUDE.md](CLAUDE.md) | Claude Code 开发指南，包含编译命令和架构说明 |
+
+---
 
 ## 开发约定
 
@@ -158,6 +234,8 @@ powershell.exe -Command "& 'D:\Program Files\Microsoft Visual Studio\2022\Commun
 | `U::` | 工具类 | `U::Interface`, `U::Pattern`, `U::Math` |
 | `F::` | 功能模块 | `F::ESP`, `F::EnginePrediction` |
 | `Hooks::` | Hook 相关 | `Hooks::BaseClient`, `Hooks::ModelRender` |
+
+---
 
 ## 关键文件说明
 
@@ -185,12 +263,13 @@ powershell.exe -Command "& 'D:\Program Files\Microsoft Visual Studio\2022\Commun
 | [Util/Pattern/Pattern.cpp](src/Util/Pattern/Pattern.cpp) | 内存模式搜索 |
 | [Util/Math/Math.cpp](src/Util/Math/Math.cpp) | 数学工具函数 |
 
-## 注意事项
+### 加载器
+| 文件 | 说明 |
+|------|------|
+| [Launcher/Launcher.cpp](src/Launcher/Launcher.cpp) | 加载器主程序 |
+| [Launcher/Launcher.vcxproj](src/Launcher/Launcher.vcxproj) | 加载器项目配置 |
 
-1. **仅限学习研究**: 本项目仅用于技术学习和研究，请勿用于违反游戏服务条款的场景
-2. **版本兼容性**: 仅支持特定版本的 L4D2，游戏更新可能需要调整内存偏移
-3. **性能影响**: 递归渲染等高级功能可能影响游戏性能
-4. **稳定性**: Hook 系统可能导致游戏不稳定，建议在测试环境使用
+---
 
 ## 技术亮点
 
@@ -201,10 +280,18 @@ powershell.exe -Command "& 'D:\Program Files\Microsoft Visual Studio\2022\Commun
 - **平滑动画**: 传送门创建/移动时的缩放动画效果
 - **生命周期管理**: 支持地图切换时的资源清理和重新初始化
 
+### 自动加载方案
+- **进程注入**: 使用 `CreateRemoteThread` 和 `LoadLibrary` 技术
+- **智能检测**: 自动检测游戏运行状态
+- **参数传递**: 支持自定义游戏启动参数
+- **用户友好**: 一键启动，自动完成所有操作
+
 ### Hook 技术
 - **VMT Hook**: 虚函数表钩子，用于拦截虚函数调用
 - **Inline Hook**: 使用 MinHook 进行内联函数钩子
 - **Index-based Hook**: 通过虚函数表索引直接挂钩
+
+---
 
 ## 扩展开发
 
@@ -221,12 +308,58 @@ powershell.exe -Command "& 'D:\Program Files\Microsoft Visual Studio\2022\Commun
 - 系统初始化: `Portal/L4D2_Portal.cpp`
 - 地图生命周期: `Hooks/BaseClient/BaseClient.cpp`
 
+### 自定义启动参数
+
+如需修改游戏启动参数，编辑 `Launcher/Launcher.cpp:189`：
+
+```cpp
+const char* cmdArgs = "-insecure -steam -novid -console -windowed";
+```
+
+常用参数：
+- `-insecure` - 禁用VAC
+- `-steam` - Steam认证
+- `-novid` - 跳过视频
+- `-console` - 启用控制台
+- `-windowed` - 窗口模式
+- `-width 1920 -height 1080` - 设置分辨率
+
+---
+
+## 常见问题
+
+### Q: 加载器启动后游戏没有反应？
+A: 请确保加载器和DLL都在游戏目录中，且路径中没有中文或特殊字符。
+
+### Q: 传送门功能不工作？
+A: 请确保在主菜单进入地图，不要在游戏运行中注入。
+
+### Q: 控制台窗口太大？
+A: Debug版本的控制台会自动最小化。您可以在任务栏找到它。
+
+### Q: 可以在联网游戏中使用吗？
+A: 不建议。本项目仅用于离线测试和学习，联网可能导致VAC封禁。
+
+---
+
+## 注意事项
+
+1. **仅限学习研究**: 本项目仅用于技术学习和研究，请勿用于违反游戏服务条款的场景
+2. **版本兼容性**: 仅支持特定版本的 L4D2，游戏更新可能需要调整内存偏移
+3. **VAC风险**: 即使使用`-insecure`参数，仍有VAC风险，建议在离线模式测试
+4. **性能影响**: 递归渲染等高级功能可能影响游戏性能
+5. **稳定性**: Hook 系统可能导致游戏不稳定，建议在测试环境使用
+
+---
+
 ## 参考资料
 
 项目开发参考了以下技术资源：
 - Valve Developer Wiki - Source Engine 文档
 - UnknownCheats 论坛 - 游戏修改教程
 - DirectX 和游戏图形编程资料
+
+---
 
 ## 许可声明
 
