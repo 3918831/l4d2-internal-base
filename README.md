@@ -116,7 +116,7 @@
 
 1. **复制文件到游戏目录**
    ```
-   left4dead2/
+   Left 4 Dead 2/
    ├── left4dead2.exe
    ├── L4D2_Portal.exe        ← 复制到这里
    ├── L4D2_Portal.dll        ← 复制到这里
