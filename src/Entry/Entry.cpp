@@ -4,6 +4,7 @@
 #include "../SDK/L4D2/Interfaces/IInput.h"
 #include "../SDK/L4D2/Interfaces/Vphysics.h"
 #include "../SDK/L4D2/Interfaces/CServerTools.h"
+#include "../SDK/L4D2/Interfaces/IVEngineServer.h"
 #include "../Portal/L4D2_Portal.h"
 
 
@@ -364,6 +365,9 @@ void CGlobal_ModuleEntry::Load()
 
 		I::CServerTools = U::Interface.Get<IServerTools*>("server.dll", "VSERVERTOOLS001");
 		std::cout << "CServerTools: " << I::CServerTools << std::endl;
+
+		I::EngineServer = U::Interface.Get<IVEngineServer*>("engine.dll", "VEngineServer022");
+		std::cout << "EngineServer: " << I::EngineServer << std::endl;
 
 	}
 

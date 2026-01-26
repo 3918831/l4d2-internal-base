@@ -6,6 +6,7 @@
 #include "../../SDK/L4D2/Interfaces/EngineClient.h"
 #include "../../SDK/L4D2/Interfaces/ModelInfo.h"
 #include "../../SDK/L4D2/Interfaces/ModelRender.h"
+#include "../../SDK/L4D2/Interfaces/IVEngineServer.h"
 #include "../../SDK/L4D2/Includes/const.h"
 #include "../../Util/Math/Math.h"
 //#include "../../Portal/public/mathlib.h"
@@ -22,6 +23,33 @@ void __fastcall BaseClient::LevelInitPreEntity::Detour(void* ecx, void* edx, cha
 	Table.Original<FN>(Index)(ecx, edx, pMapName);
 
 	printf("[BaseClient] LevelInitPreEntity: %s\n", pMapName);
+
+	// 预载传送门模型
+	if (I::EngineServer)
+	{
+		printf("[BaseClient] Precaching portal models...\n");
+
+		// 预载橙色传送门模型
+		int index1 = I::EngineServer->PrecacheModel("models/blackops/portal_og.mdl", true);
+		printf("[BaseClient] Precached models/blackops/portal_og.mdl, index: %d\n", index1);
+
+		// 预载蓝色传送门模型
+		int index2 = I::EngineServer->PrecacheModel("models/blackops/portal.mdl", true);
+		printf("[BaseClient] Precached models/blackops/portal.mdl, index: %d\n", index2);
+
+		if (index1 > 0 && index2 > 0)
+		{
+			printf("[BaseClient] Both portal models precached successfully!\n");
+		}
+		else
+		{
+			printf("[BaseClient] WARNING: Failed to precache one or more portal models!\n");
+		}
+	}
+	else
+	{
+		printf("[BaseClient] WARNING: EngineServer interface is null, cannot precache models!\n");
+	}
 }
 
 void __fastcall BaseClient::LevelInitPostEntity::Detour(void* ecx, void* edx)
