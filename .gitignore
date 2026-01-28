@@ -18,5 +18,5 @@ src/.vs/*
 .vs/*
 .vscode/
 src/Debug/
-src/Launcher/Debug
-
+src/Launcher/Debug/
+src/Launcher/Release/

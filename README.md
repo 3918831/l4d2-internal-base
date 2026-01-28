@@ -169,20 +169,38 @@ powershell.exe -Command "& 'C:\Program Files (x86)\Microsoft Visual Studio\Insta
 
 ### 编译命令
 
-**Debug 版本**：
+**步骤 1：查找 MSBuild 位置**
+
 ```powershell
-powershell.exe -Command "& 'D:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe' 'src\l4d2_base.sln' /p:Configuration=Debug /p:Platform=x86"
+powershell.exe -Command "& 'C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe' -latest -products * -requires Microsoft.Component.MSBuild -property installationPath"
 ```
 
-**Release 版本**：
+然后在返回的路径后添加 `MSBuild\Current\Bin\MSBuild.exe`。
+
+**步骤 2：进入项目根目录并编译**
+
+```powershell
+# 进入项目根目录
+cd l4d2-internal-base
+
+# Debug 版本
+powershell.exe -Command "& '<你的MSBuild路径>' 'src\l4d2_base.sln' /p:Configuration=Debug /p:Platform=x86"
+
+# Release 版本
+powershell.exe -Command "& '<你的MSBuild路径>' 'src\l4d2_base.sln' /p:Configuration=Release /p:Platform=x86"
+```
+
+**示例**（如果你的 VS 安装在 D 盘）：
 ```powershell
 powershell.exe -Command "& 'D:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe' 'src\l4d2_base.sln' /p:Configuration=Release /p:Platform=x86"
 ```
 
-**重要提示**：
-- 使用 `/p:Platform=x86` **不是** `/p:Platform=Win32`
-- 根据你的 VS 安装路径调整 MSBuild 路径
-- 根据你的工作区位置调整解决方案路径
+**常见 MSBuild 路径**：
+| Visual Studio 版本 | MSBuild 路径 |
+|-------------------|--------------|
+| VS2022 Community | `D:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe` |
+| VS2022 Professional | `C:\Program Files\Microsoft Visual Studio\2022\Professional\MSBuild\Current\Bin\MSBuild.exe` |
+| VS2022 Enterprise | `C:\Program Files\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin\MSBuild.exe` |
 
 ### 编译输出
 
@@ -413,6 +431,6 @@ A: 不建议。本项目仅用于离线测试和学习，联网可能导致VAC�
 
 ---
 
-*最后更新: 2026-01-26*
+*最后更新: 2026-01-28*
 *项目: L4D2 Internal Base*
 *开发者: Claude + User*

@@ -105,9 +105,9 @@ public:
     // 全局或类成员变量，用于跟踪当前递归深度
     int m_nPortalRenderDepth = 0;
     const int MAX_PORTAL_RECURSION_DEPTH = 5; // 设置一个合理的递归上限
+#endif
 
     std::unique_ptr<CWeaponPortalgun> m_pWeaponPortalgun;
-#endif
 };
 
 namespace G { inline L4D2_Portal G_L4D2Portal; }
