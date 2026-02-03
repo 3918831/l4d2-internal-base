@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include "../Util/Math/Vector/Vector.h"
 #include "../SDK/L4D2/Interfaces/MaterialSystem.h"
+#include "L4D2_Portal.h"
 #define _MAX_SIGS_LEN_ 128
 
 //Render:
@@ -42,6 +43,7 @@ class VisibleFogVolumeInfo_t
 };
 
 using VPlane = cplane_t;
+typedef VPlane Frustum[FRUSTUM_NUMPLANES];
 
 typedef void(__cdecl* FnGetVisibleFogVolume)(Vector&, VisibleFogVolumeInfo_t&);
 typedef void(__thiscall* FnDrawWorldAndEntities)(ITerrorViewRender*, bool, CViewSetup&, int, VisibleFogVolumeInfo_t*, WaterRenderInfo_t*, void*);

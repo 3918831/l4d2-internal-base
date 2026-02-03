@@ -211,6 +211,32 @@ public:
 		return &m[0][0];
 	}
 
+	// Applies the rotation (ignores translation in the matrix).
+	inline Vector ApplyRotation(const Vector &vVec) const
+	{
+		return VMul3x3(vVec);
+	}
+
+	// Multiply by the upper 3x3 part of the matrix (ie: only apply rotation).
+	inline Vector VMul3x3(const Vector &vVec) const
+	{
+		return Vector(
+			m[0][0]*vVec.x + m[0][1]*vVec.y + m[0][2]*vVec.z,
+			m[1][0]*vVec.x + m[1][1]*vVec.y + m[1][2]*vVec.z,
+			m[2][0]*vVec.x + m[2][1]*vVec.y + m[2][2]*vVec.z
+		);
+	}
+
+	// Multiply by a vector (divides by w, assumes input w is 1).
+	inline Vector operator*(const Vector &vVec) const
+	{
+		Vector vRet;
+		vRet.x = m[0][0]*vVec.x + m[0][1]*vVec.y + m[0][2]*vVec.z + m[0][3];
+		vRet.y = m[1][0]*vVec.x + m[1][1]*vVec.y + m[1][2]*vVec.z + m[1][3];
+		vRet.z = m[2][0]*vVec.x + m[2][1]*vVec.y + m[2][2]*vVec.z + m[2][3];
+
+		return vRet;
+	}
 	// The matrix.
 	vec_t		m[4][4];
 };

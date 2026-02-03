@@ -14,6 +14,8 @@
 #include "TerrorPlayer/TerrorPlayer.h"
 #include "WndProc/WndProc.h"
 #include "C_Weapon/Weapon_Pistol.h"
+#include "EngineServer/EngineServer.h"
+#include "EngineTrace/EngineTrace.h"
 
 class CGlobal_Hooks
 {

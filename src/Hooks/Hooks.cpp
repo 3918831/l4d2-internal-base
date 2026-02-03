@@ -25,6 +25,12 @@ void CGlobal_Hooks::Init()
 
 		//增加对Pistol的Hook
 		Pistol::Init();
+
+		//增加对EngineServer的Hook
+		EngineServer::Init();
+
+		//增加对EngineTrace的Hook
+		EngineTrace::Init();
 	}
 
 	XASSERT(MH_EnableHook(MH_ALL_HOOKS) != MH_STATUS::MH_OK);

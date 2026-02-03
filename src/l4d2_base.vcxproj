@@ -163,6 +163,8 @@
     <ClCompile Include="Hooks\ClientPrediction\ClientPrediction.cpp" />
     <ClCompile Include="Hooks\CL_Main\CL_Main.cpp" />
     <ClCompile Include="Hooks\C_Weapon\Weapon_Pistol.cpp" />
+    <ClCompile Include="Hooks\EngineServer\EngineServer.cpp" />
+    <ClCompile Include="Hooks\EngineTrace\EngineTrace.cpp" />
     <ClCompile Include="Hooks\EngineVGui\EngineVGui.cpp" />
     <ClCompile Include="Hooks\GameMovement\CCSGameMovement.cpp" />
     <ClCompile Include="Hooks\Hooks.cpp" />
@@ -206,6 +208,8 @@
     <ClInclude Include="Hooks\ClientPrediction\ClientPrediction.h" />
     <ClInclude Include="Hooks\CL_Main\CL_Main.h" />
     <ClInclude Include="Hooks\C_Weapon\Weapon_Pistol.h" />
+    <ClInclude Include="Hooks\EngineServer\EngineServer.h" />
+    <ClInclude Include="Hooks\EngineTrace\EngineTrace.h" />
     <ClInclude Include="Hooks\EngineVGui\EngineVGui.h" />
     <ClInclude Include="Hooks\GameMovement\CCSGameMovement.h" />
     <ClInclude Include="Hooks\Hooks.h" />
