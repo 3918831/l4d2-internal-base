@@ -63,7 +63,9 @@ void CWeaponPortalgun::TraceFirePortal(bool bPortal2, const Vector& vTraceStart,
 
         printf("[CWeaponPortalgun] hit worldspawn success.\n");
         U::Math.VectorAngles(tr.plane.normal, qFinalAngles);
-        vFinalPosition = tr.endpos;
+
+        // 最终决定传送门创建的位置vFinalPosition加上0.5个法向量偏移，可以保证纹理在墙面的前面，避免Z-fighting问题
+        vFinalPosition = tr.endpos + tr.plane.normal * 0.5f;
         vNormal = tr.plane.normal;
     }
 
@@ -223,6 +225,7 @@ void CWeaponPortalgun::FirePortal(bool bPortal2, Vector* pVector /*= 0*/, bool b
         portalInfo.bIsActive = true;
         portalInfo.origin = vFinalPosition;
         portalInfo.angles = qFinalAngles;
+        U::Math.AngleVectors(qFinalAngles, &portalInfo.normal, nullptr, nullptr);
         printf("[CWeaponPortalgun] Portal %s updated successfully.\n", bPortal2 ? "orange" : "blue");
 
         // If it was a failure, put the effect at exactly where the player shot instead of where the portal bumped to

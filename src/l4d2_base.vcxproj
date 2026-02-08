@@ -165,6 +165,7 @@
     <ClCompile Include="Hooks\C_Weapon\Weapon_Pistol.cpp" />
     <ClCompile Include="Hooks\EngineServer\EngineServer.cpp" />
     <ClCompile Include="Hooks\EngineTrace\EngineTrace.cpp" />
+    <ClCompile Include="Hooks\RenderView\RenderView.cpp" />
     <ClCompile Include="Hooks\EngineVGui\EngineVGui.cpp" />
     <ClCompile Include="Hooks\GameMovement\CCSGameMovement.cpp" />
     <ClCompile Include="Hooks\Hooks.cpp" />
@@ -210,6 +211,7 @@
     <ClInclude Include="Hooks\C_Weapon\Weapon_Pistol.h" />
     <ClInclude Include="Hooks\EngineServer\EngineServer.h" />
     <ClInclude Include="Hooks\EngineTrace\EngineTrace.h" />
+    <ClInclude Include="Hooks\RenderView\RenderView.h" />
     <ClInclude Include="Hooks\EngineVGui\EngineVGui.h" />
     <ClInclude Include="Hooks\GameMovement\CCSGameMovement.h" />
     <ClInclude Include="Hooks\Hooks.h" />

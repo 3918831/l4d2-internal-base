@@ -50,6 +50,51 @@ enum {
 	VIEW_SETUP_VIS_EX_RETURN_FLAGS_USES_RADIAL_VIS = 0x00000001
 };
 
+// 定义最大可见性叶子数，Source引擎通常是 32 或 64
+#define MAX_VIS_LEAVES 32 
+
+// 可见性覆盖数据
+struct VisOverrideData_t
+{
+    Vector      m_vecVisOrigin;                 // 用于计算 Area Portal 的原点
+    float       m_fDistToAreaPortalTolerance;   // 容差
+};
+
+// #define FLT_MAX		3.40282346638528859811704183484516925e+38F
+// 自定义可见性结构体
+struct ViewCustomVisibility_t
+{
+    ViewCustomVisibility_t()
+    {
+        m_nNumVisOrigins = 0;
+        m_VisData.m_fDistToAreaPortalTolerance = FLT_MAX;
+        m_iForceViewLeaf = -1;
+    }
+
+    void AddVisOrigin( const Vector& origin )
+    {
+        if ( m_nNumVisOrigins >= MAX_VIS_LEAVES )
+            return;
+        m_rgVisOrigins[ m_nNumVisOrigins++ ] = origin;
+    }
+
+	void ForceVisOverride( VisOverrideData_t& visData )
+	{
+		m_VisData = visData;
+	}
+
+	void ForceViewLeaf ( int iViewLeaf )
+	{
+		m_iForceViewLeaf = iViewLeaf;
+	}
+
+    // 成员变量顺序必须严格对应引擎内存
+    int                 m_nNumVisOrigins;
+    Vector              m_rgVisOrigins[ MAX_VIS_LEAVES ];
+    VisOverrideData_t   m_VisData;
+    int                 m_iForceViewLeaf;
+};
+
 class IVRenderView
 {
 public:

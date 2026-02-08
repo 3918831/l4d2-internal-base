@@ -16,6 +16,13 @@
 #include "C_Weapon/Weapon_Pistol.h"
 #include "EngineServer/EngineServer.h"
 #include "EngineTrace/EngineTrace.h"
+#include "RenderView/RenderView.h"
+
+// 全局标志，防止递归渲染时再次触发 Hook 逻辑
+// 用于传送门纹理渲染期间的控制
+#ifdef RECURSIVE_RENDERING
+extern bool g_bIsRenderingPortalTexture;
+#endif
 
 class CGlobal_Hooks
 {

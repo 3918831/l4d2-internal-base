@@ -31,7 +31,15 @@ void CGlobal_Hooks::Init()
 
 		//增加对EngineTrace的Hook
 		EngineTrace::Init();
+
+		//增加对RenderView的Hook
+		RenderView::Init();
 	}
 
 	XASSERT(MH_EnableHook(MH_ALL_HOOKS) != MH_STATUS::MH_OK);
 }
+
+#ifdef RECURSIVE_RENDERING
+// 全局标志定义
+bool g_bIsRenderingPortalTexture = false;
+#endif

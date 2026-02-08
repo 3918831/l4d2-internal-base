@@ -66,6 +66,11 @@ public:
 	{
 		return FnGetVisibleFogVolume_func(vec, fog);
 	}
+	void ViewSetupVisEx(bool novis, int numorigins, const Vector origin[], unsigned int& returnFlags)
+	{
+		using FN = void(__thiscall*)(IRender*, bool, int, const Vector[], unsigned int&);
+		return (*(FN**)this)[45](this, novis, numorigins, origin, returnFlags);
+	}
 	void Init()
 	{
 		FnGetVisibleFogVolume_func = (FnGetVisibleFogVolume)U::Pattern.Find("engine.dll", Sigs_FnGetVisibleFogVolume);
