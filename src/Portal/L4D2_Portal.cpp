@@ -432,13 +432,10 @@ bool L4D2_Portal::RenderPortalViewRecursive(const CViewSetup& previousView, Port
     for (const auto& pt : testPoints) {
         // 模仿官方：先检查点是否有效
         int leafID = I::EngineTrace->GetLeafContainingPoint(pt);
-        if (leafID != -1 && leafID != 0) // 0 通常是 Solid
-        {
-            customVis.AddVisOrigin(pt);
-            
+        if (leafID != -1 && leafID != 0) { // 0 通常是 Solid        
+            customVis.AddVisOrigin(pt);            
             // 记录第一个有效的 Leaf ID 用于强制指定
             if (validLeafIndex == -1) validLeafIndex = leafID;
-
             // I::DebugOverlay->AddBoxOverlay(pt, Vector(-2,-2,-2), Vector(2,2,2), Vector(0,0,0), 0, 255, 0, 100, 0.1f);
         } else {
             // [调试] 无效点 (在墙里)，画个红框
@@ -544,16 +541,17 @@ void L4D2_Portal::RenderViewToTexture(void* ecx, void* edx, const CViewSetup& ma
 
     int validLeafIndex = -1;
 
-    for (const auto& pt : testPoints)
-    {
+    for (const auto& pt : testPoints) {
         // 模仿官方：先检查点是否有效
         int leafID = I::EngineTrace->GetLeafContainingPoint(pt);
-        if (leafID != -1 && leafID != 0) // 0 通常是 Solid
-        {
-            customVis.AddVisOrigin(pt);
-            
+        if (leafID != -1 && leafID != 0) { // 0 通常是 Solid        
+            customVis.AddVisOrigin(pt);            
             // 记录第一个有效的 Leaf ID 用于强制指定
             if (validLeafIndex == -1) validLeafIndex = leafID;
+            // I::DebugOverlay->AddBoxOverlay(pt, Vector(-2,-2,-2), Vector(2,2,2), Vector(0,0,0), 0, 255, 0, 100, 0.1f);
+        } else {
+            // [调试] 无效点 (在墙里)，画个红框
+            // I::DebugOverlay->AddBoxOverlay(pt, Vector(-2,-2,-2), Vector(2,2,2), Vector(0,0,0), 255, 0, 0, 100, 0.1f);
         }
     }
 

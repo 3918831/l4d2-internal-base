@@ -96,7 +96,7 @@ void __fastcall BaseClient::FrameStageNotify::Detour(void* ecx, void* edx, Clien
 // 全局标志，需要在ModelRender.cpp中声明
 //extern bool g_bIsRenderingPortalTexture;
 
-#ifdef RECURSIVE_RENDERING
+#ifdef RECURSIVE_RENDERING_0
 // RECURSIVE_RENDERING_0: 这个实现是为了配合在DrawModelExecute中绘制传送门纹理的写法, 但是在DrawModelExecute中绘制纹理存在的问题就是
 // 到了某个模型绘制阶段才去绘制整张纹理, 是有点晚了的, 现象就是第一帧传送门绘制会卡顿, 新的方案改为从RenderView阶段就去绘制传送门纹理(如果两个传送门都被创建了的话)
 // 本质上, 绘制传送门只需要两个要素: 两扇传送门均被创建& 人物当前视角, 此时就可以唯一确定传送门后的纹理内容了
@@ -118,7 +118,7 @@ void __fastcall BaseClient::RenderView::Detour(void* ecx, void* edx, CViewSetup&
 }
 #endif
 
-#ifdef RECURSIVE_RENDERING_0 //Recursive-Rendering指的是支持迭代式计算门中门场景的方式,主要绘制逻辑已经不能放在RenderView函数中了
+#ifdef RECURSIVE_RENDERING //Recursive-Rendering指的是支持迭代式计算门中门场景的方式,主要绘制逻辑已经不能放在RenderView函数中了
 // g_bIsRenderingPortalTexture 已在 Hooks.h 中声明
 
 void __fastcall Hooks::BaseClient::RenderView::Detour(void* ecx, void* edx, CViewSetup& setup, CViewSetup& hudViewSetup, int nClearFlags, int whatToDraw)

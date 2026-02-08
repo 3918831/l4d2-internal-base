@@ -56,7 +56,7 @@ void __fastcall ModelRender::ForcedMaterialOverride::Detour(void* ecx, void* edx
 	Table.Original<FN>(Index)(ecx, edx, newMaterial, nOverrideType);
 }
 
-#ifdef RECURSIVE_RENDERING
+#ifdef RECURSIVE_RENDERING_0
 void __fastcall ModelRender::DrawModelExecute::Detour(void* ecx, void* edx, const DrawModelState_t& state, const ModelRenderInfo_t& pInfo, matrix3x4_t* pCustomBoneToWorld)
 {
     // 1. 递归保护：防止画自己
@@ -350,7 +350,7 @@ void __fastcall ModelRender::DrawModelExecute::Detour(void* ecx, void* edx, cons
 }
 #endif
 
-#ifdef RECURSIVE_RENDERING_0
+#ifdef RECURSIVE_RENDERING
 void __fastcall ModelRender::DrawModelExecute::Detour(void* ecx, void* edx, const DrawModelState_t& state, const ModelRenderInfo_t& pInfo, matrix3x4_t* pCustomBoneToWorld)
 {
     const char* modelName = I::ModelInfo->GetModelName(pInfo.pModel);
