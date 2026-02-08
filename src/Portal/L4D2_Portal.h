@@ -22,6 +22,7 @@ struct PortalInfo_t
     bool bIsActive = false; // 传送门是否已激活
     Vector origin;          // 传送门在世界中的位置
     QAngle angles;          // 传送门在世界中的朝向
+    Vector normal;          // 传送门法线向量
     CProp_Portal* pPortalEntity = nullptr; // 传送门实体指针
 
     // 平滑缩放动画相关
@@ -65,11 +66,11 @@ public:
      */
     CViewSetup CalculatePortalView(const CViewSetup& playerView, const PortalInfo_t* pEntrancePortal, const PortalInfo_t* pExitPortal);
 
-    ITexture* m_pPortalTexture;
-    ITexture* m_pPortalTexture_2;
+    ITexture* m_pPortalTexture_Blue;
+    ITexture* m_pPortalTexture_Orange;
 
-    IMaterial* m_pPortalMaterial;
-    IMaterial* m_pPortalMaterial_2;
+    IMaterial* m_pPortalMaterial_Blue;
+    IMaterial* m_pPortalMaterial_Orange;
 
     IMaterialSystem* m_pMaterialSystem;
     Custom_IMaterialSystem* m_pCustomMaterialSystem;
@@ -91,6 +92,8 @@ public:
     // 递归渲染传送门
     // 这个核心函数现在要承担起管理栈状态的责任，在它进入递归前，将新计算出的视角入栈；在它完成工作后，必须将自己的视角出栈。
     bool RenderPortalViewRecursive(const CViewSetup& previousView, PortalInfo_t* entryPortal, PortalInfo_t* exitPortal);
+
+    void RenderViewToTexture(void *ecx, void *edx, const CViewSetup &mainView, PortalInfo_t *entryPortal, PortalInfo_t *exitPortal, ITexture *pTargetTex);
 
     // 视图栈
     std::vector<CViewSetup> m_vViewStack;

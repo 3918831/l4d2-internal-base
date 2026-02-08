@@ -1,6 +1,8 @@
 ﻿#include <memory>
 #include <cassert>
 #include "BaseClient.h"
+// #include "../ModelRender/ModelRender.h"
+#include "../Hooks.h"
 #include "../../Portal/L4D2_Portal.h"
 #include "../../SDK/L4D2/Interfaces/RenderView.h"
 #include "../../SDK/L4D2/Interfaces/EngineClient.h"
@@ -93,141 +95,12 @@ void __fastcall BaseClient::FrameStageNotify::Detour(void* ecx, void* edx, Clien
 
 // 全局标志，需要在ModelRender.cpp中声明
 //extern bool g_bIsRenderingPortalTexture;
-#ifdef PRE_RENDERING //Pre-Rendering指的是在RenderView函数内绘制纹理，在DrawModelExecute中使用这个纹理
-void __fastcall BaseClient::RenderView::Detour(void* ecx, void* edx, CViewSetup& setup, CViewSetup& hudViewSetup, int nClearFlags, int whatToDraw)
-{
-	if (!g_pClient_this_ptr) {
-		g_pClient_this_ptr = ecx;
-	}
 
-	// 只有在游戏内且传送门系统初始化后才执行
-	if (I::EngineClient->IsInGame() && G::G_L4D2Portal.m_pMaterialSystem
-		&& G::G_L4D2Portal.m_pPortalTexture && G::G_L4D2Portal.m_pPortalTexture_2
-		&& G::G_L4D2Portal.g_BluePortal.bIsActive && G::G_L4D2Portal.g_OrangePortal.bIsActive)
-	{
-		IMatRenderContext* pRenderContext = G::G_L4D2Portal.m_pMaterialSystem->GetRenderContext();
-		if (pRenderContext)
-		{
-			// --- 渲染蓝门内的场景 (裁剪平面在橙门) ---
-			{
-				// 边界条件检查: 玩家必须在蓝门前方且大致朝向蓝门
-				// (这部分逻辑是好的优化，保持)
-				// 20251011: 貌似可以删除了
-				Vector vPlayerFwd, vBluePortalFwd, vToPlayer;
-				U::Math.AngleVectors(setup.angles, &vPlayerFwd, nullptr, nullptr);
-				U::Math.AngleVectors(G::G_L4D2Portal.g_BluePortal.angles, &vBluePortalFwd, nullptr, nullptr);
-				vToPlayer = setup.origin - G::G_L4D2Portal.g_BluePortal.origin;
-				U::Math.VectorNormalize(vToPlayer); // 归一化以获得纯方向
-
-				if (/*DotProduct(vToPlayer, vBluePortalFwd) >= 0.0f*/ true)
-				{
-					pRenderContext->PushRenderTargetAndViewport();
-					pRenderContext->SetRenderTarget(G::G_L4D2Portal.m_pPortalTexture);
-					pRenderContext->Viewport(0, 0, setup.width, setup.height);
-					pRenderContext->ClearBuffers(true, true, true);
-
-					// --- 定义出口（橙门）的裁剪平面 ---
-					Vector exitNormal_O;
-					U::Math.AngleVectors(G::G_L4D2Portal.g_OrangePortal.angles, &exitNormal_O, nullptr, nullptr);
-
-					float clipPlane_O[4];
-					clipPlane_O[0] = exitNormal_O.x;
-					clipPlane_O[1] = exitNormal_O.y;
-					clipPlane_O[2] = exitNormal_O.z;
-
-					// 【核心修正】修正 D 值的计算，遵循 n·p - d = 0 的形式
-					// d = n·p，并加入一个小的偏移量防止瑕疵
-					clipPlane_O[3] = DotProduct(G::G_L4D2Portal.g_OrangePortal.origin, exitNormal_O) - 0.5f;
-
-					CViewSetup portalView = G::G_L4D2Portal.CalculatePortalView(setup, &G::G_L4D2Portal.g_BluePortal, &G::G_L4D2Portal.g_OrangePortal);
-
-					pRenderContext->PushCustomClipPlane(clipPlane_O);
-					pRenderContext->EnableClipping(true);
-
-
-					VisibleFogVolumeInfo_t fog_1;
-					I::CustomRender->GetVisibleFogVolumeInfo(G::G_L4D2Portal.g_OrangePortal.origin, fog_1);
-					WaterRenderInfo_t water_1;
-					I::CustomView->DetermineWaterRenderInfo(&fog_1, &water_1);
-
-
-					//I::RenderView->Push3DView(pRenderContext, &portalView, 0, G::G_L4D2Portal.m_pPortalTexture, &G::G_L4D2Portal.m_Frustum);
-					I::CustomRender->Push3DView(portalView, 0, G::G_L4D2Portal.m_pPortalTexture, I::CustomView->GetFrustum(), nullptr);
-					// 递归调用原函数进行渲染, 不渲染玩家模型和HUD
-					//Func.Original<FN>()(ecx, edx, portalView, hudViewSetup, nClearFlags, whatToDraw & (~RENDERVIEW_DRAWVIEWMODEL) & (~RENDERVIEW_DRAWHUD));
-					//Func.Original<FN>()(ecx, edx, portalView, hudViewSetup, 0, RENDERVIEW_UNSPECIFIED);
-					I::CustomView->DrawWorldAndEntities(true, portalView, nClearFlags, &fog_1, &water_1);
-					//I::RenderView->PopView(pRenderContext, &G::G_L4D2Portal.m_Frustum);
-					I::CustomRender->PopView(I::CustomView->GetFrustum());
-
-
-					pRenderContext->EnableClipping(false);
-					pRenderContext->PopCustomClipPlane();
-					pRenderContext->PopRenderTargetAndViewport();
-				}
-			}
-
-			// --- 渲染橙门内的场景 (裁剪平面在蓝门) ---
-			{
-				// 对橙门执行相同的边界条件检查
-				Vector vPlayerFwd, vOrangePortalFwd, vToPlayer;
-				U::Math.AngleVectors(setup.angles, &vPlayerFwd, nullptr, nullptr);
-				U::Math.AngleVectors(G::G_L4D2Portal.g_OrangePortal.angles, &vOrangePortalFwd, nullptr, nullptr);
-				vToPlayer = setup.origin - G::G_L4D2Portal.g_OrangePortal.origin;
-				U::Math.VectorNormalize(vToPlayer);
-
-				if (/*DotProduct(vToPlayer, vOrangePortalFwd) >= 0.0f*/ true)
-				{
-					pRenderContext->PushRenderTargetAndViewport();
-					pRenderContext->SetRenderTarget(G::G_L4D2Portal.m_pPortalTexture_2);
-					pRenderContext->Viewport(0, 0, setup.width, setup.height);
-					pRenderContext->ClearBuffers(true, true, true);
-
-					// --- 定义出口（蓝门）的裁剪平面 ---
-					Vector exitNormal_B;
-					U::Math.AngleVectors(G::G_L4D2Portal.g_BluePortal.angles, &exitNormal_B, nullptr, nullptr);
-
-					float clipPlane_B[4];
-					clipPlane_B[0] = exitNormal_B.x;
-					clipPlane_B[1] = exitNormal_B.y;
-					clipPlane_B[2] = exitNormal_B.z;
-
-					// 【核心修正】修正 D 值的计算
-					clipPlane_B[3] = DotProduct(G::G_L4D2Portal.g_BluePortal.origin, exitNormal_B) - 0.5f;
-
-					CViewSetup portalView2 = G::G_L4D2Portal.CalculatePortalView(setup, &G::G_L4D2Portal.g_OrangePortal, &G::G_L4D2Portal.g_BluePortal);
-
-
-					pRenderContext->PushCustomClipPlane(clipPlane_B);
-					pRenderContext->EnableClipping(true);
-
-					VisibleFogVolumeInfo_t fog_2;
-					I::CustomRender->GetVisibleFogVolumeInfo(G::G_L4D2Portal.g_OrangePortal.origin, fog_2);
-					WaterRenderInfo_t water_2;
-					I::CustomView->DetermineWaterRenderInfo(&fog_2, &water_2);
-
-					//I::RenderView->Push3DView(pRenderContext, &portalView2, 0, G::G_L4D2Portal.m_pPortalTexture_2, &G::G_L4D2Portal.m_Frustum);
-					I::CustomRender->Push3DView(portalView2, 0, G::G_L4D2Portal.m_pPortalTexture_2, I::CustomView->GetFrustum(), nullptr);
-					//Func.Original<FN>()(ecx, edx, portalView2, hudViewSetup, nClearFlags, whatToDraw & (~RENDERVIEW_DRAWVIEWMODEL) & (~RENDERVIEW_DRAWHUD));
-					//Func.Original<FN>()(ecx, edx, portalView2, hudViewSetup, 0, RENDERVIEW_UNSPECIFIED);
-					I::CustomView->DrawWorldAndEntities(true, portalView2, nClearFlags, &fog_2, &water_2);
-					//I::RenderView->PopView(pRenderContext, &G::G_L4D2Portal.m_Frustum);
-					I::CustomRender->PopView(I::CustomView->GetFrustum());
-
-					pRenderContext->EnableClipping(false);
-					pRenderContext->PopCustomClipPlane();
-					pRenderContext->PopRenderTargetAndViewport();
-				}
-			}
-		}
-	}
-	// 正常情况下调用原函数，渲染玩家的主视角
-	Func.Original<FN>()(ecx, edx, setup, hudViewSetup, nClearFlags, whatToDraw);
-}
-#endif
-
-
-#ifdef RECURSIVE_RENDERING //Recursive-Rendering指的是支持迭代式计算门中门场景的方式,主要绘制逻辑已经不能放在RenderView函数中了
+#ifdef RECURSIVE_RENDERING
+// RECURSIVE_RENDERING_0: 这个实现是为了配合在DrawModelExecute中绘制传送门纹理的写法, 但是在DrawModelExecute中绘制纹理存在的问题就是
+// 到了某个模型绘制阶段才去绘制整张纹理, 是有点晚了的, 现象就是第一帧传送门绘制会卡顿, 新的方案改为从RenderView阶段就去绘制传送门纹理(如果两个传送门都被创建了的话)
+// 本质上, 绘制传送门只需要两个要素: 两扇传送门均被创建& 人物当前视角, 此时就可以唯一确定传送门后的纹理内容了
+// 当前可以使用, 但是在RenderPortalViewRecursive存在一定视角丢模型问题待解决
 void __fastcall BaseClient::RenderView::Detour(void* ecx, void* edx, CViewSetup& setup, CViewSetup& hudViewSetup, int nClearFlags, int whatToDraw)
 {
 	// 每帧开始时，重置状态
@@ -241,6 +114,71 @@ void __fastcall BaseClient::RenderView::Detour(void* ecx, void* edx, CViewSetup&
 	G::G_L4D2Portal.m_nClearFlags = nClearFlags;
 
 	// 调用原始函数。当它内部渲染到传送门时，会触发 DrawModelExecute
+	Func.Original<FN>()(ecx, edx, setup, hudViewSetup, nClearFlags, whatToDraw);
+}
+#endif
+
+#ifdef RECURSIVE_RENDERING_0 //Recursive-Rendering指的是支持迭代式计算门中门场景的方式,主要绘制逻辑已经不能放在RenderView函数中了
+// g_bIsRenderingPortalTexture 已在 Hooks.h 中声明
+
+void __fastcall Hooks::BaseClient::RenderView::Detour(void* ecx, void* edx, CViewSetup& setup, CViewSetup& hudViewSetup, int nClearFlags, int whatToDraw)
+{
+    // 1. 如果已经在渲染传送门纹理，或者是递归保护，直接调用原始函数
+    // if (g_bIsRenderingPortalTexture || !I::EngineClient->IsInGame()) {
+    //     Func.Original<FN>()(ecx, edx, setup, hudViewSetup, nClearFlags, whatToDraw);
+    //     return;
+    // }
+
+    // 2. 每帧初始化状态
+    G::G_L4D2Portal.m_nPortalRenderDepth = 0;
+    G::G_L4D2Portal.m_vViewStack.clear();
+    G::G_L4D2Portal.m_vViewStack.push_back(setup);
+    G::G_L4D2Portal.m_nClearFlags = nClearFlags;
+
+    // 3. 方案 B：反馈回路预渲染
+    // 只有当两扇门都激活时才进行渲染
+    if (G::G_L4D2Portal.g_BluePortal.bIsActive && G::G_L4D2Portal.g_OrangePortal.bIsActive) 
+    {
+        g_bIsRenderingPortalTexture = true; // 开启保护
+
+        // 渲染流程：
+        // A. 计算并渲染从“橙门”看出去，显示在“蓝门”表面的画面
+        G::G_L4D2Portal.RenderViewToTexture(ecx, edx, setup, 
+            &G::G_L4D2Portal.g_BluePortal,   // 入口 (我们要画在这个门上)
+            &G::G_L4D2Portal.g_OrangePortal, // 出口 (相机从这里射出去)
+            G::G_L4D2Portal.m_pPortalTexture_Blue);
+
+        // B. 计算并渲染从“蓝门”看出去，显示在“橙门”表面的画面
+        G::G_L4D2Portal.RenderViewToTexture(ecx, edx, setup, 
+            &G::G_L4D2Portal.g_OrangePortal, // 入口
+            &G::G_L4D2Portal.g_BluePortal,   // 出口
+            G::G_L4D2Portal.m_pPortalTexture_Orange);
+
+        g_bIsRenderingPortalTexture = false; // 解除保护
+    }
+
+
+	// =================================================================================================
+	// 以下代码用于测试近平面裁剪
+
+	// IMatRenderContext* pRenderContext = I::MaterialSystem->GetRenderContext();
+    // if (!pRenderContext) return;
+    // Vector exitNormal;
+    // U::Math.AngleVectors(setup.angles, &exitNormal, nullptr, nullptr);
+    // float clipPlane[4];
+    // clipPlane[0] = exitNormal.x;
+    // clipPlane[1] = exitNormal.y;
+    // clipPlane[2] = exitNormal.z;
+    // clipPlane[3] = DotProduct(setup.origin, exitNormal) + 200.0f;
+	// pRenderContext->PushCustomClipPlane(clipPlane);
+    // pRenderContext->EnableClipping(true);
+
+    // Func.Original<FN>()(ecx, edx, setup, hudViewSetup, nClearFlags, whatToDraw);
+
+	// pRenderContext->EnableClipping(false);
+    // pRenderContext->PopCustomClipPlane();
+	// =================================================================================================
+
 	Func.Original<FN>()(ecx, edx, setup, hudViewSetup, nClearFlags, whatToDraw);
 }
 #endif
