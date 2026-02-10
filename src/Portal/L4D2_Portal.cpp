@@ -17,6 +17,9 @@
 #include "L4D2_Portal.h"
 #include "CustomRender.h"
 
+#include <fstream>
+#include <vector>
+
 // ITexture* g_pPortalTexture = nullptr;
 //IMaterialSystem* g_pPortalMaterialSystem = nullptr;
 IMaterial* g_pPortalMaterial = nullptr;
@@ -50,8 +53,8 @@ void L4D2_Portal::CreatePortalTexture()
         0,//TEXTUREFLAGS_NOMIP,
         CREATERENDERTARGETFLAGS_HDR);
 
-#ifdef RECURSIVE_RENDERING
-    // 预分配内存
+#if PORTAL_RENDER_MODE == 1
+    // 模式1: 预分配纹理池
     m_vPortalTextures.reserve(MAX_PORTAL_RECURSION_DEPTH);
 
     for (int i = 0; i < MAX_PORTAL_RECURSION_DEPTH; ++i)
@@ -78,8 +81,62 @@ void L4D2_Portal::CreatePortalTexture()
             printf("[Portal] Error: Failed to create portal texture %d\n", i);
         }
     }
-
 #endif
+
+#if PORTAL_RENDER_MODE == 3
+    // 模式3: 初始化蓝门纹理
+    for (int i = 0; i < MAX_PORTAL_RECURSION_DEPTH; ++i)
+    {
+        // 创建一个唯一的纹理名称
+        char textureName[64];
+        sprintf_s(textureName, "_blue_portal_texture_%d", i);
+
+        // 使用您熟悉的方式创建纹理
+        // 注意：这里的参数可能需要根据您的具体需求微调
+        ITexture* newTexture = I::MaterialSystem->CreateNamedRenderTargetTextureEx(
+            textureName,
+            1, 1,
+            RT_SIZE_FULL_FRAME_BUFFER,
+            I::MaterialSystem->GetBackBufferFormat(), // or IMAGE_FORMAT_RGBA8888, 
+            MATERIAL_RT_DEPTH_SEPARATE,
+            0,//TEXTUREFLAGS_NOMIP,
+            CREATERENDERTARGETFLAGS_HDR);
+
+        if (newTexture) {
+            m_vTexForBlue.push_back(newTexture);
+        } else {
+            // 处理错误，例如打印日志
+            printf("[Portal] Error: Failed to create portal texture %d\n", i);
+        }
+    }
+
+    // 初始化橙门纹理
+    for (int i = 0; i < MAX_PORTAL_RECURSION_DEPTH; ++i)
+    {
+        // 创建一个唯一的纹理名称
+        char textureName[64];
+        sprintf_s(textureName, "_orange_portal_texture_%d", i);
+
+        // 使用您熟悉的方式创建纹理
+        // 注意：这里的参数可能需要根据您的具体需求微调
+        ITexture* newTexture = I::MaterialSystem->CreateNamedRenderTargetTextureEx(
+            textureName,
+            1, 1,
+            RT_SIZE_FULL_FRAME_BUFFER,
+            I::MaterialSystem->GetBackBufferFormat(), // or IMAGE_FORMAT_RGBA8888, 
+            MATERIAL_RT_DEPTH_SEPARATE,
+            0,//TEXTUREFLAGS_NOMIP,
+            CREATERENDERTARGETFLAGS_HDR);
+
+        if (newTexture) {
+            m_vTexForOrange.push_back(newTexture);
+        } else {
+            // 处理错误，例如打印日志
+            printf("[Portal] Error: Failed to create portal texture %d\n", i);
+        }
+    }
+#endif
+
     m_pMaterialSystem->EndRenderTargetAllocation();
 
     if (!m_pPortalTexture_Blue || !m_pPortalTexture_Orange)
@@ -105,13 +162,27 @@ void L4D2_Portal::CreatePortalMaterial()
     g_pPortalMaterial = m_pMaterialSystem->FindMaterial("models/zimu/zimu1_hd/zimu1_hd", TEXTURE_GROUP_MODEL, true, nullptr);
     g_pPortalMaterial_2 = m_pMaterialSystem->FindMaterial("models/zimu/zimu2_hd/zimu2_hd", TEXTURE_GROUP_MODEL, true, nullptr);
     g_pPortalMaterial_3 = m_pMaterialSystem->FindMaterial("dev/write_stencil", TEXTURE_GROUP_OTHER);
-#ifdef RECURSIVE_RENDERING
-    m_pWriteStencilMaterial = m_pMaterialSystem->FindMaterial("dev/write_stencil", TEXTURE_GROUP_OTHER);
+#if PORTAL_RENDER_MODE == 1 || PORTAL_RENDER_MODE == 2 || PORTAL_RENDER_MODE == 3
     m_pDynamicPortalMaterial = m_pMaterialSystem->FindMaterial("dev/portal_content", TEXTURE_GROUP_OTHER);
+
+    if (!m_pDynamicPortalMaterial) {
+        printf("[Portal] Failed to find dynamic portal material!\n");
+        return;
+    }
+#endif
+#if PORTAL_RENDER_MODE == 1 || PORTAL_RENDER_MODE == 3
     m_pBlackoutMaterial = m_pMaterialSystem->FindMaterial("dev/portal_blackout", TEXTURE_GROUP_OTHER);
 
-    if (!m_pDynamicPortalMaterial || !m_pWriteStencilMaterial || !m_pBlackoutMaterial) {
-        printf("[Portal] m_pDynamicPortalMaterial::Failed to find dynamic portal material!\n");
+    if (!m_pBlackoutMaterial) {
+        printf("[Portal] Failed to find blackout material!\n");
+        return;
+    }
+#endif
+#if PORTAL_RENDER_MODE == 1
+    m_pWriteStencilMaterial = m_pMaterialSystem->FindMaterial("dev/write_stencil", TEXTURE_GROUP_OTHER);
+
+    if (!m_pWriteStencilMaterial) {
+        printf("[Portal] Failed to find write_stencil material!\n");
         return;
     }
 #endif
@@ -128,10 +199,14 @@ void L4D2_Portal::CreatePortalMaterial()
     g_pPortalMaterial->IncrementReferenceCount();
     g_pPortalMaterial_2->IncrementReferenceCount();
     g_pPortalMaterial_3->IncrementReferenceCount();
-#ifdef RECURSIVE_RENDERING
-    m_pWriteStencilMaterial->IncrementReferenceCount();
+#if PORTAL_RENDER_MODE == 1 || PORTAL_RENDER_MODE == 2 || PORTAL_RENDER_MODE == 3
     m_pDynamicPortalMaterial->IncrementReferenceCount();
+#endif
+#if PORTAL_RENDER_MODE == 1 || PORTAL_RENDER_MODE == 3
     m_pBlackoutMaterial->IncrementReferenceCount();
+#endif
+#if PORTAL_RENDER_MODE == 1
+    m_pWriteStencilMaterial->IncrementReferenceCount();
 #endif
     // 查找并设置基础纹理参数
     IMaterialVar* pBaseTextureVar = g_pPortalMaterial->FindVar("$basetexture", NULL, false);
@@ -220,9 +295,11 @@ void L4D2_Portal::PortalInit()
     printf("[Portal] m_pPortalMaterial_Blue: %p\n", m_pPortalMaterial_Blue);
     printf("[Portal] m_pCustomMaterialSystem: %p\n", m_pCustomMaterialSystem);
 
-#ifdef RECURSIVE_RENDERING
+#if PORTAL_RENDER_MODE == 1 || PORTAL_RENDER_MODE == 2
     m_nClearFlags = 0;
     I::EngineClient->GetScreenSize(screenWidth, screenHeight);
+#elif PORTAL_RENDER_MODE == 3
+    m_nClearFlags = 0;
 #endif
     m_pWeaponPortalgun = std::make_unique<CWeaponPortalgun>();
 }
@@ -262,22 +339,30 @@ void L4D2_Portal::PortalShutdown()
         m_pPortalMaterial_Orange = nullptr;
     }
 
-#ifdef RECURSIVE_RENDERING
-    // 3. 释放递归渲染材质
+#if PORTAL_RENDER_MODE == 1 || PORTAL_RENDER_MODE == 2 || PORTAL_RENDER_MODE == 3
+    // 释放动态传送门材质
     if (m_pDynamicPortalMaterial) {
         m_pDynamicPortalMaterial->DecrementReferenceCount();
         m_pDynamicPortalMaterial = nullptr;
     }
-    if (m_pWriteStencilMaterial) {
-        m_pWriteStencilMaterial->DecrementReferenceCount();
-        m_pWriteStencilMaterial = nullptr;
-    }
+#endif
+
+#if PORTAL_RENDER_MODE == 1 || PORTAL_RENDER_MODE == 3
+    // 释放 blackout 材质
     if (m_pBlackoutMaterial) {
         m_pBlackoutMaterial->DecrementReferenceCount();
         m_pBlackoutMaterial = nullptr;
     }
+#endif
 
-    // 4. 清理纹理池
+#if PORTAL_RENDER_MODE == 1
+    // 释放模式1专用材质
+    if (m_pWriteStencilMaterial) {
+        m_pWriteStencilMaterial->DecrementReferenceCount();
+        m_pWriteStencilMaterial = nullptr;
+    }
+
+    // 清理纹理池
     if (!m_vPortalTextures.empty())
     {
         for (ITexture* pTexture : m_vPortalTextures)
@@ -290,15 +375,42 @@ void L4D2_Portal::PortalShutdown()
         }
         m_vPortalTextures.clear();
     }
-
-    // 5. 清理视图栈
+    // 清理视图栈
     if (!m_vViewStack.empty())
     {
         m_vViewStack.clear();
     }
 #endif
 
-    // 6. 释放传送门纹理
+#if PORTAL_RENDER_MODE == 3
+    if (!m_vTexForBlue.empty())
+    {
+        for (ITexture* pTexture : m_vTexForBlue)
+        {
+            // 纹理由材质系统管理，置空即可
+            if (pTexture)
+            {
+                pTexture = nullptr;
+            }
+        }
+        m_vTexForBlue.clear();
+    }
+
+    if (!m_vTexForOrange.empty())
+    {
+        for (ITexture* pTexture : m_vTexForOrange)
+        {
+            // 纹理由材质系统管理，置空即可
+            if (pTexture)
+            {
+                pTexture = nullptr;
+            }
+        }
+        m_vTexForOrange.clear();
+    }
+#endif
+
+    // 释放传送门纹理
     if (m_pPortalTexture_Blue)
     {
         // 纹理由材质系统管理，置空即可
@@ -384,7 +496,7 @@ CViewSetup L4D2_Portal::CalculatePortalView(const CViewSetup& playerView, const 
     return portalView;
 }
 
-#ifdef RECURSIVE_RENDERING
+#if PORTAL_RENDER_MODE == 1
 bool L4D2_Portal::RenderPortalViewRecursive(const CViewSetup& previousView, PortalInfo_t* entryPortal, PortalInfo_t* exitPortal)
 {
     // 1. 递归深度检查, 检查递归深度是否超限
@@ -490,10 +602,12 @@ bool L4D2_Portal::RenderPortalViewRecursive(const CViewSetup& previousView, Port
 
     // 9. 执行渲染
     // Push 真实视角 (墙后)
-    I::CustomRender->Push3DView(newPortalView, 0, pRenderTarget, nullptr, nullptr);
+    I::CustomRender->Push3DView(newPortalView, 0, pRenderTarget, I::CustomView->GetFrustum(), nullptr);
     
+    // 计算环境光 (使用最稳的那个有效点，如果没有就用原点)
+    Vector fogOrigin = (customVis.m_nNumVisOrigins > 0) ? customVis.m_rgVisOrigins[0] : exitPortal->origin;
     VisibleFogVolumeInfo_t fog_1;
-    I::CustomRender->GetVisibleFogVolumeInfo(exitPortal->origin, fog_1);
+    I::CustomRender->GetVisibleFogVolumeInfo(fogOrigin, fog_1);
     WaterRenderInfo_t water_1;
     I::CustomView->DetermineWaterRenderInfo(&fog_1, &water_1);
 
@@ -502,7 +616,7 @@ bool L4D2_Portal::RenderPortalViewRecursive(const CViewSetup& previousView, Port
     I::CustomView->DrawWorldAndEntities(true, newPortalView, m_nClearFlags, &fog_1, &water_1, &customVis);
     
     // 10. 恢复与清理
-    I::CustomRender->PopView(nullptr);
+    I::CustomRender->PopView(I::CustomView->GetFrustum());
     pRenderContext->EnableClipping(false);
     pRenderContext->PopCustomClipPlane();
     pRenderContext->PopRenderTargetAndViewport();
@@ -513,7 +627,7 @@ bool L4D2_Portal::RenderPortalViewRecursive(const CViewSetup& previousView, Port
 }
 #endif
 
-#ifdef RECURSIVE_RENDERING
+#if PORTAL_RENDER_MODE == 1 || PORTAL_RENDER_MODE == 2
 void L4D2_Portal::RenderViewToTexture(void* ecx, void* edx, const CViewSetup& mainView, PortalInfo_t* entryPortal, PortalInfo_t* exitPortal, ITexture* pTargetTex)
 {
     if (!pTargetTex) return;
@@ -606,5 +720,237 @@ void L4D2_Portal::RenderViewToTexture(void* ecx, void* edx, const CViewSetup& ma
     pRenderContext->EnableClipping(false);
     pRenderContext->PopCustomClipPlane();
     pRenderContext->PopRenderTargetAndViewport();
+}
+#endif
+
+#if PORTAL_RENDER_MODE == 3
+void L4D2_Portal::BuildRenderStack(const CViewSetup& currentView, PortalInfo_t* entry, PortalInfo_t* exit, int depth)
+{
+    if (depth >= MAX_PORTAL_RECURSION_DEPTH) return;
+
+    // 1. 计算下一层的视角
+    CViewSetup nextView = CalculatePortalView(currentView, entry, exit);
+
+    // 2. 确定目标纹理
+    ITexture* pTargetTexture = nullptr;
+
+    // 逻辑推导：
+    // 如果 entry 是蓝门 (我们正往蓝门里看)，那么下一层的视角是从橙门(exit)发出的。
+    // 这个视角产生的画面，最终应该贴在【蓝门】上。
+    if (entry == &G::G_L4D2Portal.g_BluePortal) {
+        pTargetTexture = m_vTexForBlue[depth]; 
+    } else if (entry == &G::G_L4D2Portal.g_OrangePortal) {
+        pTargetTexture = m_vTexForOrange[depth];
+    } else {
+        printf("[BuildRenderStack]: entry is not BluePortal or OrangePortal");
+    }
+    
+    // 2. 简单的视锥体剔除检查 (可选优化)
+    // 检查 exit 门是否在 currentView 的视野内，如果看不见就不需要继续递归了
+    // 这里先省略，假设都能看见
+
+    // 3. 记录请求 (注意：纹理索引对应 depth)
+    PortalRenderRequest req;
+    req.view = nextView;
+    req.entry = exit; // 下一层的入口变成了当前的出口
+    req.exit = entry; // 下一层的出口变成了当前的入口
+    req.targetTex = pTargetTexture;
+    req.depth = depth + 1; // 深度 1 开始
+
+    m_renderQueue.push_back(req);
+
+    // 4. 继续递归
+    // 注意：这里需要分叉递归，但在简单的“无限长廊”场景中（门对门），
+    // 我们只需要继续沿着当前的 exit -> entry 路径递归即可。
+    BuildRenderStack(nextView, exit, entry, depth + 1);
+}
+#endif
+
+// RenderPortalViewRecursive 里的渲染代码剥离出来，去掉递归调用，只负责画一帧。
+#if PORTAL_RENDER_MODE == 3
+void L4D2_Portal::RenderTextureInternal(const CViewSetup& mainView, PortalInfo_t* entryPortal, PortalInfo_t* exitPortal, ITexture* pTargetTex)
+{
+    // ... 获取 RenderContext, PushRenderTarget 等标准操作 ...
+    // ... PushCustomClipPlane (使用 +0.5f ~ +1.0f 修正遮挡) ...
+    if (!pTargetTex) return;
+    IMatRenderContext* pRenderContext = m_pMaterialSystem->GetRenderContext();
+    if (!pRenderContext) return;
+
+    // 1. 计算透视正确的视角 (Render View) - 保持在墙后
+    CViewSetup portalView = CalculatePortalView(mainView, entryPortal, exitPortal);
+    
+    // 2. 构造官方风格的可见性数据 (Custom Visibility)
+    // 【重要】ViewCustomVisibility_t 依然是必须的，解决丢模型
+    // 获取出口法线
+    ViewCustomVisibility_t customVis;
+    Vector exitNormal;
+    U::Math.AngleVectors(exitPortal->angles, &exitNormal, nullptr, nullptr);
+
+
+    // 策略优化：多点采样 + 有效性检查
+    // 我们生成 3 个探测点：中心，中心前移 20，中心前移 50
+    // 只要其中有一个在有效 Leaf 里，渲染就稳了
+    Vector testPoints[] = {
+        exitPortal->origin + (exitNormal * 1.0f),  // 紧贴门面
+        exitPortal->origin + (exitNormal * 25.0f), // 稍微靠前
+        exitPortal->origin + (exitNormal * 50.0f)  // 明显靠前
+    };
+
+    int validLeafIndex = -1;
+
+    for (const auto& pt : testPoints) {
+        // 模仿官方：先检查点是否有效
+        int leafID = I::EngineTrace->GetLeafContainingPoint(pt);
+        if (leafID != -1 && leafID != 0) { // 0 通常是 Solid        
+            customVis.AddVisOrigin(pt);            
+            // 记录第一个有效的 Leaf ID 用于强制指定
+            if (validLeafIndex == -1) validLeafIndex = leafID;
+            // I::DebugOverlay->AddBoxOverlay(pt, Vector(-2,-2,-2), Vector(2,2,2), Vector(0,0,0), 0, 255, 0, 100, 0.1f);
+        } else {
+            // [调试] 无效点 (在墙里)，画个红框
+            // I::DebugOverlay->AddBoxOverlay(pt, Vector(-2,-2,-2), Vector(2,2,2), Vector(0,0,0), 255, 0, 0, 100, 0.1f);
+        }
+    }
+
+    // 模仿官方：强制指定 View Leaf (如果找到了有效 Leaf)
+    if (validLeafIndex != -1) {
+        customVis.ForceViewLeaf(validLeafIndex);
+    }
+
+    // 3. 准备渲染环境
+    pRenderContext->PushRenderTargetAndViewport();
+    pRenderContext->SetRenderTarget(pTargetTex);
+    pRenderContext->Viewport(0, 0, pTargetTex->GetActualWidth(), pTargetTex->GetActualHeight());    
+    pRenderContext->ClearColor4ub(255, 0, 0, 255);
+    pRenderContext->ClearBuffers(true, true, true);
+
+    // 4. 设置剪裁平面 (Clip Plane) - 模仿官方处理遮挡
+    // 官方代码：m_vForward.Dot( origin - forward * 0.5f )
+    float clipPlane[4];
+    clipPlane[0] = exitNormal.x; 
+    clipPlane[1] = exitNormal.y; 
+    clipPlane[2] = exitNormal.z;
+    // 官方偏移 0.5f，我们也用 0.5f
+    clipPlane[3] = (exitNormal.Dot(exitPortal->origin) + 1.0f); 
+
+    pRenderContext->PushCustomClipPlane(clipPlane);
+    pRenderContext->EnableClipping(true);
+
+    // 5. 渲染
+    // Push 真实视角 (墙后) 以保持透视
+    I::CustomRender->Push3DView(portalView, 0, pTargetTex, nullptr, nullptr);
+    
+    // 计算环境光 (使用最稳的那个有效点，如果没有就用原点)
+    Vector fogOrigin = (customVis.m_nNumVisOrigins > 0) ? customVis.m_rgVisOrigins[0] : exitPortal->origin;
+    VisibleFogVolumeInfo_t fog_1;
+    I::CustomRender->GetVisibleFogVolumeInfo(fogOrigin, fog_1); 
+    WaterRenderInfo_t water_1;
+    I::CustomView->DetermineWaterRenderInfo(&fog_1, &water_1);
+    
+    // 【核心】传入 customVis
+    I::CustomView->DrawWorldAndEntities(true, portalView, m_nClearFlags, &fog_1, &water_1, &customVis);
+
+    // 6. 恢复
+    I::CustomRender->PopView(nullptr);
+    pRenderContext->EnableClipping(false);
+    pRenderContext->PopCustomClipPlane();
+    pRenderContext->PopRenderTargetAndViewport();
+}
+#endif
+
+// 调试函数 - 所有模式共用
+#if PORTAL_RENDER_MODE != 0
+// 简单的 BMP 写入器 (无需依赖)
+void L4D2_Portal::WriteBMP(const char* filename, int width, int height, unsigned char* data)
+{
+    // BMP 文件头 (14 bytes)
+    unsigned char fileHeader[14] = {
+        'B','M', // Magic
+        0,0,0,0, // File size (filled later)
+        0,0,     // Reserved
+        0,0,     // Reserved
+        54,0,0,0 // Offset to pixel data
+    };
+
+    // BMP 信息头 (40 bytes)
+    unsigned char infoHeader[40] = {
+        40,0,0,0, // Info header size
+        0,0,0,0,  // Width (filled later)
+        0,0,0,0,  // Height (filled later)
+        1,0,      // Planes
+        32,0,     // Bits per pixel (32 for BGRA)
+        0,0,0,0,  // Compression (0 = none)
+        0,0,0,0,  // Image size (can be 0 for uncompressed)
+        0,0,0,0,  // X pixels per meter
+        0,0,0,0,  // Y pixels per meter
+        0,0,0,0,  // Colors used
+        0,0,0,0   // Colors important
+    };
+
+    int fileSize = 54 + (width * height * 4); // 4 bytes per pixel
+
+    // 填充文件头数据
+    fileHeader[2] = (unsigned char)(fileSize);
+    fileHeader[3] = (unsigned char)(fileSize >> 8);
+    fileHeader[4] = (unsigned char)(fileSize >> 16);
+    fileHeader[5] = (unsigned char)(fileSize >> 24);
+
+    // 填充信息头数据
+    infoHeader[4] = (unsigned char)(width);
+    infoHeader[5] = (unsigned char)(width >> 8);
+    infoHeader[6] = (unsigned char)(width >> 16);
+    infoHeader[7] = (unsigned char)(width >> 24);
+
+    infoHeader[8] = (unsigned char)(height);
+    infoHeader[9] = (unsigned char)(height >> 8);
+    infoHeader[10] = (unsigned char)(height >> 16);
+    infoHeader[11] = (unsigned char)(height >> 24);
+
+    std::ofstream f(filename, std::ios::out | std::ios::binary);
+    if (!f) return;
+
+    f.write((char*)fileHeader, 14);
+    f.write((char*)infoHeader, 40);
+    f.write((char*)data, width * height * 4);
+    f.close();
+    
+    printf("[Debug] Texture saved to: %s\n", filename);
+}
+
+void L4D2_Portal::DumpTextureToDisk(ITexture* pTexture, const char* pFilename)
+{
+    if (!pTexture || !m_pMaterialSystem) return;
+
+    IMatRenderContext* pRenderContext = m_pMaterialSystem->GetRenderContext();
+    if (!pRenderContext) return;
+
+    int w = pTexture->GetActualWidth();
+    int h = pTexture->GetActualHeight();
+
+    // 1. 临时绑定该纹理为 RenderTarget
+    // 这样做是为了能使用 ReadPixels 从中读取数据
+    pRenderContext->PushRenderTargetAndViewport();
+    pRenderContext->SetRenderTarget(pTexture);
+    pRenderContext->Viewport(0, 0, w, h);
+
+    // 2. 分配内存缓冲区 (RGBA = 4字节)
+    int bufferSize = w * h * 4;
+    unsigned char* pPixelData = new unsigned char[bufferSize];
+
+    // 3. 从 GPU 读取像素
+    // 注意：这里使用 IMAGE_FORMAT_BGRA8888，因为 BMP 格式原生是 BGR 顺序
+    // 如果读出来颜色是反的（红蓝互换），改成 IMAGE_FORMAT_RGBA8888
+    pRenderContext->ReadPixels(0, 0, w, h, pPixelData, IMAGE_FORMAT_BGRA8888);
+
+    // 4. 恢复之前的 RT
+    pRenderContext->PopRenderTargetAndViewport();
+
+    // 5. 写入磁盘
+    // 注意：Source引擎保存的文件通常在游戏根目录下，或者 bin 目录下
+    // 为了方便找，建议写绝对路径，或者文件名写死
+    WriteBMP(pFilename, w, h, pPixelData);
+
+    // 6. 清理
+    delete[] pPixelData;
 }
 #endif

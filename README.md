@@ -44,6 +44,32 @@
 - 裁剪平面 (Clip Plane) 防止渲染穿帮
 - 模板缓冲 (Stencil Buffer) 实现传送门遮罩
 
+**渲染模式**：
+
+项目支持三种不同的传送门渲染技术方案，通过编译宏 `PORTAL_RENDER_MODE` 进行选择：
+
+| 模式 | 渲染时机 | 特点 |
+|------|----------|------|
+| **模式 1** | DrawModelExecute中递归渲染 | 完整递归效果，不丢模型，首次创建有卡顿 |
+| **模式 2** | RenderView预渲染纹理 | 不丢模型，无动画，不支持迭代渲染 |
+| **模式 3** | RenderView构建队列+独立渲染 | 迭代渲染+深递归，待完善状态 |
+
+**切换渲染模式**：
+
+修改项目文件 `src/l4d2_base.vcxproj` 中的预处理器定义：
+
+```xml
+<!-- Debug 配置 (行 91) -->
+<PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;PORTAL_RENDER_MODE=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+
+<!-- Release 配置 (行 107) -->
+<PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;_CRT_SECURE_NO_WARNINGS;PORTAL_RENDER_MODE=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+```
+
+将 `PORTAL_RENDER_MODE=1` 改为 `PORTAL_RENDER_MODE=2` 或 `PORTAL_RENDER_MODE=3`，然后重新编译即可。
+
+**注意**：三种模式的编译宏隔离仅影响代码组织方式，业务逻辑保持不变。默认配置为模式 1。
+
 **使用方法**：
 1. 在游戏中按 **左键** 创建蓝色传送门
 2. 按 **右键** 创建橙色传送门

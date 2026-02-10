@@ -84,30 +84,66 @@ public:
     PortalInfo_t g_BluePortal;
     PortalInfo_t g_OrangePortal;
 
-#ifdef RECURSIVE_RENDERING
+    // 模式1和2共用的变量和函数
+#if PORTAL_RENDER_MODE == 1 || PORTAL_RENDER_MODE == 2
     int screenWidth, screenHeight;
     int m_nClearFlags;
     PortalInfo_t* m_pCurrentExitPortal;
-
-    // 递归渲染传送门
-    // 这个核心函数现在要承担起管理栈状态的责任，在它进入递归前，将新计算出的视角入栈；在它完成工作后，必须将自己的视角出栈。
-    bool RenderPortalViewRecursive(const CViewSetup& previousView, PortalInfo_t* entryPortal, PortalInfo_t* exitPortal);
+    IMaterial* m_pDynamicPortalMaterial = nullptr;
 
     void RenderViewToTexture(void *ecx, void *edx, const CViewSetup &mainView, PortalInfo_t *entryPortal, PortalInfo_t *exitPortal, ITexture *pTargetTex);
+
+    // 调试函数
+    void DumpTextureToDisk(ITexture *pTexture, const char *pFilename);
+    void WriteBMP(const char *filename, int width, int height, unsigned char *data);
+
+    const int MAX_PORTAL_RECURSION_DEPTH = 5; // 设置一个合理的递归上限
+#endif
+
+    // 模式1专用的变量和函数
+#if PORTAL_RENDER_MODE == 1
+    // 递归渲染传送门
+    bool RenderPortalViewRecursive(const CViewSetup& previousView, PortalInfo_t* entryPortal, PortalInfo_t* exitPortal);
 
     // 视图栈
     std::vector<CViewSetup> m_vViewStack;
     // 纹理池
     std::vector<ITexture*> m_vPortalTextures;
-    // 对应的材质也需要动态修改
-    IMaterial* m_pDynamicPortalMaterial = nullptr;
-
-    // 新增：用于递归终止的材质
+    // 用于递归终止的材质
     IMaterial* m_pBlackoutMaterial = nullptr;
-
     // 全局或类成员变量，用于跟踪当前递归深度
     int m_nPortalRenderDepth = 0;
+#endif
+
+    // 模式3专用的变量和函数
+#if PORTAL_RENDER_MODE == 3
+    int m_nClearFlags;
+    IMaterial* m_pDynamicPortalMaterial = nullptr;
+    IMaterial* m_pBlackoutMaterial = nullptr;
+    void BuildRenderStack(const CViewSetup &currentView, PortalInfo_t *entry, PortalInfo_t *exit, int depth);
+    void RenderTextureInternal(const CViewSetup &view, PortalInfo_t *entry, PortalInfo_t *exit, ITexture *targetTex);
+    void DumpTextureToDisk(ITexture *pTexture, const char *pFilename);
+    void WriteBMP(const char *filename, int width, int height, unsigned char *data);
+
+    struct PortalRenderRequest {
+        CViewSetup view;          // 计算好的视角
+        PortalInfo_t* entry;      // 入口
+        PortalInfo_t* exit;       // 出口
+        ITexture* targetTex;      // 要写入的纹理
+        int depth;                // 当前深度
+    };
+
     const int MAX_PORTAL_RECURSION_DEPTH = 5; // 设置一个合理的递归上限
+
+    // 分离两组纹理池
+    // m_vTexForBlue[i]:  存储第 i 层递归中，应贴在蓝门上的纹理（即从橙门看出的视角）
+    // m_vTexForOrange[i]: 存储第 i 层递归中，应贴在橙门上的纹理（即从蓝门看出的视角）
+    std::vector<ITexture*> m_vTexForBlue;
+    std::vector<ITexture*> m_vTexForOrange;
+    // 用于存储预计算的渲染队列
+    std::vector<PortalRenderRequest> m_renderQueue;
+    // 当前正在渲染哪一层（用于 DME 判断贴什么图）
+    int m_nProcessingDepth = 0;
 #endif
 
     std::unique_ptr<CWeaponPortalgun> m_pWeaponPortalgun;

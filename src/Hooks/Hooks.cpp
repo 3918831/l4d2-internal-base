@@ -39,7 +39,7 @@ void CGlobal_Hooks::Init()
 	XASSERT(MH_EnableHook(MH_ALL_HOOKS) != MH_STATUS::MH_OK);
 }
 
-#ifdef RECURSIVE_RENDERING
+#if PORTAL_RENDER_MODE != 0
 // 全局标志定义
 bool g_bIsRenderingPortalTexture = false;
 #endif

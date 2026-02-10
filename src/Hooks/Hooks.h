@@ -20,7 +20,7 @@
 
 // 全局标志，防止递归渲染时再次触发 Hook 逻辑
 // 用于传送门纹理渲染期间的控制
-#ifdef RECURSIVE_RENDERING
+#if PORTAL_RENDER_MODE != 0
 extern bool g_bIsRenderingPortalTexture;
 #endif
 

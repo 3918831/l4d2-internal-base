@@ -56,7 +56,8 @@ void __fastcall ModelRender::ForcedMaterialOverride::Detour(void* ecx, void* edx
 	Table.Original<FN>(Index)(ecx, edx, newMaterial, nOverrideType);
 }
 
-#ifdef RECURSIVE_RENDERING_0
+#if PORTAL_RENDER_MODE == 1
+// 模式1: DrawModelExecute中递归渲染 - 完整递归，不丢模型，首次创建有卡顿
 void __fastcall ModelRender::DrawModelExecute::Detour(void* ecx, void* edx, const DrawModelState_t& state, const ModelRenderInfo_t& pInfo, matrix3x4_t* pCustomBoneToWorld)
 {
     // 1. 递归保护：防止画自己
@@ -350,7 +351,8 @@ void __fastcall ModelRender::DrawModelExecute::Detour(void* ecx, void* edx, cons
 }
 #endif
 
-#ifdef RECURSIVE_RENDERING
+#if PORTAL_RENDER_MODE == 2
+// 模式2: RenderView预渲染纹理 - 不丢模型，无动画，不支持迭代渲染
 void __fastcall ModelRender::DrawModelExecute::Detour(void* ecx, void* edx, const DrawModelState_t& state, const ModelRenderInfo_t& pInfo, matrix3x4_t* pCustomBoneToWorld)
 {
     const char* modelName = I::ModelInfo->GetModelName(pInfo.pModel);
@@ -398,7 +400,7 @@ void __fastcall ModelRender::DrawModelExecute::Detour(void* ecx, void* edx, cons
             Table.Original<FN>(Index)(ecx, edx, state, pInfo, pCustomBoneToWorld);
             I::ModelRender->ForcedMaterialOverride(nullptr);
 
-            // 阶段 2: 绘制预渲染好的纹理 (放映机逻辑)
+            // 阶段 2: 绘制预渲染好的纹理
             // 根据是蓝门还是橙门，绑定正确的 RT
             ITexture* pTex = isBluePortal ? G::G_L4D2Portal.m_pPortalTexture_Blue : G::G_L4D2Portal.m_pPortalTexture_Orange;
             IMaterialVar* pBaseTextureVar = G::G_L4D2Portal.m_pDynamicPortalMaterial->FindVar("$basetexture", nullptr);
@@ -447,6 +449,183 @@ void __fastcall ModelRender::DrawModelExecute::Detour(void* ecx, void* edx, cons
     }
     Table.Original<FN>(Index)(ecx, edx, state, pInfo, pCustomBoneToWorld);
 }
+#endif
+
+#if PORTAL_RENDER_MODE == 3
+// 模式3: RenderView构建队列+独立渲染 - 待完善
+void __fastcall ModelRender::DrawModelExecute::Detour(void* ecx, void* edx, const DrawModelState_t& state, const ModelRenderInfo_t& pInfo, matrix3x4_t* pCustomBoneToWorld)
+{
+    // ... 检查是否是传送门模型 ...
+    const char* modelName = I::ModelInfo->GetModelName(pInfo.pModel);
+    // 性能优化：先做简单的字符串首字母检查，再做 strcmp
+    if (!modelName || modelName[0] != 'm') {
+        Table.Original<FN>(Index)(ecx, edx, state, pInfo, pCustomBoneToWorld);
+        return;
+    }
+    bool isBluePortal = (modelName && strcmp(modelName, "models/blackops/portal.mdl") == 0);
+    bool isOrangePortal = (modelName && strcmp(modelName, "models/blackops/portal_og.mdl") == 0);
+
+    // 如果当前是在渲染传送门纹理过程中（Depth > 0），则不处理门，防止干扰
+    // 方案 B 依赖反馈，不需要在渲染纹理时再进行模板测试
+    if (!isBluePortal && !isOrangePortal) {
+        Table.Original<FN>(Index)(ecx, edx, state, pInfo, pCustomBoneToWorld);
+        return;
+    }
+    
+    // 如果我们在渲染纹理 (Depth > 0) 或者 主视角 (Depth = 0)
+    // 我们都需要给模型贴上 "下一层" (Depth + 1) 的纹理
+    // 或者，如果你像我上面设计的那样，m_vTexForBlue[0] 就是给主视角用的，
+    // 那么直接用 m_nProcessingDepth 作为索引即可。
+
+    int texIndex = G::G_L4D2Portal.m_nProcessingDepth;
+    ITexture* pTextureToBind = nullptr;
+
+    if (isBluePortal) {
+        // 如果遇到蓝门，就去取“专门给蓝门准备的纹理池”
+        if (texIndex < G::G_L4D2Portal.m_vTexForBlue.size()) {
+            pTextureToBind = G::G_L4D2Portal.m_vTexForBlue[texIndex];
+        }
+    } else if (isOrangePortal) {
+        // 如果遇到橙门，就去取“专门给橙门准备的纹理池”
+        if (texIndex < G::G_L4D2Portal.m_vTexForOrange.size()) {
+            pTextureToBind = G::G_L4D2Portal.m_vTexForOrange[texIndex];
+        }
+    }
+
+
+    if (pTextureToBind) {
+        IMatRenderContext* pRenderContext = G::G_L4D2Portal.m_pMaterialSystem->GetRenderContext();
+        if (!pRenderContext)
+            return;
+        
+        // 仅仅 用于调试纹理是否正确
+        // if (G::G_L4D2Portal.g_BluePortal.bIsActive && G::G_L4D2Portal.g_OrangePortal.bIsActive)
+        // {
+        //     static bool b_Blue_Dumped = false;
+        //     if (!b_Blue_Dumped && isBluePortal && texIndex == 4) {
+        //         for (int i = 0; i < 5; i++)
+        //         {
+        //             char filename[128];
+        //             // 区分蓝门/橙门，或者深度
+        //             sprintf_s(filename, "D:\\PortalDebug\\blue_portal_debug_depth_%d.bmp", i);
+        //             G::G_L4D2Portal.DumpTextureToDisk(G::G_L4D2Portal.m_vTexForBlue[i], filename);
+        //         }
+        //         printf("blue_portal_debug dumped.\n");
+        //         b_Blue_Dumped = true;
+        //     }
+
+        //     static bool b_Orange_Dumped = false;
+        //     if (!b_Orange_Dumped && isOrangePortal && texIndex == 4) {
+        //         for (int i = 0; i < 5; i++)
+        //         {
+        //             char filename[128];
+        //             // 区分蓝门/橙门，或者深度
+        //             sprintf_s(filename, "D:\\PortalDebug\\orange_portal_debug_depth_%d.bmp", i);
+        //             G::G_L4D2Portal.DumpTextureToDisk(G::G_L4D2Portal.m_vTexForOrange[i], filename);
+        //         }
+        //         printf("orange_portal_debug dumped.\n");
+        //         b_Orange_Dumped = true;
+        //     }
+        // }
+
+        // 如果我们正在渲染纹理 (g_bIsRenderingPortalTexture == true)
+        // 或者是在主视角渲染 (g_bIsRenderingPortalTexture == false)
+        
+        // 我们需要获取 "下一层" 的纹理。
+        // 如果当前是 Depth 1 (在画蓝门RT)，看到里面的门，应该贴 Depth 2 的纹理。
+        // 如果当前是 Depth 0 (主视角)，看到里面的门，应该贴 Depth 1 的纹理。
+   
+        // 安全检查：有没有更深层的纹理？
+            
+        // 【修复 A】为不同的传送门分配不同的模板ID
+        int stencilRefValue = isBluePortal ? 1 : 2;
+        // 根据当前是哪个传送门，选择对应的材质
+        IMaterial* pPortalFrameMaterial = isBluePortal
+            ? I::MaterialSystem->FindMaterial("sprites/blborder", TEXTURE_GROUP_OTHER)
+            : I::MaterialSystem->FindMaterial("sprites/ogborder", TEXTURE_GROUP_OTHER);
+
+        // 阶段 1: 写入模板
+        // (这段模板测试逻辑本身是完美的，我们保持原样)
+        pRenderContext->OverrideDepthEnable(false, true);
+        I::ModelRender->ForcedMaterialOverride(G::G_L4D2Portal.m_pWriteStencilMaterial);
+
+        ShaderStencilState_t stencilState;
+        stencilState.m_bEnable = true;
+        stencilState.m_nReferenceValue = stencilRefValue; // 使用我们分配的唯一ID
+        stencilState.m_CompareFunc = STENCILCOMPARISONFUNCTION_ALWAYS;
+        stencilState.m_PassOp = STENCILOPERATION_REPLACE;
+        stencilState.m_ZFailOp = STENCILOPERATION_KEEP;
+        stencilState.m_FailOp = STENCILOPERATION_KEEP;
+        pRenderContext->SetStencilState(stencilState);
+
+        Table.Original<FN>(Index)(ecx, edx, state, pInfo, pCustomBoneToWorld);
+        I::ModelRender->ForcedMaterialOverride(nullptr);
+
+        // 阶段 2: 绘制预渲染好的纹理
+        // 根据是蓝门还是橙门，绑定正确的 RT
+        // ITexture* pTex = isBluePortal ? G::G_L4D2Portal.m_pPortalTexture_Blue : G::G_L4D2Portal.m_pPortalTexture_Orange;
+        IMaterialVar* pBaseTextureVar = G::G_L4D2Portal.m_pDynamicPortalMaterial->FindVar("$basetexture", nullptr);
+        if (pBaseTextureVar) {
+            stencilState.m_bEnable = true;
+            stencilState.m_CompareFunc = STENCILCOMPARISONFUNCTION_EQUAL;
+            stencilState.m_PassOp = STENCILOPERATION_KEEP;
+            pRenderContext->SetStencilState(stencilState);
+
+            pBaseTextureVar->SetTextureValue(pTextureToBind);
+            pRenderContext->OverrideDepthEnable(true, false);
+            pRenderContext->DrawScreenSpaceQuad(G::G_L4D2Portal.m_pDynamicPortalMaterial);
+            pRenderContext->OverrideDepthEnable(false, true);
+        }
+
+        // 阶段 3: 绘制边框 (使用之前的偏移 0.1 方案)
+        // 绘制边框前禁用模板测试，以免互相影响
+        stencilState.m_bEnable = false;
+        pRenderContext->SetStencilState(stencilState);
+
+        if (pPortalFrameMaterial) {
+
+            // 复制当前的变换矩阵
+            matrix3x4_t modifiedMatrix = *pCustomBoneToWorld;
+            // 从角度计算出法线向量 (通常是 'forward' 前向向量)
+            Vector forward, right, up;
+            U::Math.AngleVectors(pInfo.angles, &forward, &right, &up);
+
+            // 获取当前位置
+            Vector position;
+            U::Math.MatrixGetColumn(*pCustomBoneToWorld, 3, position);
+
+            // 将位置沿着法线方向稍微向前推一点
+            position += forward * 0.1f; // 0.1f 是一个需要微调的小距离,如果仍然有z-fighting的问题,尝试调大这个值
+
+            // 将新的位置设置回矩阵
+            U::Math.MatrixSetColumn(position, 3, modifiedMatrix);
+
+            I::ModelRender->ForcedMaterialOverride(pPortalFrameMaterial);
+            Table.Original<FN>(Index)(ecx, edx, state, pInfo, &modifiedMatrix);
+            I::ModelRender->ForcedMaterialOverride(nullptr);
+        }
+
+    } else {
+
+        // 这是最深的一层，我们没有为它生成纹理。
+        // 此时我们应该用一个“终止”材质来绘制它，而不是用动态材质。
+        // 这里我们用边框材质来模拟一个有颜色的平面。
+        // --- 渲染失败路径 (达到递归上限) ---
+            // 【修正】使用我们专用的黑色材质来绘制最深处的门
+        if (G::G_L4D2Portal.m_pBlackoutMaterial)
+        {
+            I::ModelRender->ForcedMaterialOverride(G::G_L4D2Portal.m_pBlackoutMaterial);
+            Table.Original<FN>(Index)(ecx, edx, state, pInfo, pCustomBoneToWorld);
+            I::ModelRender->ForcedMaterialOverride(nullptr);
+        }     
+    }
+    return;
+    Table.Original<FN>(Index)(ecx, edx, state, pInfo, pCustomBoneToWorld);
+}
+#endif
+
+#if PORTAL_RENDER_MODE != 1 && PORTAL_RENDER_MODE != 2 && PORTAL_RENDER_MODE != 3
+    #error "Invalid PORTAL_RENDER_MODE value. Must be 1, 2, or 3."
 #endif
 
 void ModelRender::Init()

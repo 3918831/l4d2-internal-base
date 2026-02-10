@@ -96,11 +96,8 @@ void __fastcall BaseClient::FrameStageNotify::Detour(void* ecx, void* edx, Clien
 // 全局标志，需要在ModelRender.cpp中声明
 //extern bool g_bIsRenderingPortalTexture;
 
-#ifdef RECURSIVE_RENDERING_0
-// RECURSIVE_RENDERING_0: 这个实现是为了配合在DrawModelExecute中绘制传送门纹理的写法, 但是在DrawModelExecute中绘制纹理存在的问题就是
-// 到了某个模型绘制阶段才去绘制整张纹理, 是有点晚了的, 现象就是第一帧传送门绘制会卡顿, 新的方案改为从RenderView阶段就去绘制传送门纹理(如果两个传送门都被创建了的话)
-// 本质上, 绘制传送门只需要两个要素: 两扇传送门均被创建& 人物当前视角, 此时就可以唯一确定传送门后的纹理内容了
-// 当前可以使用, 但是在RenderPortalViewRecursive存在一定视角丢模型问题待解决
+#if PORTAL_RENDER_MODE == 1
+// 模式1: DrawModelExecute中递归渲染 - 完整递归，不丢模型，首次创建有卡顿
 void __fastcall BaseClient::RenderView::Detour(void* ecx, void* edx, CViewSetup& setup, CViewSetup& hudViewSetup, int nClearFlags, int whatToDraw)
 {
 	// 每帧开始时，重置状态
@@ -118,7 +115,8 @@ void __fastcall BaseClient::RenderView::Detour(void* ecx, void* edx, CViewSetup&
 }
 #endif
 
-#ifdef RECURSIVE_RENDERING //Recursive-Rendering指的是支持迭代式计算门中门场景的方式,主要绘制逻辑已经不能放在RenderView函数中了
+#if PORTAL_RENDER_MODE == 2
+// 模式2: RenderView预渲染纹理 - 不丢模型，无动画，不支持迭代渲染
 // g_bIsRenderingPortalTexture 已在 Hooks.h 中声明
 
 void __fastcall Hooks::BaseClient::RenderView::Detour(void* ecx, void* edx, CViewSetup& setup, CViewSetup& hudViewSetup, int nClearFlags, int whatToDraw)
@@ -130,9 +128,6 @@ void __fastcall Hooks::BaseClient::RenderView::Detour(void* ecx, void* edx, CVie
     // }
 
     // 2. 每帧初始化状态
-    G::G_L4D2Portal.m_nPortalRenderDepth = 0;
-    G::G_L4D2Portal.m_vViewStack.clear();
-    G::G_L4D2Portal.m_vViewStack.push_back(setup);
     G::G_L4D2Portal.m_nClearFlags = nClearFlags;
 
     // 3. 方案 B：反馈回路预渲染
@@ -181,6 +176,55 @@ void __fastcall Hooks::BaseClient::RenderView::Detour(void* ecx, void* edx, CVie
 
 	Func.Original<FN>()(ecx, edx, setup, hudViewSetup, nClearFlags, whatToDraw);
 }
+#endif
+
+#if PORTAL_RENDER_MODE == 3
+// 模式3: RenderView构建队列+独立渲染 - 待完善
+void __fastcall Hooks::BaseClient::RenderView::Detour(void* ecx, void* edx, CViewSetup& setup, CViewSetup& hudViewSetup, int nClearFlags, int whatToDraw)
+{
+    // 0. 初始化
+    G::G_L4D2Portal.m_renderQueue.clear();
+    G::G_L4D2Portal.m_nProcessingDepth = 0; // 0 表示主视角
+
+    // 1. 只有当传送门激活时才进行预计算
+    if (G::G_L4D2Portal.g_BluePortal.bIsActive && G::G_L4D2Portal.g_OrangePortal.bIsActive)
+    {
+        // 1. 构建“蓝门内部”的递归链 (最终贴在蓝门上的纹理们)
+        // 路线：主视角 -> 进蓝门 -> 进橙门 ...
+        G::G_L4D2Portal.BuildRenderStack(setup, &G::G_L4D2Portal.g_BluePortal, &G::G_L4D2Portal.g_OrangePortal, 0);
+
+        // 2. 构建“橙门内部”的递归链 (最终贴在橙门上的纹理们)
+        // 路线：主视角 -> 进橙门 -> 进蓝门 ...
+        G::G_L4D2Portal.BuildRenderStack(setup, &G::G_L4D2Portal.g_OrangePortal, &G::G_L4D2Portal.g_BluePortal, 0);
+    }
+
+    // 3. 逆向渲染 (从最深处开始)
+    // 队列里现在混杂着给蓝门用的和给橙门用的纹理，但没关系，req.targetTex 已经指向了正确的池子
+    for (int i = G::G_L4D2Portal.m_renderQueue.size() - 1; i >= 0; i--)
+    {
+        const auto& req = G::G_L4D2Portal.m_renderQueue[i];
+
+        // 设置全局深度，告诉 DME 现在画的是哪一层
+        G::G_L4D2Portal.m_nProcessingDepth = req.depth;
+        
+        // 开启保护开关
+        g_bIsRenderingPortalTexture = true; 
+
+        // 调用具体的渲染函数 (就是你之前的 RenderPortalViewRecursive 的简化版)
+        // 注意：这里是在 RenderView 层级调用的，非常安全！
+        G::G_L4D2Portal.RenderTextureInternal(req.view, req.entry, req.exit, req.targetTex);
+
+        g_bIsRenderingPortalTexture = false;
+    }
+
+    // 3. 渲染主视角 (Level 0)
+    G::G_L4D2Portal.m_nProcessingDepth = 0; 
+    Func.Original<FN>()(ecx, edx, setup, hudViewSetup, nClearFlags, whatToDraw);
+}
+#endif
+
+#if PORTAL_RENDER_MODE != 1 && PORTAL_RENDER_MODE != 2 && PORTAL_RENDER_MODE != 3
+    #error "Invalid PORTAL_RENDER_MODE value. Must be 1, 2, or 3."
 #endif
 
 void BaseClient::Init()
