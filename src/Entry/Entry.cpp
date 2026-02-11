@@ -6,6 +6,8 @@
 #include "../SDK/L4D2/Interfaces/CServerTools.h"
 #include "../SDK/L4D2/Interfaces/IVEngineServer.h"
 #include "../Portal/L4D2_Portal.h"
+#include "../Util/CVar/CVarManager.h"
+#include "../Features/TestCVar/TestCVar.h"
 
 
 void CGlobal_ModuleEntry::Run()
@@ -346,6 +348,9 @@ void CGlobal_ModuleEntry::Load()
 		I::Cvar = U::Interface.Get<ICvar*>("materialsystem.dll", "VEngineCvar007");
 		std::cout << "Cvar: " << I::Cvar << std::endl;
 
+		// Initialize CVar manager after I::Cvar is ready
+		U::CVarManager::Initialize();
+
 		{
 			I::ClientMode = **reinterpret_cast<void***>(U::Offsets.m_dwClientMode);
 			XASSERT(I::ClientMode == nullptr);
@@ -370,6 +375,9 @@ void CGlobal_ModuleEntry::Load()
 		std::cout << "EngineServer: " << I::EngineServer << std::endl;
 
 	}
+
+	// Initialize test cvars
+	F::TestCVar::Initialize();
 
 	G::Draw.Init();
 	// PortalInit() 已移至 LevelInitPostEntity，在地图加载时调用

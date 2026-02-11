@@ -17,9 +17,10 @@
 #endif
 
 //#include "tier0/dbg.h"
+#include <cassert>
 #include "iconvar.h"
-//#include "tier1/utlvector.h"
-//#include "tier1/utlstring.h"
+#include "utlvector.h"
+#include "utlstring.h"
 #include "Color.h"
 #include "../Interfaces/ICvar.h"
 //#include "icvar.h"
@@ -558,7 +559,7 @@ FORCEINLINE_CVAR int ConVarRef::GetInt( void ) const
 //-----------------------------------------------------------------------------
 FORCEINLINE_CVAR const char *ConVarRef::GetString( void ) const 
 {
-	Assert( !IsFlagSet( FCVAR_NEVER_AS_STRING ) );
+	assert( !IsFlagSet( FCVAR_NEVER_AS_STRING ) );
 	return m_pConVarState->m_pszString;
 }
 
@@ -654,13 +655,13 @@ public:
 
 	virtual void CommandCallback( const CCommand &command )
 	{
-		Assert( m_pOwner && m_Func );
+		assert( m_pOwner && m_Func );
 		(m_pOwner->*m_Func)( command );
 	}
 
 	virtual int  CommandCompletionCallback( const char *pPartial, CUtlVector< CUtlString > &commands )
 	{
-		Assert( m_pOwner && m_CompletionFunc );
+		assert( m_pOwner && m_CompletionFunc );
 		return (m_pOwner->*m_CompletionFunc)( pPartial, commands );
 	}
 

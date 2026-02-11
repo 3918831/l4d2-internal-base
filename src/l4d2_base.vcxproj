@@ -183,6 +183,7 @@
     <ClCompile Include="SDK\KeyValues\KeyValues.cpp" />
     <ClCompile Include="SDK\L4D2\Includes\basehandle.cpp" />
     <ClCompile Include="SDK\L4D2\Includes\checksum_md5.cpp" />
+    <ClCompile Include="SDK\L4D2\Includes\convar.cpp" />
     <ClCompile Include="SDK\SDK.cpp" />
     <ClCompile Include="Util\Hook\MinHook\buffer.c" />
     <ClCompile Include="Util\Hook\MinHook\hde\hde32.c" />
@@ -196,6 +197,9 @@
     <ClCompile Include="Util\Pattern\Pattern.cpp" />
     <ClCompile Include="Util\Util.cpp" />
     <ClCompile Include="Util\VFunc\VFunc.cpp" />
+    <ClCompile Include="Util\CVar\CVarManager.cpp" />
+    <ClCompile Include="Features\TestCVar\TestCVar.cpp" />
+    <ClCompile Include="Features\TestCVar\TestCommands.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Entry\Entry.h" />
@@ -298,6 +302,11 @@
     <ClInclude Include="Util\Util.h" />
     <ClInclude Include="Util\VFunc\VFunc.h" />
     <ClInclude Include="Util\XorString\XorString.h" />
+    <ClInclude Include="Util\CVar\CVarManager.h" />
+    <ClInclude Include="Features\TestCVar\TestCVar.h" />
+    <ClInclude Include="SDK\L4D2\Includes\convar.h" />
+    <ClInclude Include="SDK\L4D2\Includes\utlvector.h" />
+    <ClInclude Include="SDK\L4D2\Includes\utlstring.h" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="Docs\DebugLog.txt" />

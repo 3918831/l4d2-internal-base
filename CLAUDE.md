@@ -140,11 +140,29 @@ Three types of hooks are used (defined in `Util/Hook/Hook.h`):
 | `CTable` | Index-based VMT hooks | Direct index manipulation |
 
 **Key Hook Locations:**
+
+*Client-Side Hooks:*
 - `Hooks/BaseClient/` - Level init/shutdown, frame rendering
 - `Hooks/ClientMode/` - Input and rendering hooks
 - `Hooks/ModelRender/` - Model rendering for visual effects (chams, ESP)
 - `Hooks/TerrorPlayer/` - Player-specific function overrides
 - `Hooks/C_Weapon/Weapon_Pistol.cpp` - Portal gun fire logic
+- `Hooks/CL_Main/` - Main client logic hooks
+- `Hooks/ClientPrediction/` - Client prediction system hooks
+- `Hooks/GameMovement/` - Movement and player physics hooks
+- `Hooks/BasePlayer/` - Base player class hooks
+- `Hooks/WndProc/` - Window procedure hooks for input handling
+
+*Rendering and Visual Hooks:*
+- `Hooks/RenderView/` - View rendering setup hooks
+- `Hooks/ModelRenderSystem/` - Model rendering system hooks
+- `Hooks/EngineVGui/` - VGUI system hooks
+
+*Engine Hooks:*
+- `Hooks/EngineTrace/` - Ray tracing hooks for portal placement
+- `Hooks/EngineServer/` - Server communication hooks
+- `Hooks/TerrorGameRules/` - Game rule system hooks
+- `Hooks/SequenceTransitioner/` - Animation sequence transition hooks
 
 ### SDK Interface System
 
@@ -155,6 +173,13 @@ Game interfaces are accessed via global `I::` namespace (defined in `SDK/SDK.h`)
 Key interface locations:
 - `SDK/L4D2/Interfaces/` - All game engine interfaces
 - `SDK/L4D2/Entities/` - Client-side entity definitions
+
+**Entity System:**
+- `C_TerrorPlayer` - Player entity with health, position, team
+- `C_TerrorWeapon` - Weapon entity with ammo, fire state
+- `C_BaseEntity` - Base entity class (position, model, angles)
+- `C_WeaponCSBase` - Base weapon class
+- Entity iteration via `I::EntityList->GetHighestEntityIndex()`
 
 ### Portal System Architecture
 
@@ -174,6 +199,8 @@ Portal/
 - Ray tracing via `I::EngineTrace` for placement
 - Custom materials for portal effects
 - Placement logic in `Hooks/C_Weapon/Weapon_Pistol.cpp`
+- `CWeaponPortalgun` class in `Portal/client/` handles blue/orange portal creation
+- `prop_portal` entity in `Portal/server/` handles server-side portal logic and network sync
 
 ### Namespace Conventions
 
@@ -183,6 +210,35 @@ Portal/
 | `I::` | Game interfaces | `I::EngineClient`, `I::ModelRender` |
 | `U::` | Utilities | `U::Interface`, `U::Pattern` |
 | `F::` | Features | `F::ESP`, `F::EnginePrediction` |
+| `Hooks::` | Hook implementations | `Hooks::CL_Main`, `Hooks::RenderView` |
+| `Vars::` | Configuration variables | Feature toggles and settings |
+
+### Core Utility Systems
+
+**DrawManager** (`SDK/DrawManager/`)
+- Comprehensive 2D rendering system for all UI elements
+- Multiple font types: DEBUG, ESP, ESP_NAME, ESP_WEAPON, MENU variants
+- Drawing primitives: lines, rectangles, circles, triangles, gradients
+- Text alignment with flags: LEFT, CENTERX, CENTERY, RIGHT, etc.
+- Used extensively by ESP, menu, and debug visualizations
+
+**GameUtil** (`SDK/GameUtil/`)
+- World-to-screen coordinate conversion
+- Movement fixing/prediction algorithms
+- Team validation utilities
+- Health-based color calculation
+- Material creation helpers
+- Ray tracing wrapper functions
+
+**NetVarManager** (`Util/NetVarManager/`)
+- Network variable management system
+- Simplifies accessing networked entity properties
+- Critical for ESP and features requiring entity data
+
+**Math Library** (`SDK/Math/`)
+- Complete math utilities for vectors (2D, 3D, 4D)
+- Matrix operations and transformations
+- Essential for aimbot calculations and portal physics
 
 ### Critical Patterns
 
@@ -193,6 +249,19 @@ Portal/
 **Render Target Management**: Portals require careful render target management to avoid texture corruption. Portal rendering happens in `ModelRender` hooks.
 
 **Client-Side Only**: The mod operates entirely client-side. Server communication happens through existing game protocols (no custom network code).
+
+### Feature Modules
+
+| Feature | Description | Location |
+|---------|-------------|----------|
+| **Portal Gun** | Creates linked portals for teleportation | `Portal/` |
+| **ESP** | Extra Sensory Perception - shows players through walls | `Features/ESP/` |
+| **Aimbot** | Automated aiming with target selection | `Features/Aimbot/` |
+| **Melee Aimbot** | Melee-specific aiming with FOV and weapon type checks | `Features/MeleeAimbot/` |
+| **EnginePrediction** | Client-side prediction for smooth gameplay | `Features/EnginePrediction/` |
+| **NoSpread** | Removes weapon spread randomness | `Features/NoSpread/` |
+| **Bunny Hop** | Automatic jumping for faster movement | `Features/BunnyHop/` |
+| **Fast Melee** | Speeds up melee attack animations | `Features/FastMelee/` |
 
 ## Development Notes
 
@@ -221,14 +290,22 @@ The Portal system integrates tightly with the rendering pipeline. When modifying
 
 Debug console is allocated at `Entry/Entry.cpp:286`. It automatically minimizes to keep the view clean. Use `ConsolePrint()` or standard `printf` for output.
 
-Key test functions for development:
-- `Func_TraceRay_Test` - Ray tracing validation
-- `Func_Pistol_Fire_Test` - Portal gun firing logic
-- `Func_IPhysicsEnvironment_Test` - Physics environment checks
+**Test Functions** (currently commented out in `Entry/Entry.cpp`):
+- `Func_TraceRay_Test()` - Ray tracing validation for portal placement
+- `Func_Pistol_Fire_Test()` - Portal gun firing logic testing
+- `Func_IPhysicsEnvironment_Test()` - Physics environment checks
+- `Func_CServerTools_Test()` - Server tools testing
 
-## Recent Changes (2026-01-26)
+These can be uncommented for debugging specific systems during development.
 
-### Auto-Loading Implementation
+## Recent Changes
+
+### 2026-02-11: Aimbot and Melee Improvements
+- Added melee aimbot with FOV filtering
+- Added weapon type condition checks for aimbot
+- General code refactoring
+
+### 2026-01-26: Auto-Loading Implementation
 
 **Problem**: Manual DLL injection using tools like Extreme Injector was not user-friendly.
 

@@ -9,7 +9,15 @@
       "Bash(powershell.exe:*)",
       "mcp__zread__get_repo_structure",
       "Bash(git rev-list:*)",
-      "Bash(dir:*)"
+      "Bash(dir:*)",
+      "Bash(findstr:*)",
+      "Bash(\"D:\\\\Program Files\\\\Microsoft Visual Studio\\\\2022\\\\Community\\\\MSBuild\\\\Current\\\\Bin\\\\MSBuild.exe\" l4d2_base.sln /p:Configuration=Debug /p:Platform=x86 /t:Clean /nologo /v:minimal)",
+      "Bash(where:*)",
+      "Bash(\"D:/Program Files/Microsoft Visual Studio/2022/Community/MSBuild/Current/Bin/MSBuild.exe\":*)",
+      "Bash(\"D:/Program Files/Microsoft Visual Studio/2022/Community/MSBuild/Current/Bin/MSBuild.exe\" /p:Configuration=Debug /p:Platform=x86 \"l4d2_base.sln\" /t:Clean /nologo /v:minimal)",
+      "Bash(\"D:/Program Files/Microsoft Visual Studio/2022/Community/MSBuild/Current/Bin/MSBuild.exe\" \"src\\\\l4d2_base.sln\" /p:Configuration=Debug /p:Platform=x86 /t:Clean /nologo /v:minimal)",
+      "Bash(\"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\2022\\\\Community\\\\MSBuild\\\\Current\\\\Bin\\\\MSBuild.exe\" \"l4d2_base.sln\" -p:Configuration=Debug -p:Platform=x86 -t:Clean -nologo)",
+      "Bash(ls:*)"
     ]
   }
 }
