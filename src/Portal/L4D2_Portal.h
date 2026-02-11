@@ -17,6 +17,16 @@ enum
 
 class CProp_Portal; // 前置声明
 
+// 缩放动画曲线类型枚举
+enum EScaleAnimationType
+{
+    SCALE_LINEAR = 0,      // 线性
+    SCALE_EASE_IN,         // 缓入（慢速开始，快速结束）
+    SCALE_EASE_OUT,        // 缓出（快速开始，慢速结束）
+    SCALE_EASE_IN_OUT,     // 缓入缓出
+    SCALE_ELASTIC,         // 弹性效果
+};
+
 struct PortalInfo_t
 {
     bool bIsActive = false; // 传送门是否已激活
@@ -29,9 +39,27 @@ struct PortalInfo_t
     Vector lastOrigin = Vector(0, 0, 0); // 上一次的位置，用于检测位置变化
     float currentScale = 1.0f;           // 当前缩放比例 (0.0f ~ 1.0f)
     bool isAnimating = false;            // 是否正在播放缩放动画
-    float lastTime = 0.0f;               // 上一次的时间戳，用于计算实际帧时间
-    const float SCALE_SPEED = 2.0f;      // 缩放速度（每秒增加的比例）
+
+    // 动画配置（新架构）
+    EScaleAnimationType animType = SCALE_ELASTIC;  // 动画曲线类型
+    float animDuration = 0.5f;     // 动画持续时间（秒）
+    float animStartTime = 0.0f;    // 动画开始时间戳
+
+    // 兼容性：保留旧成员用于平滑迁移
+    float lastTime = 0.0f;
+    const float SCALE_SPEED = 2.0f;
 };
+
+// 缩放曲线计算函数（纯函数，无副作用）
+// 输入 t ∈ [0,1]，输出 ∈ [0,1]
+namespace ScaleCurves
+{
+    float Linear(float t);       // 线性
+    float EaseInQuad(float t);   // 缓入
+    float EaseOutQuad(float t);  // 缓出
+    float EaseInOut(float t);    // 缓入缓出
+    float Elastic(float t);      // 弹性效果
+}
 
 class Custom_IMaterialSystem {
 public:
@@ -80,6 +108,13 @@ public:
     void CreatePortalMaterial();
     void CreatePortalTexture();
     void PortalShutdown();
+
+    // 更新传送门缩放动画
+    // @param pPortal    - 传送门信息
+    // @param currentPos - 当前位置（用于检测移动触发）
+    // @param pEntity    - 实体指针（用于应用缩放）
+    // @return           - 是否触发了新的动画
+    bool UpdatePortalScaleAnimation(PortalInfo_t* pPortal, const Vector& currentPos, class C_BaseAnimating* pEntity);
 
     PortalInfo_t g_BluePortal;
     PortalInfo_t g_OrangePortal;

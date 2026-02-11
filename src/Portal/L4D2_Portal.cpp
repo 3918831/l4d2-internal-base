@@ -954,3 +954,132 @@ void L4D2_Portal::DumpTextureToDisk(ITexture* pTexture, const char* pFilename)
     delete[] pPixelData;
 }
 #endif
+
+// ============================================================================
+// 缩放曲线函数实现
+// ============================================================================
+
+namespace ScaleCurves
+{
+    // 线性：f(t) = t
+    float Linear(float t)
+    {
+        return t;
+    }
+
+    // 缓入（二次方）：慢速开始，快速结束
+    // f(t) = t^2
+    float EaseInQuad(float t)
+    {
+        return t * t;
+    }
+
+    // 缓出（二次方）：快速开始，慢速结束
+    // f(t) = t * (2 - t) = 2t - t^2
+    float EaseOutQuad(float t)
+    {
+        return t * (2.0f - t);
+    }
+
+    // 缓入缓出：结合两者
+    // f(t) = 2t^2 (t < 0.5), f(t) = -1 + (4 - 2t)t (t >= 0.5)
+    float EaseInOut(float t)
+    {
+        return t < 0.5f ? 2.0f * t * t : -1.0f + (4.0f - 2.0f * t) * t;
+    }
+
+    // 弹性效果：带有回弹的动画
+    // 模拟弹簧振荡效果
+    float Elastic(float t)
+    {
+        const float c4 = (2.0f * 3.14159265f) / 3.0f;
+
+        if (t == 0.0f) return 0.0f;
+        if (t == 1.0f) return 1.0f;
+
+        return t == 0.0f ? 0.0f :
+               t == 1.0f ? 1.0f :
+               powf(2.0f, -10.0f * t) * sinf((t * 10.0f - 0.75f) * c4) + 1.0f;
+    }
+}
+
+// ============================================================================
+// 传送门缩放动画更新函数
+// ============================================================================
+
+#include "../SDK/L4D2/Entities/C_BaseAnimating.h"
+
+bool L4D2_Portal::UpdatePortalScaleAnimation(PortalInfo_t* pPortal, const Vector& currentPos, C_BaseAnimating* pEntity)
+{
+    if (!pPortal || !I::EngineClient) {
+        return false;
+    }
+
+    // 1. 检测位置变化，触发动画
+    float flDistToLast = currentPos.DistTo(pPortal->lastOrigin);
+    if (flDistToLast > 1.0f) {
+        pPortal->isAnimating = true;
+        pPortal->currentScale = 0.0f;
+        pPortal->animStartTime = I::EngineClient->OBSOLETE_Time();
+        pPortal->lastTime = pPortal->animStartTime;  // 兼容旧成员
+    }
+
+    // 2. 更新动画状态
+    if (pPortal->isAnimating) {
+        float flCurrentTime = I::EngineClient->OBSOLETE_Time();
+        float flElapsedTime = flCurrentTime - pPortal->animStartTime;
+        float t = flElapsedTime / pPortal->animDuration;  // 归一化时间 [0,1]
+
+        // 3. 应用缩放曲线
+        float scale = 0.0f;
+        switch (pPortal->animType) {
+            case SCALE_LINEAR:
+                scale = ScaleCurves::Linear(t);
+                break;
+            case SCALE_EASE_IN:
+                scale = ScaleCurves::EaseInQuad(t);
+                break;
+            case SCALE_EASE_OUT:
+                scale = ScaleCurves::EaseOutQuad(t);
+                break;
+            case SCALE_EASE_IN_OUT:
+                scale = ScaleCurves::EaseInOut(t);
+                break;
+            case SCALE_ELASTIC:
+                scale = ScaleCurves::Elastic(t);
+                break;
+            default:
+                scale = ScaleCurves::Linear(t);
+                break;
+        }
+
+        // 限制在 [0,1] 范围内
+        if (scale < 0.0f) scale = 0.0f;
+        if (scale > 1.0f) scale = 1.0f;
+        pPortal->currentScale = scale;
+
+        // 4. 检查动画完成
+        if (t >= 1.0f) {
+            pPortal->currentScale = 1.0f;
+            pPortal->isAnimating = false;
+        }
+
+        // 更新 lastTime 以保持兼容性
+        pPortal->lastTime = flCurrentTime;
+    }
+
+    // 5. 应用到模型
+    if (pEntity) {
+        float* pScale = (float*)((uintptr_t)pEntity + 0x728); //0x728是m_flModelScale的offset
+        if (pScale) {
+            *pScale = pPortal->currentScale;
+        }
+    }
+
+    // 6. 保存状态
+    pPortal->lastOrigin = currentPos;
+    pPortal->origin = currentPos;
+
+    // 返回是否触发了新的动画
+    return flDistToLast > 1.0f;
+}
