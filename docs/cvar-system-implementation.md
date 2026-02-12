@@ -85,6 +85,195 @@ public:
 
 ---
 
+## ConVar vs ConCommand
+
+### 核心区别
+
+| 维度 | ConVar（控制台变量） | ConCommand（控制台命令） |
+|------|---------------------|---------------------|
+| **本质** | 存储数据的对象 | 执行函数的对象 |
+| **类比** | 像变量 `x = 5` | 像函数 `print()` |
+| **用途** | 配置选项、开关、数值参数 | 动作、操作、打印信息 |
+| **存储** | 内部存储值（m_fValue, m_nValue, m_pszString） | 存储函数指针（m_pCommandCallback） |
+| **控制台行为** | 输入名字 → 显示当前值；输入名字+参数 → 修改值 | 输入名字 → 执行函数；参数由函数内部解析 |
+| **代码访问** | `GetFloat()`, `GetInt()`, `GetString()`, `SetValue()` | 通过Dispatch()调用，无法直接"访问" |
+
+### 生命周期对比
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    DLL加载阶段（静态初始化）                      │
+└─────────────────────────────────────────────────────────────────────────┘
+                         │
+         ┌───────────────┴──────────────┐
+         │                                │
+         ▼                                ▼
+    ┌─────────────────┐          ┌──────────────────┐
+    │   ConVar构造   │          │  ConCommand构造  │
+    │                │          │                │
+    │ ConVar对象创建  │          │ CON_COMMAND宏   │
+    │ - 分配内存     │          │ - 函数声明     │
+    │ - 初始值       │          │ - 对象创建     │
+    │ - 添加到链表   │          │ - 添加到链表   │
+    └─────────────────┘          └──────────────────┘
+         │                                │
+         └──────────────┬───────────────────┘
+                      │
+                      ▼
+              所有对象都在 s_pConCommandBases 链表中
+
+
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    DLL初始化阶段（注册）                              │
+└─────────────────────────────────────────────────────────────────────────┘
+                         │
+                      ▼
+         ┌─────────────────────────────────┐
+         │  ConVar_Register() 遍历链表  │
+         │                                │
+         │  对每个对象调用 Init()           │
+         │                                │
+         │  I::Cvar->RegisterConCommand()  │
+         │                                │
+         └─────────────────────────────────┘
+                         │
+                      ▼
+         ┌─────────────────────────────────────┐
+         │  游戏引擎内部建立映射表         │
+         │  "名字" → ConVar/ConCommand对象  │
+         └─────────────────────────────────────┘
+
+
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    游戏运行阶段（玩家触发）                            │
+└─────────────────────────────────────────────────────────────────────────┘
+
+玩家输入: test_var
+                         │
+                         ▼
+            ┌────────────────────────┐
+            │  游戏引擎检查:      │
+            │  "这是ConVar，      │
+            │   返回存储的值"     │
+            └────────────────────────┘
+                         │
+                         ▼
+                输出: "test_var" = "42"
+
+玩家输入: test_var 999
+                         │
+                         ▼
+            ┌────────────────────────┐
+            │  游戏引擎检查:      │
+            │  "这是ConVar，      │
+            │   修改存储的值"     │
+            └────────────────────────┘
+                         │
+                         ▼
+                test_var的内部值从"42"变为"999"
+
+玩家输入: test_print
+                         │
+                         ▼
+            ┌────────────────────────┐
+            │  游戏引擎检查:      │
+            │  "这是ConCommand，    │
+            │   执行它的函数!"     │
+            └────────────────────────┘
+                         │
+                         ▼
+              调用 Dispatch(const CCommand& command)
+                         │
+                         ▼
+              执行 CC_test_print 函数体
+              (打印所有cvar的值)
+```
+
+### IsCommand()区分方法
+
+```cpp
+// ConVar实现
+class ConVar : public ConCommandBase {
+public:
+    virtual bool IsCommand() const override {
+        return false;  // ← ConVar返回false
+    }
+};
+
+// ConCommand实现
+class ConCommand : public ConCommandBase {
+public:
+    virtual bool IsCommand() const override {
+        return true;   // ← ConCommand返回true
+    }
+};
+```
+
+游戏引擎通过`IsCommand()`判断如何处理：
+- `false` → 作为变量，返回/修改存储的值
+- `true` → 作为命令，执行函数
+
+### 实际代码示例对比
+
+**ConVar示例（存储配置）**：
+```cpp
+// 定义
+namespace {
+    ConVar esp_enabled("esp_enabled", "1",
+        FCVAR_CLIENTDLL | FCVAR_ARCHIVE,
+        "Enable ESP feature");
+}
+
+// 使用
+if (F::ESP::enabled->GetBool()) {
+    // ESP功能启用
+    DrawESP();
+}
+
+// 控制台
+] esp_enabled
+"esp_enabled" = "1"
+] esp_enabled 0
+] esp_enabled
+"esp_enabled" = "0"
+```
+
+**ConCommand示例（执行动作）**：
+```cpp
+// 定义
+CON_COMMAND(esp_reset, "Reset ESP settings to default")
+{
+    if (!I::Cvar) return;
+
+    // 执行重置逻辑
+    F::ESP::ResetColors();
+    F::ESP::ResetDistance();
+
+    I::Cvar->ConsolePrintf("ESP settings reset to defaults\n");
+}
+
+// 控制台
+] esp_reset
+ESP settings reset to defaults
+```
+
+### 对比总结表
+
+| 特性 | ConVar | ConCommand |
+|------|---------|-----------|
+| **创建方式** | `ConVar name("name", "default", flags, "help")` | `CON_COMMAND(name, "help") { ... }` |
+| **控制台查询** | `] name` → 显示当前值 | `] name` → 执行函数 |
+| **控制台修改** | `] name value` → 修改值 | `] name arg1 arg2` → 传递参数给函数 |
+| **值持久化** | 支持`FCVAR_ARCHIVE`，保存到config.cfg | 不存储值，无法持久化 |
+| **参数访问** | `args.Arg(1)`在命令函数中使用 | 在变量中无意义 |
+| **值类型** | `int`, `float`, `const char*` | 无返回值，执行逻辑 |
+| **典型用途** | 配置开关、数值范围、颜色值 | 打印信息、执行操作、触发事件 |
+| **IsCommand()** | 返回`false` | 返回`true` |
+
+---
+
 ## 架构设计
 
 ### 文件结构
