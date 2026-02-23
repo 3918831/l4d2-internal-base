@@ -1,5 +1,6 @@
 #include "CVarManager.h"
 #include "../../SDK/SDK.h"
+#include "../Logger/Logger.h"
 
 namespace U {
 	bool CVarManager::m_bInitialized = false;
@@ -11,10 +12,10 @@ namespace U {
 
 		// DEBUG: Log entry to CVarManager::Initialize
 		if (I::Cvar) {
-			I::Cvar->ConsolePrintf("[CVar DEBUG] ===== CVarManager::Initialize() called =====\n");
+			U::LogDebug("===== CVarManager::Initialize() called =====\n");
 		}
 		else {
-			printf("[CVar DEBUG] ERROR: I::Cvar is NULL in CVarManager::Initialize()!\n");
+			U::LogError("I::Cvar is NULL in CVarManager::Initialize()!\n");
 		}
 
 		// Register all ConVars and ConCommands that have been statically created

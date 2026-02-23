@@ -1,7 +1,7 @@
 
-#include <iostream>
 #include "Offsets.h"
 #include "../../Portal/CustomRender.h"
+#include "../Logger/Logger.h"
 
 void CUtil_Offsets::Init()
 {
@@ -73,15 +73,15 @@ void CUtil_Offsets::Init()
 	XASSERT(m_dwTracePlayerBBox == 0x0);
 
 	//自行再次添加的Hook
-	I::CustomRender = *(IRender**)*(DWORD*)(U::Pattern.Find("client.dll", Sigs_RenderInstance) + 0x2);	
+	I::CustomRender = *(IRender**)*(DWORD*)(U::Pattern.Find("client.dll", Sigs_RenderInstance) + 0x2);
 	if (I::CustomRender) {
-		std::cout << "[Offsets]CustomRender: " << I::CustomRender << std::endl;
+		U::LogInfo("CustomRender: %p\n", I::CustomRender);
 		I::CustomRender->Init();
-	}	
+	}
 
 	I::CustomView = *(ITerrorViewRender**)*(DWORD*)(U::Pattern.Find("client.dll", Sigs_TerrorViewRenderInstance) + 0x2);
 	if (I::CustomView) {
-		std::cout << "[Offsets]CustomView: " << I::CustomView << std::endl;
+		U::LogInfo("CustomView: %p\n", I::CustomView);
 		I::CustomView->Init();
 	}
 

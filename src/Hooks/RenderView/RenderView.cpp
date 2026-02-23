@@ -1,11 +1,11 @@
 #include "RenderView.h"
 
-#include <iostream>
 #include <Windows.h>
 #include <map>
 #include "../../SDK/L4D2/Interfaces/RenderView.h"
 #include "../../Portal/L4D2_Portal.h"
 #include "../Hooks.h"
+#include "../../Util/Logger/Logger.h"
 
 // g_bIsRenderingPortalTexture 已在 Hooks.h 中声明
 
@@ -70,37 +70,37 @@ namespace Detail
 	// 打印统计报告
 	static void PrintReport()
 	{
-		std::cout << "\n[RenderView] ===== Index Detection Report =====" << std::endl;
-		std::cout << "[RenderView] Testing Index: " << Hooks::RenderView::ViewSetupVisEx::Index << std::endl;
+		U::LogDebug("\n===== Index Detection Report =====\n");
+		U::LogDebug("Testing Index: %d\n", Hooks::RenderView::ViewSetupVisEx::Index);
 
 		int total = s_TotalCallCount[Hooks::RenderView::ViewSetupVisEx::Index];
 		int valid = s_ValidCallCount[Hooks::RenderView::ViewSetupVisEx::Index];
 		int invalid = s_InvalidCallCount[Hooks::RenderView::ViewSetupVisEx::Index];
 
-		std::cout << "[RenderView] Total calls: " << total << std::endl;
-		std::cout << "[RenderView] Valid calls (origin != nullptr): " << valid << std::endl;
-		std::cout << "[RenderView] Invalid calls (origin == nullptr): " << invalid << std::endl;
+		U::LogDebug("Total calls: %d\n", total);
+		U::LogDebug("Valid calls (origin != nullptr): %d\n", valid);
+		U::LogDebug("Invalid calls (origin == nullptr): %d\n", invalid);
 
 		if (total > 0)
 		{
 			float validRate = (float)valid / total * 100.0f;
-			std::cout << "[RenderView] Valid rate: " << validRate << "%" << std::endl;
+			U::LogDebug("Valid rate: %.2f%%\n", validRate);
 
 			if (validRate > 50.0f)
 			{
-				std::cout << "[RenderView] *** LIKELY CORRECT INDEX *** (High valid rate)" << std::endl;
+				U::LogInfo("*** LIKELY CORRECT INDEX *** (High valid rate)\n");
 			}
 			else
 			{
-				std::cout << "[RenderView] *** INCORRECT INDEX *** (Low valid rate)" << std::endl;
+				U::LogWarning("*** INCORRECT INDEX *** (Low valid rate)\n");
 			}
 		}
 		else
 		{
-			std::cout << "[RenderView] No calls recorded - function may not be invoked" << std::endl;
+			U::LogWarning("No calls recorded - function may not be invoked\n");
 		}
 
-		std::cout << "[RenderView] ===== End of Report =====\n" << std::endl;
+		U::LogDebug("===== End of Report =====\n\n");
 	}
 #endif
 }
@@ -156,7 +156,7 @@ void __fastcall Hooks::RenderView::ViewSetupVisEx::Detour(void* ecx, void* edx, 
 	// 参数保护：如果 origin 为空，不要调用原函数（会崩溃）
 	if (ecx == nullptr)
 	{
-		std::cerr << "[RenderView::ViewSetupVisEx] ERROR: ecx is null!" << std::endl;
+		U::LogError("ViewSetupVisEx: ecx is null!\n");
 		return;
 	}
 
@@ -184,7 +184,7 @@ void Hooks::RenderView::Init()
 {
 	if (I::RenderView == nullptr)
 	{
-		std::cerr << "[RenderView::Init] ERROR: I::RenderView interface is null!" << std::endl;
+		U::LogError("I::RenderView interface is null!\n");
 		return;
 	}
 
@@ -193,36 +193,34 @@ void Hooks::RenderView::Init()
 
 #ifdef DETECT_VMT_INDEX
 	// ========== 索引检测模式（仅在启用 DETECT_VMT_INDEX 时编译） ==========
-	std::cout << "\n[RenderView] ===== Index Detection Mode =====" << std::endl;
-	std::cout << "[RenderView] Testing ViewSetupVisEx Index: " << ViewSetupVisEx::Index << std::endl;
+	U::LogDebug("\n===== Index Detection Mode =====\n");
+	U::LogDebug("Testing ViewSetupVisEx Index: %d\n", ViewSetupVisEx::Index);
 
 	// 静态检查：验证函数指针是否有效
 	if (Detail::IsIndexValid(vmt, ViewSetupVisEx::Index))
 	{
-		std::cout << "[RenderView] Index " << ViewSetupVisEx::Index << " function pointer: VALID (0x"
-			<< std::hex << vmt[ViewSetupVisEx::Index] << std::dec << ")" << std::endl;
+		U::LogDebug("Index %d function pointer: VALID (0x%X)\n", ViewSetupVisEx::Index, vmt[ViewSetupVisEx::Index]);
 	}
 	else
 	{
-		std::cerr << "[RenderView::Init] ERROR: Index " << ViewSetupVisEx::Index
-			<< " has INVALID function pointer! Skipping ViewSetupVisEx hook." << std::endl;
-		std::cerr << "[RenderView::Init] Try a different index in RenderView.h" << std::endl;
+		U::LogError("Index %d has INVALID function pointer! Skipping ViewSetupVisEx hook.\n", ViewSetupVisEx::Index);
+		U::LogWarning("Try a different index in RenderView.h\n");
 	}
 
-	std::cout << "[RenderView] Will print report every " << Detail::s_ReportInterval << " calls" << std::endl;
-	std::cout << "[RenderView] ===== Detection Started =====\n" << std::endl;
+	U::LogDebug("Will print report every %d calls\n", Detail::s_ReportInterval);
+	U::LogDebug("===== Detection Started =====\n\n");
 	// ========================================================================
 #endif
 
 	if (Table.Init(I::RenderView) == false)
 	{
-		std::cerr << "[RenderView::Init] ERROR: Failed to initialize VMT table!" << std::endl;
+		U::LogError("Failed to initialize VMT table!\n");
 		return;
 	}
 
 	if (Table.Hook(&ViewSetupVis::Detour, ViewSetupVis::Index) == false)
 	{
-		std::cerr << "[RenderView::Init] ERROR: Failed to hook ViewSetupVis!" << std::endl;
+		U::LogError("Failed to hook ViewSetupVis!\n");
 		return;
 	}
 
@@ -233,7 +231,7 @@ void Hooks::RenderView::Init()
 	{
 		if (Table.Hook(&ViewSetupVisEx::Detour, ViewSetupVisEx::Index) == false)
 		{
-			std::cerr << "[RenderView::Init] ERROR: Failed to hook ViewSetupVisEx!" << std::endl;
+			U::LogError("Failed to hook ViewSetupVisEx!\n");
 			return;
 		}
 	}
@@ -241,16 +239,13 @@ void Hooks::RenderView::Init()
 #ifdef DETECT_VMT_INDEX
 	if (Detail::IsIndexValid(vmt, ViewSetupVisEx::Index))
 	{
-		std::cout << "[RenderView::Init] Successfully hooked ViewSetupVis (Index " << ViewSetupVis::Index
-			<< ") and ViewSetupVisEx (Index " << ViewSetupVisEx::Index << ")" << std::endl;
+		U::LogInfo("Successfully hooked ViewSetupVis (Index %d) and ViewSetupVisEx (Index %d)\n", ViewSetupVis::Index, ViewSetupVisEx::Index);
 	}
 	else
 	{
-		std::cout << "[RenderView::Init] Successfully hooked ViewSetupVis (Index " << ViewSetupVis::Index
-			<< ") - ViewSetupVisEx SKIPPED (invalid index)" << std::endl;
+		U::LogInfo("Successfully hooked ViewSetupVis (Index %d) - ViewSetupVisEx SKIPPED (invalid index)\n", ViewSetupVis::Index);
 	}
 #else
-	std::cout << "[RenderView::Init] Successfully hooked ViewSetupVis (Index " << ViewSetupVis::Index
-		<< ") and ViewSetupVisEx (Index " << ViewSetupVisEx::Index << ")" << std::endl;
+	U::LogInfo("Successfully hooked ViewSetupVis (Index %d) and ViewSetupVisEx (Index %d)\n", ViewSetupVis::Index, ViewSetupVisEx::Index);
 #endif
 }

@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include "../Util/Math/Vector/Vector.h"
 #include "../SDK/L4D2/Interfaces/MaterialSystem.h"
+#include "../Util/Logger/Logger.h"
 #include "L4D2_Portal.h"
 #define _MAX_SIGS_LEN_ 128
 
@@ -75,7 +76,7 @@ public:
 	{
 		FnGetVisibleFogVolume_func = (FnGetVisibleFogVolume)U::Pattern.Find("engine.dll", Sigs_FnGetVisibleFogVolume);
 		if (FnGetVisibleFogVolume_func) {
-			printf("[IRender]FnGetVisibleFogVolume_func: %p\n", FnGetVisibleFogVolume_func);
+			U::LogDebug("FnGetVisibleFogVolume_func: %p\n", FnGetVisibleFogVolume_func);
 		}
 	}
 	inline static FnGetVisibleFogVolume FnGetVisibleFogVolume_func = 0x0;
@@ -101,11 +102,11 @@ public:
 		DWORD ABC = U::Pattern.Find("client.dll", Sigs_FnDrawWorldAndEntities) - 0xC0;
 		FnDrawWorldAndEntities_func_new = (FnDrawWorldAndEntities)ABC;
 		if (FnDrawWorldAndEntities_func_new) {
-			printf("[ITerrorViewRender]FnDrawWorldAndEntities_func_new: %p\n", FnDrawWorldAndEntities_func_new);
+			U::LogDebug("FnDrawWorldAndEntities_func_new: %p\n", FnDrawWorldAndEntities_func_new);
 		}
 		FnDetermineWaterRenderInfo_func = (FnDetermineWaterRenderInfo)U::Pattern.Find("client.dll", Sigs_FnDetermineWaterRenderInfo);
 		if (FnDetermineWaterRenderInfo_func) {
-			printf("[ITerrorViewRender]FnDetermineWaterRenderInfo_func: %p\n", FnDetermineWaterRenderInfo_func);
+			U::LogDebug("FnDetermineWaterRenderInfo_func: %p\n", FnDetermineWaterRenderInfo_func);
 		}
 	}
 private:

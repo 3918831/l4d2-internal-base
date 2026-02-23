@@ -1,17 +1,18 @@
 #include "Weapon_Pistol.h"
 #include "../../Portal/L4D2_Portal.h"
+#include "../../Util/Logger/Logger.h"
 
 using namespace Hooks;
 
 void __fastcall Pistol::Reload::Detour(C_TerrorWeapon* pThis, void* edx)
 {
-	printf("Pistol::Reload::Detour is called.\n");
+	U::LogDebug("Pistol::Reload::Detour is called.\n");
 	Func.Original<FN>()(pThis, edx);
 }
 
 void __fastcall Pistol::PrimaryAttack::Detour(C_TerrorWeapon* pThis, void* edx)
 {
-	printf("Pistol::PrimaryAttack::Detour is called.\n");
+	U::LogDebug("Pistol::PrimaryAttack::Detour is called.\n");
 
 	/*
 	C_TerrorPlayer* pLocal = I::ClientEntityList->GetClientEntity(I::EngineClient->GetLocalPlayer())->As<C_TerrorPlayer*>();
@@ -20,7 +21,7 @@ void __fastcall Pistol::PrimaryAttack::Detour(C_TerrorWeapon* pThis, void* edx)
 	{
 		Vector eyePosition = pLocal->EyePosition();
 
-		// ¼ÆËãÖ÷ÊÓ½ÇÄ¿Ç°½Ç¶È¶ÔÓ¦µÄÏòÁ¿×ø±ê
+		// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ó½ï¿½Ä¿Ç°ï¿½Ç¶È¶ï¿½Ó¦ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 		Vector forward, right, up;
 
 		Vector eyeAngles = pLocal->EyeAngles();
@@ -43,12 +44,12 @@ void __fastcall Pistol::PrimaryAttack::Detour(C_TerrorWeapon* pThis, void* edx)
 		trace_t pTrace;
 		I::EngineTrace->TraceRay(ray, fMask, &pTraceFilter, &pTrace);
 		if (pTrace.DidHit()) {
-			int index = pTrace.m_pEnt->entindex(); //Îª0µÄ»°¾ÍÊÇworldspawn
-			printf("[Hook] Hit index: %d\n", index);
+			int index = pTrace.m_pEnt->entindex(); //Îª0ï¿½Ä»ï¿½ï¿½ï¿½ï¿½ï¿½worldspawn
+			U::LogDebug("[Hook] Hit index: %d\n", index);
 		} else {
-			printf("[Hook] Hit nothing\n");
+			U::LogDebug("[Hook] Hit nothing\n");
 		}
-		
+
 	}
 	//*/
 	G::G_L4D2Portal.m_pWeaponPortalgun->FirePortal1();
@@ -57,7 +58,7 @@ void __fastcall Pistol::PrimaryAttack::Detour(C_TerrorWeapon* pThis, void* edx)
 
 void __fastcall Pistol::SecondaryAttack::Detour(C_TerrorWeapon* pThis, void* edx)
 {
-	printf("Pistol::SecondaryAttack::Detour is called.\n");
+	U::LogDebug("Pistol::SecondaryAttack::Detour is called.\n");
 	G::G_L4D2Portal.m_pWeaponPortalgun->FirePortal2();
 	Func.Original<FN>()(pThis, edx);
 }

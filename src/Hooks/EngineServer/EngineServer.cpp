@@ -1,8 +1,8 @@
 #include "EngineServer.h"
 
-#include <iostream>
 #include "../../SDK/L4D2/Interfaces/IVEngineServer.h"
 #include "../../Portal/L4D2_Portal.h"
+#include "../../Util/Logger/Logger.h"
 
 using namespace Hooks;
 
@@ -49,24 +49,23 @@ void EngineServer::Init()
 	// Validate that I::EngineServer interface has been initialized
 	if (I::EngineServer == nullptr)
 	{
-		std::cerr << "[EngineServer::Init] ERROR: I::EngineServer interface is null! "
-			<< "Make sure SDK initialization completes before Hook initialization." << std::endl;
+		U::LogError("I::EngineServer interface is null! Make sure SDK initialization completes before Hook initialization.\n");
 		return;
 	}
 
 	// Initialize the VMT table hook
 	if (Table.Init(I::EngineServer) == false)
 	{
-		std::cerr << "[EngineServer::Init] ERROR: Failed to initialize VMT table for IVEngineServer!" << std::endl;
+		U::LogError("Failed to initialize VMT table for IVEngineServer!\n");
 		return;
 	}
 
 	// Hook the GetArea function at index 65
 	if (Table.Hook(&GetArea::Detour, GetArea::Index) == false)
 	{
-		std::cerr << "[EngineServer::Init] ERROR: Failed to hook GetArea function!" << std::endl;
+		U::LogError("Failed to hook GetArea function!\n");
 		return;
 	}
 
-	std::cout << "[EngineServer::Init] Successfully hooked IVEngineServer::GetArea (Index 65)" << std::endl;
+	U::LogInfo("Successfully hooked IVEngineServer::GetArea (Index 65)\n");
 }

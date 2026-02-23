@@ -4,6 +4,7 @@
 #include "../../Util/Math/Math.h"
 #include "../../SDK/L4D2/Interfaces/CServerTools.h"
 #include "../L4D2_Portal.h"
+#include "../../Util/Logger/Logger.h"
 
 // hits solids (not grates) and passes through everything else
 #define MASK_SHOT_PORTAL            (CONTENTS_SOLID|CONTENTS_MOVEABLE|CONTENTS_WINDOW|CONTENTS_MONSTER)
@@ -44,13 +45,13 @@ void CWeaponPortalgun::TraceFirePortal(bool bPortal2, const Vector& vTraceStart,
             vFinalPosition = pPortal->m_vDelayedPosition;
             qFinalAngles = pPortal->m_qDelayedAngles;*/
         }
-        printf("[CWeaponPortalgun] Hit nothing.\n");
+        U::LogDebug("Hit nothing.\n");
         return;
     }
-    
+
     int hitEntityIndex = tr.m_pEnt->entindex();
     if (hitEntityIndex != 0) {
-        printf("[CWeaponPortalgun] Hit index: %d.\n", hitEntityIndex);
+        U::LogDebug("Hit index: %d.\n", hitEntityIndex);
     } else { //为0的话就是worldspawn
 
         // 传送门源码在此处做了一次额外检查：
@@ -61,7 +62,7 @@ void CWeaponPortalgun::TraceFirePortal(bool bPortal2, const Vector& vTraceStart,
         //    vUp = vDirection;
         //}
 
-        printf("[CWeaponPortalgun] hit worldspawn success.\n");
+        U::LogInfo("hit worldspawn success.\n");
         U::Math.VectorAngles(tr.plane.normal, qFinalAngles);
 
         // 最终决定传送门创建的位置vFinalPosition加上0.5个法向量偏移，可以保证纹理在墙面的前面，避免Z-fighting问题
@@ -76,42 +77,42 @@ void CWeaponPortalgun::FirePortal(bool bPortal2, Vector* pVector /*= 0*/, bool b
     // 【安全检查 1】检查 EngineClient 是否可用
     if (!I::EngineClient)
     {
-        printf("[CWeaponPortalgun] ERROR: I::EngineClient is nullptr!\n");
+        U::LogError("I::EngineClient is nullptr!\n");
         return;
     }
 
     // 【安全检查 2】检查 ClientEntityList 是否可用
     if (!I::ClientEntityList)
     {
-        printf("[CWeaponPortalgun] ERROR: I::ClientEntityList is nullptr!\n");
+        U::LogError("I::ClientEntityList is nullptr!\n");
         return;
     }
 
     // 【安全检查 3】检查传送门系统是否已初始化
     if (!G::G_L4D2Portal.m_pMaterialSystem)
     {
-        printf("[CWeaponPortalgun] ERROR: Portal system not initialized! MaterialSystem is null.\n");
-        printf("[CWeaponPortalgun] HINT: Make sure LevelInitPostEntity has been called.\n");
+        U::LogError("Portal system not initialized! MaterialSystem is null.\n");
+        U::LogInfo("HINT: Make sure LevelInitPostEntity has been called.\n");
         return;
     }
 
     // 【安全检查 4】检查 CServerTools 是否可用
     if (!I::CServerTools)
     {
-        printf("[CWeaponPortalgun] ERROR: I::CServerTools is nullptr! Map may not be fully loaded.\n");
+        U::LogError("I::CServerTools is nullptr! Map may not be fully loaded.\n");
         return;
     }
 
     int localPlayerIndex = I::EngineClient->GetLocalPlayer();
     if (localPlayerIndex == -1)
     {
-        printf("[CWeaponPortalgun] ERROR: GetLocalPlayer returned -1!\n");
+        U::LogError("GetLocalPlayer returned -1!\n");
         return;
     }
 
     C_TerrorPlayer* pLocalPlayer = I::ClientEntityList->GetClientEntity(localPlayerIndex)->As<C_TerrorPlayer*>();
     if (!pLocalPlayer || pLocalPlayer->deadflag()) {
-        printf("[CWeaponPortalgun] pLocalPlayer is nullptr or deadflag is true.\n");
+        U::LogDebug("pLocalPlayer is nullptr or deadflag is true.\n");
         return;
     }
 
@@ -156,10 +157,10 @@ void CWeaponPortalgun::FirePortal(bool bPortal2, Vector* pVector /*= 0*/, bool b
     //I::EngineTrace->TraceRay(ray, fMask, &pTraceFilter, &pTrace);
     //if (pTrace.DidHit()) {
     //    int index = pTrace.m_pEnt->entindex(); //为0的话就是worldspawn
-    //    printf("[Hook] Hit index: %d\n", index);
+    //    U::LogDebug("[Hook] Hit index: %d\n", index);
     //}
     //else {
-    //    printf("[Hook] Hit nothing\n");
+    //    U::LogDebug("[Hook] Hit nothing\n");
     //}
 
 
@@ -180,7 +181,7 @@ void CWeaponPortalgun::FirePortal(bool bPortal2, Vector* pVector /*= 0*/, bool b
         PortalInfo_t& portalInfo = bPortal2 ? G::G_L4D2Portal.g_OrangePortal : G::G_L4D2Portal.g_BluePortal;
         bool bAlreadyExists = (portalInfo.pPortalEntity != nullptr);
 
-        printf("[CWeaponPortalgun] Calling FindPortal for %s portal...\n", bPortal2 ? "orange" : "blue");
+        U::LogDebug("Calling FindPortal for %s portal...\n", bPortal2 ? "orange" : "blue");
 
         // FindPortal 现在会复用已存在的传送门实体，或创建新的
         CProp_Portal* pPortal = CProp_Portal::FindPortal(bPortal2, true);
@@ -188,36 +189,36 @@ void CWeaponPortalgun::FirePortal(bool bPortal2, Vector* pVector /*= 0*/, bool b
         // 【安全检查 5】检查 FindPortal 是否成功返回
         if (!pPortal)
         {
-            printf("[CWeaponPortalgun] ERROR: FindPortal returned nullptr! Aborting portal creation.\n");
+            U::LogError("FindPortal returned nullptr! Aborting portal creation.\n");
             return;
         }
 
-        printf("[CWeaponPortalgun] FindPortal succeeded, pPortal = %p\n", pPortal);
+        U::LogDebug("FindPortal succeeded, pPortal = %p\n", pPortal);
 
         // 只在第一次创建时设置模型和生成实体
         if (!bAlreadyExists)
         {
-            printf("[CWeaponPortalgun] First time creating portal, setting model...\n");
+            U::LogDebug("First time creating portal, setting model...\n");
             const char* modelName = bPortal2 ? "models/blackops/portal_og.mdl" : "models/blackops/portal.mdl";
             pPortal->SetModel(modelName);
 
             // 【安全检查 6】再次检查 CServerTools（防止在 SetModel 过程中失效）
             if (!I::CServerTools)
             {
-                printf("[CWeaponPortalgun] ERROR: I::CServerTools became nullptr after SetModel!\n");
+                U::LogError("I::CServerTools became nullptr after SetModel!\n");
                 return;
             }
 
             I::CServerTools->DispatchSpawn(pPortal);
-            printf("[CWeaponPortalgun]: Created new %s portal entity.\n", bPortal2 ? "orange" : "blue");
+            U::LogInfo("Created new %s portal entity.\n", bPortal2 ? "orange" : "blue");
         }
         else
         {
-            printf("[CWeaponPortalgun]: Moving existing %s portal to new location.\n", bPortal2 ? "orange" : "blue");
+            U::LogInfo("Moving existing %s portal to new location.\n", bPortal2 ? "orange" : "blue");
         }
 
         // 总是更新传送门位置（无论新旧）
-        printf("[CWeaponPortalgun] Calling Teleport to position (%.2f, %.2f, %.2f)\n",
+        U::LogDebug("Calling Teleport to position (%.2f, %.2f, %.2f)\n",
                vFinalPosition.x, vFinalPosition.y, vFinalPosition.z);
         pPortal->Teleport(&vFinalPosition, &qFinalAngles, nullptr);
 
@@ -226,16 +227,16 @@ void CWeaponPortalgun::FirePortal(bool bPortal2, Vector* pVector /*= 0*/, bool b
         portalInfo.origin = vFinalPosition;
         portalInfo.angles = qFinalAngles;
         U::Math.AngleVectors(qFinalAngles, &portalInfo.normal, nullptr, nullptr);
-        printf("[CWeaponPortalgun] Portal %s updated successfully.\n", bPortal2 ? "orange" : "blue");
+        U::LogInfo("Portal %s updated successfully.\n", bPortal2 ? "orange" : "blue");
 
         // If it was a failure, put the effect at exactly where the player shot instead of where the portal bumped to
         /*if (fPlacementSuccess < 0.5f)
             vFinalPosition = tr.endpos;*/
 
         // TODO: PlacePortal未完全实现
-        printf("[CWeaponPortalgun] Calling PlacePortal...\n");
+        U::LogDebug("Calling PlacePortal...\n");
         pPortal->PlacePortal(vFinalPosition, qFinalAngles, fPlacementSuccess, false);
-        printf("[CWeaponPortalgun] FirePortal completed.\n");
+        U::LogDebug("FirePortal completed.\n");
     }
 
     /*return fPlacementSuccess;*/

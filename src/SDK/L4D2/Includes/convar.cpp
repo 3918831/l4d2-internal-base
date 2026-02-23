@@ -1,5 +1,6 @@
 #include "convar.h"
 #include "../Interfaces/ICvar.h"
+#include "../../../Util/Logger/Logger.h"
 #include <cstring>
 #include <cstdlib>
 #include <stdio.h>
@@ -100,9 +101,9 @@ void ConCommandBase::Init()
 
 	if (is_test_cvar) {
 		if (I::Cvar) {
-			I::Cvar->ConsolePrintf("[CVar DEBUG] Init() called for: %s (this=%p)\n", m_pszName, this);
+			U::LogDebug("Init() called for: %s (this=%p)\n", m_pszName, this);
 		} else {
-			printf("[CVar DEBUG] WARNING: I::Cvar is NULL during Init() for %s\n", m_pszName);
+			U::LogWarning("I::Cvar is NULL during Init() for %s\n", m_pszName);
 			return;
 		}
 	}
@@ -114,7 +115,7 @@ void ConCommandBase::Init()
 	if (s_pAccessor)
 	{
 		if (is_test_cvar && I::Cvar) {
-			I::Cvar->ConsolePrintf("[CVar DEBUG] Registering with accessor: %s\n", m_pszName);
+			U::LogDebug("Registering with accessor: %s\n", m_pszName);
 		}
 		s_pAccessor->RegisterConCommandBase(this);
 	}
@@ -122,11 +123,11 @@ void ConCommandBase::Init()
 	// Register with the game's ICvar interface if available
 	// This is critical for the cvars to be accessible in the game console
 	if (is_test_cvar && I::Cvar) {
-		I::Cvar->ConsolePrintf("[CVar DEBUG] Attempting to register '%s' with game ICvar (flags=0x%X)...\n", m_pszName, m_nFlags);
+		U::LogDebug("Attempting to register '%s' with game ICvar (flags=0x%X)...\n", m_pszName, m_nFlags);
 	}
 	I::Cvar->RegisterConCommand(this);
 	if (is_test_cvar && I::Cvar) {
-		I::Cvar->ConsolePrintf("[CVar DEBUG] RegisterConCommand call completed for '%s'\n", m_pszName);
+		U::LogDebug("RegisterConCommand call completed for '%s'\n", m_pszName);
 	}
 
 	// Mark as registered
@@ -163,7 +164,7 @@ ConCommand::ConCommand(const char* pName, FnCommandCallbackV1_t callback, const 
 {
 	// DEBUG: Log constructor call
 	if (I::Cvar) {
-		I::Cvar->ConsolePrintf("[CVar DEBUG] ConCommand constructor (V1 callback) called: %s\n", pName);
+		U::LogDebug("ConCommand constructor (V1 callback) called: %s\n", pName);
 	}
 
 	// Add to the static linked list of all cvars/commands
@@ -172,7 +173,7 @@ ConCommand::ConCommand(const char* pName, FnCommandCallbackV1_t callback, const 
 
 	// DEBUG: Log after adding to list
 	if (I::Cvar) {
-		I::Cvar->ConsolePrintf("[CVar DEBUG] ConCommand %s added to linked list (next=%p)\n", pName, m_pNext);
+		U::LogDebug("ConCommand %s added to linked list (next=%p)\n", pName, m_pNext);
 	}
 }
 
@@ -186,7 +187,7 @@ ConCommand::ConCommand(const char* pName, FnCommandCallback_t callback, const ch
 {
 	// DEBUG: Log constructor call
 	if (I::Cvar) {
-		I::Cvar->ConsolePrintf("[CVar DEBUG] ConCommand constructor (callback) called: %s\n", pName);
+		U::LogDebug("ConCommand constructor (callback) called: %s\n", pName);
 	}
 
 	// Add to the static linked list of all cvars/commands
@@ -195,7 +196,7 @@ ConCommand::ConCommand(const char* pName, FnCommandCallback_t callback, const ch
 
 	// DEBUG: Log after adding to list
 	if (I::Cvar) {
-		I::Cvar->ConsolePrintf("[CVar DEBUG] ConCommand %s added to linked list (next=%p)\n", pName, m_pNext);
+		U::LogDebug("ConCommand %s added to linked list (next=%p)\n", pName, m_pNext);
 	}
 }
 
@@ -209,7 +210,7 @@ ConCommand::ConCommand(const char* pName, ICommandCallback* pCallback, const cha
 {
 	// DEBUG: Log constructor call
 	if (I::Cvar) {
-		I::Cvar->ConsolePrintf("[CVar DEBUG] ConCommand constructor (interface callback) called: %s\n", pName);
+		U::LogDebug("ConCommand constructor (interface callback) called: %s\n", pName);
 	}
 
 	// Add to the static linked list of all cvars/commands
@@ -218,7 +219,7 @@ ConCommand::ConCommand(const char* pName, ICommandCallback* pCallback, const cha
 
 	// DEBUG: Log after adding to list
 	if (I::Cvar) {
-		I::Cvar->ConsolePrintf("[CVar DEBUG] ConCommand %s added to linked list (next=%p)\n", pName, m_pNext);
+		U::LogDebug("ConCommand %s added to linked list (next=%p)\n", pName, m_pNext);
 	}
 }
 
@@ -281,7 +282,7 @@ ConVar::ConVar(const char* pName, const char* pDefaultValue, int flags) :
 {
 	// DEBUG: Log constructor call
 	if (I::Cvar) {
-		I::Cvar->ConsolePrintf("[CVar DEBUG] ConVar constructor called: %s\n", pName);
+		U::LogDebug("ConVar constructor called: %s\n", pName);
 	}
 
 	// Initialize string value
@@ -299,7 +300,7 @@ ConVar::ConVar(const char* pName, const char* pDefaultValue, int flags) :
 
 	// DEBUG: Log after adding to list
 	if (I::Cvar) {
-		I::Cvar->ConsolePrintf("[CVar DEBUG] ConVar %s added to linked list\n", pName);
+		U::LogDebug("ConVar %s added to linked list\n", pName);
 	}
 }
 
@@ -315,7 +316,7 @@ ConVar::ConVar(const char* pName, const char* pDefaultValue, int flags, const ch
 {
 	// DEBUG: Log constructor call
 	if (I::Cvar) {
-		I::Cvar->ConsolePrintf("[CVar DEBUG] ConVar constructor (with help) called: %s = %s\n", pName, pDefaultValue);
+		U::LogDebug("ConVar constructor (with help) called: %s = %s\n", pName, pDefaultValue);
 	}
 
 	// Initialize string value
@@ -333,7 +334,7 @@ ConVar::ConVar(const char* pName, const char* pDefaultValue, int flags, const ch
 
 	// DEBUG: Log after adding to list
 	if (I::Cvar) {
-		I::Cvar->ConsolePrintf("[CVar DEBUG] ConVar %s added to linked list (next=%p)\n", pName, m_pNext);
+		U::LogDebug("ConVar %s added to linked list (next=%p)\n", pName, m_pNext);
 	}
 }
 
@@ -349,7 +350,7 @@ ConVar::ConVar(const char* pName, const char* pDefaultValue, int flags, const ch
 {
 	// DEBUG: Log constructor call
 	if (I::Cvar) {
-		I::Cvar->ConsolePrintf("[CVar DEBUG] ConVar constructor (with min/max) called: %s = %s\n", pName, pDefaultValue);
+		U::LogDebug("ConVar constructor (with min/max) called: %s = %s\n", pName, pDefaultValue);
 	}
 
 	// Initialize string value
@@ -377,7 +378,7 @@ ConVar::ConVar(const char* pName, const char* pDefaultValue, int flags, const ch
 
 	// DEBUG: Log after adding to list
 	if (I::Cvar) {
-		I::Cvar->ConsolePrintf("[CVar DEBUG] ConVar %s added to linked list (next=%p)\n", pName, m_pNext);
+		U::LogDebug("ConVar %s added to linked list (next=%p)\n", pName, m_pNext);
 	}
 }
 
@@ -393,7 +394,7 @@ ConVar::ConVar(const char* pName, const char* pDefaultValue, int flags, const ch
 {
 	// DEBUG: Log constructor call
 	if (I::Cvar) {
-		I::Cvar->ConsolePrintf("[CVar DEBUG] ConVar constructor (with callback) called: %s = %s\n", pName, pDefaultValue);
+		U::LogDebug("ConVar constructor (with callback) called: %s = %s\n", pName, pDefaultValue);
 	}
 
 	// Initialize string value
@@ -411,7 +412,7 @@ ConVar::ConVar(const char* pName, const char* pDefaultValue, int flags, const ch
 
 	// DEBUG: Log after adding to list
 	if (I::Cvar) {
-		I::Cvar->ConsolePrintf("[CVar DEBUG] ConVar %s added to linked list (next=%p)\n", pName, m_pNext);
+		U::LogDebug("ConVar %s added to linked list (next=%p)\n", pName, m_pNext);
 	}
 }
 
@@ -427,7 +428,7 @@ ConVar::ConVar(const char* pName, const char* pDefaultValue, int flags, const ch
 {
 	// DEBUG: Log constructor call
 	if (I::Cvar) {
-		I::Cvar->ConsolePrintf("[CVar DEBUG] ConVar constructor (with min/max + callback) called: %s = %s\n", pName, pDefaultValue);
+		U::LogDebug("ConVar constructor (with min/max + callback) called: %s = %s\n", pName, pDefaultValue);
 	}
 
 	// Initialize string value
@@ -455,7 +456,7 @@ ConVar::ConVar(const char* pName, const char* pDefaultValue, int flags, const ch
 
 	// DEBUG: Log after adding to list
 	if (I::Cvar) {
-		I::Cvar->ConsolePrintf("[CVar DEBUG] ConVar %s added to linked list (next=%p)\n", pName, m_pNext);
+		U::LogDebug("ConVar %s added to linked list (next=%p)\n", pName, m_pNext);
 	}
 }
 
@@ -706,7 +707,7 @@ void ConVar_Register(int nCVarFlag, IConCommandBaseAccessor* pAccessor)
 {
 	// DEBUG: Log entry to ConVar_Register
 	if (I::Cvar) {
-		I::Cvar->ConsolePrintf("[CVar DEBUG] ===== ConVar_Register called =====\n");
+		U::LogDebug("===== ConVar_Register called =====\n");
 	}
 
 	if (pAccessor)
@@ -729,14 +730,14 @@ void ConVar_Register(int nCVarFlag, IConCommandBaseAccessor* pAccessor)
 		if (strncmp(name, "test_", 5) == 0) {
 			test_cvar_count++;
 			if (I::Cvar) {
-				I::Cvar->ConsolePrintf("[CVar DEBUG] Found test cvar in list: %s (this=%p)\n", name, pCur);
+				U::LogDebug("Found test cvar in list: %s (this=%p)\n", name, pCur);
 			}
 		}
 		pCur = pCur->m_pNext;
 	}
 	if (I::Cvar) {
-		I::Cvar->ConsolePrintf("[CVar DEBUG] Total: %d ConCommandBase instances, %d are test cvars\n", count, test_cvar_count);
-		I::Cvar->ConsolePrintf("[CVar DEBUG] s_pConCommandBases head = %p\n", ConCommandBase::s_pConCommandBases);
+		U::LogDebug("Total: %d ConCommandBase instances, %d are test cvars\n", count, test_cvar_count);
+		U::LogDebug("s_pConCommandBases head = %p\n", ConCommandBase::s_pConCommandBases);
 	}
 
 	// Initialize all ConCommandBase instances
@@ -749,7 +750,7 @@ void ConVar_Register(int nCVarFlag, IConCommandBaseAccessor* pAccessor)
 		bool is_test_cvar = (strncmp(name, "test_", 5) == 0);
 
 		if (I::Cvar) {
-			I::Cvar->ConsolePrintf("[CVar DEBUG] [%d/%d] Calling Init() for: %s (this=%p, next=%p)\n",
+			U::LogDebug("[%d/%d] Calling Init() for: %s (this=%p, next=%p)\n",
 				init_count, count, name, pCur, pCur->m_pNext);
 		}
 
@@ -758,7 +759,7 @@ void ConVar_Register(int nCVarFlag, IConCommandBaseAccessor* pAccessor)
 
 		// Verify the list is still intact after Init()
 		if (I::Cvar && is_test_cvar) {
-			I::Cvar->ConsolePrintf("[CVar DEBUG] After Init(), pCur->m_pNext = %p (was %p)\n",
+			U::LogDebug("After Init(), pCur->m_pNext = %p (was %p)\n",
 				pCur->m_pNext, pNext);
 		}
 
@@ -766,8 +767,8 @@ void ConVar_Register(int nCVarFlag, IConCommandBaseAccessor* pAccessor)
 	}
 
 	if (I::Cvar) {
-		I::Cvar->ConsolePrintf("[CVar DEBUG] Initialized %d ConCommandBase instances\n", init_count);
-		I::Cvar->ConsolePrintf("[CVar DEBUG] ===== ConVar_Register completed =====\n");
+		U::LogDebug("Initialized %d ConCommandBase instances\n", init_count);
+		U::LogDebug("===== ConVar_Register completed =====\n");
 	}
 }
 

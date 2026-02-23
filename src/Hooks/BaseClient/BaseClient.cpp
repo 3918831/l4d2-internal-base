@@ -11,6 +11,7 @@
 #include "../../SDK/L4D2/Interfaces/IVEngineServer.h"
 #include "../../SDK/L4D2/Includes/const.h"
 #include "../../Util/Math/Math.h"
+#include "../../Util/Logger/Logger.h"
 //#include "../../Portal/public/mathlib.h"
 
 //CViewSetup g_ViewSetup;
@@ -24,33 +25,33 @@ void __fastcall BaseClient::LevelInitPreEntity::Detour(void* ecx, void* edx, cha
 	// 先调用原始函数
 	Table.Original<FN>(Index)(ecx, edx, pMapName);
 
-	printf("[BaseClient] LevelInitPreEntity: %s\n", pMapName);
+	U::LogInfo("LevelInitPreEntity: %s\n", pMapName);
 
 	// 预载传送门模型
 	if (I::EngineServer)
 	{
-		printf("[BaseClient] Precaching portal models...\n");
+		U::LogInfo("Precaching portal models...\n");
 
 		// 预载橙色传送门模型
 		int index1 = I::EngineServer->PrecacheModel("models/blackops/portal_og.mdl", true);
-		printf("[BaseClient] Precached models/blackops/portal_og.mdl, index: %d\n", index1);
+		U::LogInfo("Precached models/blackops/portal_og.mdl, index: %d\n", index1);
 
 		// 预载蓝色传送门模型
 		int index2 = I::EngineServer->PrecacheModel("models/blackops/portal.mdl", true);
-		printf("[BaseClient] Precached models/blackops/portal.mdl, index: %d\n", index2);
+		U::LogInfo("Precached models/blackops/portal.mdl, index: %d\n", index2);
 
 		if (index1 > 0 && index2 > 0)
 		{
-			printf("[BaseClient] Both portal models precached successfully!\n");
+			U::LogInfo("Both portal models precached successfully!\n");
 		}
 		else
 		{
-			printf("[BaseClient] WARNING: Failed to precache one or more portal models!\n");
+			U::LogWarning("Failed to precache one or more portal models!\n");
 		}
 	}
 	else
 	{
-		printf("[BaseClient] WARNING: EngineServer interface is null, cannot precache models!\n");
+		U::LogWarning("EngineServer interface is null, cannot precache models!\n");
 	}
 }
 
@@ -59,18 +60,18 @@ void __fastcall BaseClient::LevelInitPostEntity::Detour(void* ecx, void* edx)
 	// 先调用原始函数
 	Table.Original<FN>(Index)(ecx, edx);
 
-	printf("[BaseClient] LevelInitPostEntity: Initializing portal system...\n");
+	U::LogInfo("LevelInitPostEntity: Initializing portal system...\n");
 
 	// 地图加载完成后初始化传送门系统
 	// 这样每次切换地图都会重新初始化
 	G::G_L4D2Portal.PortalInit();
 
-	printf("[BaseClient] Portal system initialized.\n");
+	U::LogInfo("Portal system initialized.\n");
 }
 
 void __fastcall BaseClient::LevelShutdown::Detour(void* ecx, void* edx)
 {
-	printf("[BaseClient] LevelShutdown: Cleaning up portal system...\n");
+	U::LogInfo("LevelShutdown: Cleaning up portal system...\n");
 
 	// 地图退出前清理传送门资源
 	// 这样可以释放旧地图的资源，避免泄漏
@@ -79,7 +80,7 @@ void __fastcall BaseClient::LevelShutdown::Detour(void* ecx, void* edx)
 	// 调用原始函数
 	Table.Original<FN>(Index)(ecx, edx);
 
-	printf("[BaseClient] Portal system cleaned up.\n");
+	U::LogInfo("Portal system cleaned up.\n");
 }
 
 void __fastcall BaseClient::FrameStageNotify::Detour(void* ecx, void* edx, ClientFrameStage_t curStage)
@@ -89,7 +90,7 @@ void __fastcall BaseClient::FrameStageNotify::Detour(void* ecx, void* edx, Clien
 
 //void __fastcall BaseClient::RenderView::Detour(void* ecx, void* edx, CViewSetup& setup, int nClearFlags, int whatToDraw)
 //{
-//	printf("RenderView Hooked.\n");
+//	U::LogDebug("RenderView Hooked.\n");
 //	Table.Original<FN>(Index)(ecx, edx, setup, nClearFlags, whatToDraw);
 //}
 
@@ -229,7 +230,7 @@ void __fastcall Hooks::BaseClient::RenderView::Detour(void* ecx, void* edx, CVie
 
 void BaseClient::Init()
 {
-	printf("[BaseClient] Initializing BaseClient hooks...\n");
+	U::LogInfo("Initializing BaseClient hooks...\n");
 
 	XASSERT(Table.Init(I::BaseClient) == false);
 	XASSERT(Table.Hook(&LevelInitPreEntity::Detour, LevelInitPreEntity::Index) == false);
@@ -238,14 +239,14 @@ void BaseClient::Init()
 	XASSERT(Table.Hook(&FrameStageNotify::Detour, FrameStageNotify::Index) == false);
 	//XASSERT(Table.Hook(&RenderView::Detour, RenderView::Index) == false);
 
-	printf("[BaseClient] Hooks installed successfully.\n");
+	U::LogInfo("Hooks installed successfully.\n");
 
 	//RenderView
 	{
 		using namespace RenderView;
 
 		const FN pfRenderView = reinterpret_cast<FN>(U::Offsets.m_dwRenderView);
-		printf("[BaseClient] RenderView: %p\n", pfRenderView);
+		U::LogDebug("RenderView: %p\n", pfRenderView);
 		XASSERT(pfRenderView == nullptr);
 
 		if (pfRenderView)
@@ -259,18 +260,18 @@ void BaseClient::Init()
 	{
 		if (I::EngineClient->IsInGame())
 		{
-			printf("[BaseClient] Detected injection during gameplay. Manually initializing portal system...\n");
-			printf("[BaseClient] Current map: %s\n", I::EngineClient->GetLevelName());
+			U::LogInfo("Detected injection during gameplay. Manually initializing portal system...\n");
+			U::LogInfo("Current map: %s\n", I::EngineClient->GetLevelName());
 			G::G_L4D2Portal.PortalInit();
-			printf("[BaseClient] Portal system manually initialized.\n");
+			U::LogInfo("Portal system manually initialized.\n");
 		}
 		else
 		{
-			printf("[BaseClient] Not in game. Portal system will be initialized when map loads.\n");
+			U::LogInfo("Not in game. Portal system will be initialized when map loads.\n");
 		}
 	}
 	else
 	{
-		printf("[BaseClient] WARNING: EngineClient not available during Init().\n");
+		U::LogWarning("EngineClient not available during Init().\n");
 	}
 }

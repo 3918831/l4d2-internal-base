@@ -14,6 +14,7 @@
 #include "../Hooks/Hooks.h"
 #include "../Util/Math/Math.h"
 #include "../Util/Math/Vector/Vector4D.h"
+#include "../Util/Logger/Logger.h"
 #include "L4D2_Portal.h"
 #include "CustomRender.h"
 
@@ -31,7 +32,7 @@ void L4D2_Portal::CreatePortalTexture()
 {
     if (!m_pCustomMaterialSystem)
     {
-        printf("[Portal] Material system not initialized!\n");
+        U::LogError("Material system not initialized!\n");
         return;
     }
 
@@ -78,7 +79,7 @@ void L4D2_Portal::CreatePortalTexture()
             m_vPortalTextures.push_back(newTexture);
         } else {
             // 处理错误，例如打印日志
-            printf("[Portal] Error: Failed to create portal texture %d\n", i);
+            U::LogError("Failed to create portal texture %d\n", i);
         }
     }
 #endif
@@ -106,7 +107,7 @@ void L4D2_Portal::CreatePortalTexture()
             m_vTexForBlue.push_back(newTexture);
         } else {
             // 处理错误，例如打印日志
-            printf("[Portal] Error: Failed to create portal texture %d\n", i);
+            U::LogError("Failed to create portal texture %d\n", i);
         }
     }
 
@@ -132,7 +133,7 @@ void L4D2_Portal::CreatePortalTexture()
             m_vTexForOrange.push_back(newTexture);
         } else {
             // 处理错误，例如打印日志
-            printf("[Portal] Error: Failed to create portal texture %d\n", i);
+            U::LogError("Failed to create portal texture %d\n", i);
         }
     }
 #endif
@@ -141,20 +142,20 @@ void L4D2_Portal::CreatePortalTexture()
 
     if (!m_pPortalTexture_Blue || !m_pPortalTexture_Orange)
     {
-        printf("[Portal] Failed to create portal texture!\n");
+        U::LogError("Failed to create portal texture!\n");
         return;
     } else {
-        printf("[Portal] m_pPortalTexture_Blue Name: %s\n", m_pPortalTexture_Blue->GetName());
+        U::LogInfo("m_pPortalTexture_Blue Name: %s\n", m_pPortalTexture_Blue->GetName());
     }
 
-    printf("[Portal] Created portal texture successfully\n");
+    U::LogInfo("Created portal texture successfully\n");
 }
 
 void L4D2_Portal::CreatePortalMaterial()
 {
     if (!m_pMaterialSystem)
     {
-        printf("[Portal] Material system not initialized!\n");
+        U::LogError("Material system not initialized!\n");
         return;
     }
 
@@ -166,7 +167,7 @@ void L4D2_Portal::CreatePortalMaterial()
     m_pDynamicPortalMaterial = m_pMaterialSystem->FindMaterial("dev/portal_content", TEXTURE_GROUP_OTHER);
 
     if (!m_pDynamicPortalMaterial) {
-        printf("[Portal] Failed to find dynamic portal material!\n");
+        U::LogError("Failed to find dynamic portal material!\n");
         return;
     }
 #endif
@@ -174,7 +175,7 @@ void L4D2_Portal::CreatePortalMaterial()
     m_pBlackoutMaterial = m_pMaterialSystem->FindMaterial("dev/portal_blackout", TEXTURE_GROUP_OTHER);
 
     if (!m_pBlackoutMaterial) {
-        printf("[Portal] Failed to find blackout material!\n");
+        U::LogError("Failed to find blackout material!\n");
         return;
     }
 #endif
@@ -182,18 +183,18 @@ void L4D2_Portal::CreatePortalMaterial()
     m_pWriteStencilMaterial = m_pMaterialSystem->FindMaterial("dev/write_stencil", TEXTURE_GROUP_OTHER);
 
     if (!m_pWriteStencilMaterial) {
-        printf("[Portal] Failed to find write_stencil material!\n");
+        U::LogError("Failed to find write_stencil material!\n");
         return;
     }
 #endif
 
     if (!g_pPortalMaterial || !g_pPortalMaterial_2 || !g_pPortalMaterial_3)
     {
-        printf("[Portal] Failed to find portal material!\n");
+        U::LogError("Failed to find portal material!\n");
         return;
     }
 
-    printf("[Portal] Found portal material successfully\n");
+    U::LogInfo("Found portal material successfully\n");
 
     // 设置材质为可绘制状态
     g_pPortalMaterial->IncrementReferenceCount();
@@ -216,15 +217,15 @@ void L4D2_Portal::CreatePortalMaterial()
         if (m_pPortalTexture_Blue) {
             pBaseTextureVar->SetTextureValue(m_pPortalTexture_Blue);
             pBaseTextureVar_2->SetTextureValue(m_pPortalTexture_Orange);
-            printf("[Portal] Set base texture to portal render target\n");
+            U::LogInfo("Set base texture to portal render target\n");
 
             //IMaterialVar* pBaseTextureVarofDynamic = m_pDynamicPortalMaterial->FindVar("$basetexture", NULL, false);
             //if (pBaseTextureVarofDynamic) {
             //    pBaseTextureVarofDynamic->SetTextureValue(pBaseTextureVar->GetTextureValue());
             //}
         } else {
-            printf("[Portal] Failed to set base texture because portal texture is null\n");
-        }        
+            U::LogError("Failed to set base texture because portal texture is null\n");
+        }
     }
     else
     {
@@ -235,11 +236,11 @@ void L4D2_Portal::CreatePortalMaterial()
         {
             pBaseTextureVar->SetTextureValue(m_pPortalTexture_Blue);
             pBaseTextureVar_2->SetTextureValue(m_pPortalTexture_Orange);
-            printf("[Portal] Set diffuse map to portal render target\n");
+            U::LogInfo("Set diffuse map to portal render target\n");
         }
         else
         {
-            printf("[Portal] Failed to find texture variables\n");
+            U::LogError("Failed to find texture variables\n");
         }
     }
 
@@ -263,37 +264,37 @@ void L4D2_Portal::PortalInit()
     // 获取材质系统接口
     m_pMaterialSystem = I::MaterialSystem;
     m_pCustomMaterialSystem = reinterpret_cast<Custom_IMaterialSystem*>(m_pMaterialSystem);
-    
+
     if (!m_pMaterialSystem)
     {
-        printf("[Portal] Failed to get MaterialSystem interface!\n");
+        U::LogError("Failed to get MaterialSystem interface!\n");
         return;
     }
 
-    std::cout << "[Portal] I::MaterialSystem:" << (INT32)(I::MaterialSystem) << std::endl;
-    std::cout << "[Portal] m_pMaterialSystem:" << (INT32)m_pMaterialSystem << std::endl;
-    std::cout << "[Portal] m_pCustomMaterialSystem:" << (INT32)m_pCustomMaterialSystem << std::endl;
+    U::LogDebug("I::MaterialSystem: 0x%08X\n", (INT32)(I::MaterialSystem));
+    U::LogDebug("m_pMaterialSystem: 0x%08X\n", (INT32)m_pMaterialSystem);
+    U::LogDebug("m_pCustomMaterialSystem: 0x%08X\n", (INT32)m_pCustomMaterialSystem);
 
-    printf("[Portal] Got MaterialSystem interface success\n");
+    U::LogInfo("Got MaterialSystem interface success\n");
 
     // 创建或查找材质
     CreatePortalTexture();
-    
+
     // 创建测试用材质,本质上是查找zimu的材质,实际业务暂时用不到
     CreatePortalMaterial();
 
     // 初始化完成后，可以调用RenderPortalFrame进行渲染
-    printf("[Portal] Initialization completed\n\n");
-    
+    U::LogInfo("Initialization completed\n\n");
+
     m_pPortalMaterial_Blue = g_pPortalMaterial;
     m_pPortalMaterial_Orange = g_pPortalMaterial_2;
-    
-    printf("[Portal] g_pPortalMaterial: %p\n", g_pPortalMaterial);
-    printf("[Portal] g_pPortalMaterial_2: %p\n", g_pPortalMaterial_2);
-    printf("[Portal] m_pPortalTexture_Blue: %p\n", m_pPortalTexture_Blue);
-    printf("[Portal] m_pMaterialSystem: %p\n", m_pMaterialSystem);
-    printf("[Portal] m_pPortalMaterial_Blue: %p\n", m_pPortalMaterial_Blue);
-    printf("[Portal] m_pCustomMaterialSystem: %p\n", m_pCustomMaterialSystem);
+
+    U::LogDebug("g_pPortalMaterial: %p\n", g_pPortalMaterial);
+    U::LogDebug("g_pPortalMaterial_2: %p\n", g_pPortalMaterial_2);
+    U::LogDebug("m_pPortalTexture_Blue: %p\n", m_pPortalTexture_Blue);
+    U::LogDebug("m_pMaterialSystem: %p\n", m_pMaterialSystem);
+    U::LogDebug("m_pPortalMaterial_Blue: %p\n", m_pPortalMaterial_Blue);
+    U::LogDebug("m_pCustomMaterialSystem: %p\n", m_pCustomMaterialSystem);
 
 #if PORTAL_RENDER_MODE == 1 || PORTAL_RENDER_MODE == 2
     m_nClearFlags = 0;
@@ -440,7 +441,7 @@ void L4D2_Portal::PortalShutdown()
     m_pMaterialSystem = nullptr;
     m_pCustomMaterialSystem = nullptr;
 
-    printf("[Portal] Shutdown completed\n");
+    U::LogInfo("Shutdown completed\n");
 }
 
 /*
@@ -738,11 +739,11 @@ void L4D2_Portal::BuildRenderStack(const CViewSetup& currentView, PortalInfo_t* 
     // 如果 entry 是蓝门 (我们正往蓝门里看)，那么下一层的视角是从橙门(exit)发出的。
     // 这个视角产生的画面，最终应该贴在【蓝门】上。
     if (entry == &G::G_L4D2Portal.g_BluePortal) {
-        pTargetTexture = m_vTexForBlue[depth]; 
+        pTargetTexture = m_vTexForBlue[depth];
     } else if (entry == &G::G_L4D2Portal.g_OrangePortal) {
         pTargetTexture = m_vTexForOrange[depth];
     } else {
-        printf("[BuildRenderStack]: entry is not BluePortal or OrangePortal");
+        U::LogWarning("BuildRenderStack: entry is not BluePortal or OrangePortal\n");
     }
     
     // 2. 简单的视锥体剔除检查 (可选优化)
@@ -913,8 +914,8 @@ void L4D2_Portal::WriteBMP(const char* filename, int width, int height, unsigned
     f.write((char*)infoHeader, 40);
     f.write((char*)data, width * height * 4);
     f.close();
-    
-    printf("[Debug] Texture saved to: %s\n", filename);
+
+    U::LogDebug("Texture saved to: %s\n", filename);
 }
 
 void L4D2_Portal::DumpTextureToDisk(ITexture* pTexture, const char* pFilename)

@@ -7,6 +7,7 @@
 #include "../SDK/L4D2/Interfaces/IVEngineServer.h"
 #include "../Portal/L4D2_Portal.h"
 #include "../Util/CVar/CVarManager.h"
+#include "../Util/Logger/Logger.h"
 #include "../Features/TestCVar/TestCVar.h"
 
 
@@ -30,10 +31,10 @@ void CGlobal_ModuleEntry::Run()
 	}
 	//}
 	auto CvarPtr = I::Cvar->FindCommandBase("sv_cheats");
-	std::cout << "I::Cvar->FindCommandBase of sv_cheats: " << CvarPtr << std::endl;
+	U::LogDebug("I::Cvar->FindCommandBase of sv_cheats: %p\n", CvarPtr);
 
 	auto CvarPtr2 = I::Cvar->FindCommandBase("god");
-	std::cout << "I::Cvar->FindCommandBase of god: " << CvarPtr2 << std::endl;
+	U::LogDebug("I::Cvar->FindCommandBase of god: %p\n", CvarPtr2);
 	//I::Cvar->FindVar("sv_cheats")->GetInt();
 
 	//if (!I::EngineClient->IsInGame()) {
@@ -46,18 +47,18 @@ void CGlobal_ModuleEntry::Run()
 
 			if (strstr("models/zimu/zimu1_hd/zimu1_hd", pMaterial->GetName()))
 			{
-				std::cout << "material: zimu1_hd found" << std::endl;
+				U::LogDebug("material: zimu1_hd found\n");
 				//I::ModelRender->ForcedMaterialOverride(pMaterial, OVERRIDE_NORMAL);
 				bool btemp = false;
 				IMaterialVar* iMaterialVar = pMaterial->FindVar("$basetexture", &btemp, false);
 				if (iMaterialVar) {
 					auto materialvar = iMaterialVar->GetName();
-					std::cout << "materialvar: " << materialvar << std::endl;
+					U::LogDebug("materialvar: %s\n", materialvar);
 
 					auto materialvar_string_value = iMaterialVar->GetStringValue();
-					std::cout << "materialvar_string_value: " << materialvar_string_value << std::endl;
+					U::LogDebug("materialvar_string_value: %s\n", materialvar_string_value);
 
-					std::cout << "iMaterialVar->GetTextureValue->name: " << iMaterialVar->GetTextureValue()->GetName() << std::endl;
+					U::LogDebug("iMaterialVar->GetTextureValue->name: %s\n", iMaterialVar->GetTextureValue()->GetName());
 
 
 					// 查找material
@@ -69,7 +70,7 @@ void CGlobal_ModuleEntry::Run()
 						zimu2_texture = zimu2->FindVar("$basetexture", &btemp, false)->GetTextureValue();
 						//iMaterialVar->SetTextureValue(zimu2_texture);
 					} else {
-                        std::cout << "models/zimu/zimu2_hd/zimu2_hd not found" << std::endl;
+                        U::LogDebug("models/zimu/zimu2_hd/zimu2_hd not found\n");
 					}
 
 					if (zimu3 != nullptr) {
@@ -77,7 +78,7 @@ void CGlobal_ModuleEntry::Run()
 						//iMaterialVar->SetTextureValue(zimu3_texture);
 					}
 					else {
-						std::cout << "models/zimu/zimu3_hd/zimu3_hd not found" << std::endl;
+						U::LogDebug("models/zimu/zimu3_hd/zimu3_hd not found\n");
 					}
 
 					//while (true) {
@@ -89,9 +90,9 @@ void CGlobal_ModuleEntry::Run()
 
 
 					//iMaterialVar->SetStringValue("zimu/zimu2_hd"); //直接这么设置会白屏
-					//std::cout << "materialvar_string_new_value: " << iMaterialVar->GetStringValue() << std::endl;
+					//U::LogDebug("materialvar_string_new_value: %s\n", iMaterialVar->GetStringValue());
 				} else {
-					std::cout << "iMaterialVar not found" << std::endl;
+					U::LogDebug("iMaterialVar not found\n");
 				}
 			}
 
@@ -150,9 +151,9 @@ void CGlobal_ModuleEntry::Func_TraceRay_Test()
 			auto ret1 = pTrace.m_pEnt->ShouldDrawUnderwaterBulletBubbles();
 			auto ret2 = pTrace.m_pEnt->ShouldDrawWaterImpacts();
 			if (pTrace.fraction < 1.0) {
-					std::cout << "Trace Hit" << std::endl;
+					U::LogDebug("Trace Hit\n");
 			} else {
-				std::cout << "Trace Not Hit" << std::endl;				
+				U::LogDebug("Trace Not Hit\n");
 			}
 			Sleep(1000);
 		}
@@ -207,7 +208,7 @@ void CGlobal_ModuleEntry::Func_IPhysicsEnvironment_Test()
 	if (physenv) {
 		float airDensity = physenv->GetAirDensity(); //这个调用正确,默认返回值是2.0
 		// 使用name...
-		printf("airDensity = %f\n", airDensity);
+		U::LogDebug("airDensity = %f\n", airDensity);
 	}
 	
 }
@@ -225,14 +226,14 @@ void CGlobal_ModuleEntry::Func_Pistol_Fire_Test()
 		if (pWeapon)
 		{
 			const char* weapon_name = pWeapon->GetName();
-			printf("weapon_name = %s\n", weapon_name);
+			U::LogDebug("weapon_name = %s\n", weapon_name);
 			if (strcmp(weapon_name, "weapon_pistol") == 0)
 			//if (strcmp(weapon_name, "weapon_shotgun_chrome") == 0)
 			{
 				// 或者通过代码获取
 				HMODULE hModule = GetModuleHandle(L"client.dll");
 				DWORD baseAddress = (DWORD)hModule;
-				printf("DLL基址: 0x%08X\n", baseAddress);
+				U::LogDebug("DLL基址: 0x%08X\n", baseAddress);
 
 				typedef void(__thiscall* PrimaryAttackFn)(void*);
 				typedef void(__thiscall* SecondaryAttackFn)(void*);
@@ -263,7 +264,7 @@ void CGlobal_ModuleEntry::Func_CServerTools_Test()
 {
 	class CBaseEntity;
 	CBaseEntity* prop_obj = (CBaseEntity*)I::CServerTools->CreateEntityByName("prop_dynamic");
-	printf("%p\n", prop_obj);
+	U::LogDebug("prop_obj = %p\n", prop_obj);
 
 	typedef void(__thiscall* TeleportFn)(void*, Vector const*, QAngle const*, Vector const*);
 	typedef void(__thiscall* SetModelFn)(void*, const char*);
@@ -286,12 +287,13 @@ void CGlobal_ModuleEntry::Func_CServerTools_Test()
 
 void CGlobal_ModuleEntry::Load()
 {
-	AllocConsole();
-	freopen("CONIN$", "r", stdin); // makes it possible to output to output to console with cout.
-	freopen("CONOUT$", "w", stdout);
+	// 由于打印信息现在都输出到游戏内控制台，不再需要额外的控制台窗口
+	//AllocConsole();
+	//freopen("CONIN$", "r", stdin); // makes it possible to output to output to console with cout.
+	//freopen("CONOUT$", "w", stdout);
 
 	// 最小化控制台窗口到后台
-	ShowWindow(GetConsoleWindow(), SW_MINIMIZE);
+	//ShowWindow(GetConsoleWindow(), SW_MINIMIZE);
 
 	while (!GetModuleHandleA("serverbrowser.dll"))
 	    std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -301,52 +303,52 @@ void CGlobal_ModuleEntry::Load()
 	//Interfaces
 	{
 		I::BaseClient       = U::Interface.Get<IBaseClientDLL*>("client.dll", "VClient016");
-		std::cout << "BaseClient: " << I::BaseClient << std::endl;
+		U::LogInfo("BaseClient: %p\n", I::BaseClient);
 
 		I::ClientEntityList = U::Interface.Get<IClientEntityList*>("client.dll", "VClientEntityList003");
-        std::cout << "ClientEntityList: " << I::ClientEntityList << std::endl;
+        U::LogInfo("ClientEntityList: %p\n", I::ClientEntityList);
 
 		I::Prediction       = U::Interface.Get<IPrediction*>("client.dll", "VClientPrediction001");
-        std::cout << "Prediction: " << I::Prediction << std::endl;
+        U::LogInfo("Prediction: %p\n", I::Prediction);
 
 		I::GameMovement     = U::Interface.Get<IGameMovement*>("client.dll", "GameMovement001");
-        std::cout << "Client::GameMovement: " << I::GameMovement << std::endl;
+        U::LogInfo("Client::GameMovement: %p\n", I::GameMovement);
 
 		I::EngineClient     = U::Interface.Get<IVEngineClient*>("engine.dll", "VEngineClient013");
-        std::cout << "EngineClient: " << I::EngineClient << std::endl;
+        U::LogInfo("EngineClient: %p\n", I::EngineClient);
 
 		I::EngineTrace      = U::Interface.Get<IEngineTrace*>("engine.dll", "EngineTraceClient003");
-        std::cout << "EngineTrace: " << I::EngineTrace << std::endl;
+        U::LogInfo("EngineTrace: %p\n", I::EngineTrace);
 
 		I::EngineVGui       = U::Interface.Get<IEngineVGui*>("engine.dll", "VEngineVGui001");
-		std::cout << "EngineVGui: " << I::EngineVGui << std::endl;
+		U::LogInfo("EngineVGui: %p\n", I::EngineVGui);
 
 		I::RenderView       = U::Interface.Get<IVRenderView*>("engine.dll", "VEngineRenderView013");
-        std::cout << "RenderView: " << I::RenderView << std::endl;
+        U::LogInfo("RenderView: %p\n", I::RenderView);
 
 		I::DebugOverlay     = U::Interface.Get<IVDebugOverlay*>("engine.dll", "VDebugOverlay003");
-        std::cout << "DebugOverlay: " << I::DebugOverlay << std::endl;
+        U::LogInfo("DebugOverlay: %p\n", I::DebugOverlay);
 
 		I::ModelInfo        = U::Interface.Get<IVModelInfo*>("engine.dll", "VModelInfoClient004");
-        std::cout << "ModelInfo: " << I::ModelInfo << std::endl;
+        U::LogInfo("ModelInfo: %p\n", I::ModelInfo);
 
 		I::ModelRender      = U::Interface.Get<IVModelRender*>("engine.dll", "VEngineModel016");
-        std::cout << "ModelRender: " << I::ModelRender << std::endl;
+        U::LogInfo("ModelRender: %p\n", I::ModelRender);
 
 		I::VGuiPanel        = U::Interface.Get<IVGuiPanel*>("vgui2.dll", "VGUI_Panel009");
-        std::cout << "VGuiPanel: " << I::VGuiPanel << std::endl;
+        U::LogInfo("VGuiPanel: %p\n", I::VGuiPanel);
 
 		I::VGuiSurface      = U::Interface.Get<IVGuiSurface*>("vgui2.dll", "VGUI_Surface031");
-        std::cout << "VGuiSurface: " << I::VGuiSurface << std::endl;
+        U::LogInfo("VGuiSurface: %p\n", I::VGuiSurface);
 
 		I::MatSystemSurface = U::Interface.Get<IMatSystemSurface*>("vguimatsurface.dll", "VGUI_Surface031");
-		std::cout << "MatSystemSurface: " << I::MatSystemSurface << std::endl;
+		U::LogInfo("MatSystemSurface: %p\n", I::MatSystemSurface);
 
 		I::MaterialSystem   = U::Interface.Get<IMaterialSystem*>("materialsystem.dll", "VMaterialSystem080");
-        std::cout << "MaterialSystem: " << I::MaterialSystem << std::endl;
+        U::LogInfo("MaterialSystem: %p\n", I::MaterialSystem);
 
 		I::Cvar = U::Interface.Get<ICvar*>("materialsystem.dll", "VEngineCvar007");
-		std::cout << "Cvar: " << I::Cvar << std::endl;
+		U::LogInfo("Cvar: %p\n", I::Cvar);
 
 		// Initialize CVar manager after I::Cvar is ready
 		U::CVarManager::Initialize();
@@ -366,13 +368,13 @@ void CGlobal_ModuleEntry::Load()
 		}
 
 		I::PhysicsCollision = U::Interface.Get<IPhysicsCollision*>("vphysics.dll", "VPhysicsCollision007");
-		std::cout << "PhysicsCollision: " << I::PhysicsCollision << std::endl;
+		U::LogInfo("PhysicsCollision: %p\n", I::PhysicsCollision);
 
 		I::CServerTools = U::Interface.Get<IServerTools*>("server.dll", "VSERVERTOOLS001");
-		std::cout << "CServerTools: " << I::CServerTools << std::endl;
+		U::LogInfo("CServerTools: %p\n", I::CServerTools);
 
 		I::EngineServer = U::Interface.Get<IVEngineServer*>("engine.dll", "VEngineServer022");
-		std::cout << "EngineServer: " << I::EngineServer << std::endl;
+		U::LogInfo("EngineServer: %p\n", I::EngineServer);
 
 	}
 

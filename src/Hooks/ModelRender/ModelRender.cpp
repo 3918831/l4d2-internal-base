@@ -2,6 +2,7 @@
 #include "../../Portal/L4D2_Portal.h"
 #include "../../Hooks/BaseClient/BaseClient.h"
 #include "../Hooks.h"
+#include "../../Util/Logger/Logger.h"
 using namespace Hooks;
 
 // 状态管理
@@ -34,14 +35,14 @@ void __fastcall ModelRender::ForcedMaterialOverride::Detour(void* ecx, void* edx
         const char* materialName = newMaterial->GetName();
         if (strstr(materialName, "glow") != nullptr ||
             strstr(materialName, "Glow") != nullptr) {
-            printf("materialName: %s\n", materialName);
+            U::LogDebug("materialName: %s\n", materialName);
         }
     }
 
     if (g_bDrawingPortalView && newMaterial)
     {
         const char* materialName = newMaterial->GetName();
-        printf("materialName: %s\n",materialName);
+        U::LogDebug("materialName: %s\n",materialName);
         // L4D2的辉光材质通常包含 "dev/glow"
         if (strstr(materialName, "dev/glow") != nullptr)
         {
@@ -91,7 +92,7 @@ void __fastcall ModelRender::DrawModelExecute::Detour(void* ecx, void* edx, cons
     if (isBluePortal) {
         // 【安全检查】检查传送门系统是否已初始化
         if (!G::G_L4D2Portal.m_pMaterialSystem) {
-            printf("[ModelRender] Blue portal: MaterialSystem not initialized, skipping animation.\n");
+            U::LogWarning("Blue portal: MaterialSystem not initialized, skipping animation.\n");
             Table.Original<FN>(Index)(ecx, edx, state, pInfo, pCustomBoneToWorld);
             return;
         }
@@ -109,7 +110,7 @@ void __fastcall ModelRender::DrawModelExecute::Detour(void* ecx, void* edx, cons
     if (isOrangePortal) {
         // 【安全检查】检查传送门系统是否已初始化
         if (!G::G_L4D2Portal.m_pMaterialSystem) {
-            printf("[ModelRender] Orange portal: MaterialSystem not initialized, skipping animation.\n");
+            U::LogWarning("Orange portal: MaterialSystem not initialized, skipping animation.\n");
             Table.Original<FN>(Index)(ecx, edx, state, pInfo, pCustomBoneToWorld);
             return;
         }
@@ -127,7 +128,7 @@ void __fastcall ModelRender::DrawModelExecute::Detour(void* ecx, void* edx, cons
     if (isBluePortal || isOrangePortal) {
         // 【安全检查】检查传送门系统是否已初始化
         if (!G::G_L4D2Portal.m_pMaterialSystem) {
-            printf("[ModelRender] Portal system not initialized, calling original function.\n");
+            U::LogWarning("Portal system not initialized, calling original function.\n");
             Table.Original<FN>(Index)(ecx, edx, state, pInfo, pCustomBoneToWorld);
             return;
         }
@@ -154,14 +155,14 @@ void __fastcall ModelRender::DrawModelExecute::Detour(void* ecx, void* edx, cons
 
             // 2. 动态绑定纹理到材质
             if (!G::G_L4D2Portal.m_pDynamicPortalMaterial) {
-                printf("[DrawModelExecute] G::G_L4D2Portal::m_pDynamicPortalMaterial is nullptr\n");
+                U::LogError("m_pDynamicPortalMaterial is nullptr\n");
                 return;
             }
 
             // 【安全检查】检查数组索引是否有效
             if (G::G_L4D2Portal.m_nPortalRenderDepth < 0 ||
                 G::G_L4D2Portal.m_nPortalRenderDepth >= static_cast<int>(G::G_L4D2Portal.m_vPortalTextures.size())) {
-                printf("[DrawModelExecute] ERROR: m_nPortalRenderDepth=%d out of bounds [0, %zu)! Skipping texture bind.\n",
+                U::LogError("m_nPortalRenderDepth=%d out of bounds [0, %zu)! Skipping texture bind.\n",
                        G::G_L4D2Portal.m_nPortalRenderDepth, G::G_L4D2Portal.m_vPortalTextures.size());
                 return;
             }
@@ -174,7 +175,7 @@ void __fastcall ModelRender::DrawModelExecute::Detour(void* ecx, void* edx, cons
                 if (pTexture) {
                     pBaseTextureVar->SetTextureValue(pTexture);
                 } else {
-                    printf("[DrawModelExecute] WARNING: m_vPortalTextures[%d] is nullptr!\n", G::G_L4D2Portal.m_nPortalRenderDepth);
+                    U::LogWarning("m_vPortalTextures[%d] is nullptr!\n", G::G_L4D2Portal.m_nPortalRenderDepth);
                 }
             }
 
@@ -428,7 +429,7 @@ void __fastcall ModelRender::DrawModelExecute::Detour(void* ecx, void* edx, cons
         //             sprintf_s(filename, "D:\\PortalDebug\\blue_portal_debug_depth_%d.bmp", i);
         //             G::G_L4D2Portal.DumpTextureToDisk(G::G_L4D2Portal.m_vTexForBlue[i], filename);
         //         }
-        //         printf("blue_portal_debug dumped.\n");
+        //         U::LogDebug("blue_portal_debug dumped.\n");
         //         b_Blue_Dumped = true;
         //     }
 
@@ -441,7 +442,7 @@ void __fastcall ModelRender::DrawModelExecute::Detour(void* ecx, void* edx, cons
         //             sprintf_s(filename, "D:\\PortalDebug\\orange_portal_debug_depth_%d.bmp", i);
         //             G::G_L4D2Portal.DumpTextureToDisk(G::G_L4D2Portal.m_vTexForOrange[i], filename);
         //         }
-        //         printf("orange_portal_debug dumped.\n");
+        //         U::LogDebug("orange_portal_debug dumped.\n");
         //         b_Orange_Dumped = true;
         //     }
         // }
