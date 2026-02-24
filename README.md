@@ -32,6 +32,7 @@
 | 功能 | 状态 | 说明 |
 |------|------|------|
 | 传送门创建 | ✅ | 左键创建蓝色传送门，右键创建橙色传送门 |
+| 传送门关闭 | ✅ | 按 R 键触发关闭动画，所有传送门平滑消失 |
 | 传送门渲染 | ✅ | 使用递归渲染，最大递归深度 5 层 |
 | 可配置缩放动画 | ✅ | 支持多种缩放曲线（线性/缓入/缓出/弹性） |
 | 地图切换支持 | ✅ | 支持 `LevelShutdown` → `LevelInitPostEntity` 生命周期 |
@@ -46,7 +47,14 @@
 
 **缩放动画系统** 🎬
 
-传送门创建或移动时会触发缩放动画（0.0f → 1.0f）。系统支持多种动画曲线类型：
+传送门支持两种动画效果：
+
+| 动画类型 | 方向 | 触发方式 | 曲线类型 |
+|---------|------|---------|---------|
+| **打开动画** | 0.0f → 1.0f | 左键/右键创建传送门 | 可配置（弹性/线性等） |
+| **关闭动画** | 1.0f → 0.0f | 按 R 键 | 线性 |
+
+**打开动画曲线类型**：
 
 | 曲线类型 | 效果描述 | 适用场景 |
 |---------|---------|---------|
@@ -61,11 +69,14 @@
 编辑 `src/Portal/L4D2_Portal.h` 中的 `PortalInfo_t` 结构体：
 
 ```cpp
-// 修改默认动画类型（第44行）
-EScaleAnimationType animType = SCALE_ELASTIC;  // 改为弹性效果
+// 修改打开动画类型
+EScaleAnimationType openAnimType = SCALE_ELASTIC;  // 打开动画曲线
 
-// 修改动画持续时间（第45行）
-float animDuration = 0.5f;  // 改为0.3秒更快，1.0秒更慢
+// 修改关闭动画持续时间
+float closeAnimDuration = 0.3f;  // 关闭动画时长（秒）
+
+// 修改打开动画持续时间
+float animDuration = 0.5f;  // 打开动画时长（秒）
 ```
 
 **实现架构**：
@@ -108,6 +119,7 @@ float animDuration = 0.5f;  // 改为0.3秒更快，1.0秒更慢
 2. 按 **右键** 创建橙色传送门
 3. 两个传送门会自动建立链接
 4. 可以随时重新开枪移动传送门位置
+5. 按 **R 键**（换弹键）关闭所有已创建的传送门，触发平滑消失动画
 
 **模型资源安装** ⚠️
 
@@ -324,7 +336,8 @@ Done! You can now close this window.
 
 | 文档 | 内容 |
 |------|------|
-| [dll-auto-loading-implementation.md](docs/dll-auto-loading-implementation.md) | DLL自动加载方案实现文档（新） |
+| [portal-animation-refactoring.md](docs/portal-animation-refactoring.md) | 传送门动画系统重构文档（新） |
+| [dll-auto-loading-implementation.md](docs/dll-auto-loading-implementation.md) | DLL自动加载方案实现文档 |
 | [portal-development-summary.md](docs/portal-development-summary.md) | 传送门功能开发总结 |
 | [portal-injection-timing-fix.md](docs/portal-injection-timing-fix.md) | DLL注入时机问题修复 |
 | [CLAUDE.md](CLAUDE.md) | Claude Code 开发指南，包含编译命令和架构说明 |
@@ -391,7 +404,8 @@ Done! You can now close this window.
 - **递归渲染**: 支持最大 5 层递归深度，实现"门中门"效果
 - **实时纹理**: 使用自定义 RenderTarget 存储传送门视图
 - **智能裁剪**: 使用裁剪平面防止渲染穿帮
-- **可配置动画系统**: 支持多种缓动曲线（线性/缓入/缓出/弹性），易于扩展
+- **统一动画状态机**: 打开/关闭动画统一管理，支持多种缓动曲线（线性/缓入/缓出/弹性）
+- **平滑关闭效果**: R键触发线性缩放消失动画，视觉过渡自然
 - **生命周期管理**: 支持地图切换时的资源清理和重新初始化
 
 ### 自动加载方案
@@ -490,6 +504,6 @@ A: 不建议。本项目仅用于离线测试和学习，联网可能导致VAC�
 
 ---
 
-*最后更新: 2026-02-11*
+*最后更新: 2026-02-24*
 *项目: L4D2 Internal Base*
 *开发者: Claude + User*
