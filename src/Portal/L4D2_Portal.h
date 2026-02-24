@@ -27,6 +27,16 @@ enum EScaleAnimationType
     SCALE_ELASTIC,         // 弹性效果
 };
 
+// 传送门动画状态枚举（统一管理打开和关闭动画）
+enum EPortalAnimState
+{
+    PORTAL_ANIM_IDLE = 0,      // 空闲，无动画
+    PORTAL_ANIM_OPENING,       // 正在打开 (scale: 0→1)
+    PORTAL_ANIM_OPEN,          // 完全打开 (scale = 1.0)
+    PORTAL_ANIM_CLOSING,       // 正在关闭 (scale: 1→0)
+    PORTAL_ANIM_CLOSED,        // 已关闭 (scale = 0.0)
+};
+
 struct PortalInfo_t
 {
     bool bIsActive = false; // 传送门是否已激活
@@ -38,14 +48,17 @@ struct PortalInfo_t
     // 平滑缩放动画相关
     Vector lastOrigin = Vector(0, 0, 0); // 上一次的位置，用于检测位置变化
     float currentScale = 1.0f;           // 当前缩放比例 (0.0f ~ 1.0f)
-    bool isAnimating = false;            // 是否正在播放缩放动画
+    bool isAnimating = false;            // 是否正在播放缩放动画（兼容性保留）
+
+    // === 统一的动画状态管理 ===
+    EPortalAnimState animState = PORTAL_ANIM_IDLE;  // 当前动画状态
 
     // 动画配置（新架构）
     EScaleAnimationType animType = SCALE_ELASTIC;  // 动画曲线类型
     float animDuration = 0.5f;     // 动画持续时间（秒）
     float animStartTime = 0.0f;    // 动画开始时间戳
 
-    // 关闭动画配置
+    // 关闭动画配置（兼容性保留，后续可移除）
     bool bIsClosing = false;              // 是否正在执行关闭动画
     float closeAnimDuration = 0.5f;       // 关闭动画持续时间（秒）
     float closeAnimStartTime = 0.0f;      // 关闭动画开始时间戳
@@ -121,9 +134,21 @@ public:
     // @return           - 是否触发了新的动画
     bool UpdatePortalScaleAnimation(PortalInfo_t* pPortal, const Vector& currentPos, class C_BaseAnimating* pEntity);
 
+    // === 统一的动画管理函数 ===
+
+    // 开始传送门打开动画
+    // @param pPortal      - 传送门信息
+    // @param newPosition  - 传送门新位置
+    void StartPortalOpenAnimation(PortalInfo_t* pPortal, const Vector& newPosition);
+
     // 开始传送门关闭动画
     // @param pPortal - 传送门信息
     void StartPortalCloseAnimation(PortalInfo_t* pPortal);
+
+    // 检查传送门是否可以开始新动画
+    // @param pPortal - 传送门信息
+    // @return        - true 表示可以开始新动画
+    bool CanStartAnimation(const PortalInfo_t* pPortal) const;
 
     PortalInfo_t g_BluePortal;
     PortalInfo_t g_OrangePortal;

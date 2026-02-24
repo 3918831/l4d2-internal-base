@@ -102,11 +102,9 @@ void __fastcall ModelRender::DrawModelExecute::Detour(void* ecx, void* edx, cons
         C_BaseAnimating* pEntity = reinterpret_cast<C_BaseAnimating*>(I::ClientEntityList->GetClientEntity(model_index));
         G::G_L4D2Portal.UpdatePortalScaleAnimation(&G::G_L4D2Portal.g_BluePortal, pInfo.origin, pEntity);
 
-        // 保存角度，只有在没有关闭动画时才设置激活状态
+        // 保存角度
         G::G_L4D2Portal.g_BluePortal.angles = pInfo.angles;
-        if (!G::G_L4D2Portal.g_BluePortal.bIsClosing) {
-            G::G_L4D2Portal.g_BluePortal.bIsActive = true;
-        }
+        // 注意：bIsActive 由动画系统自动管理，不再在这里设置
     }
 
     if (isOrangePortal) {
@@ -122,11 +120,9 @@ void __fastcall ModelRender::DrawModelExecute::Detour(void* ecx, void* edx, cons
         C_BaseAnimating* pEntity = reinterpret_cast<C_BaseAnimating*>(I::ClientEntityList->GetClientEntity(model_index));
         G::G_L4D2Portal.UpdatePortalScaleAnimation(&G::G_L4D2Portal.g_OrangePortal, pInfo.origin, pEntity);
 
-        // 保存角度，只有在没有关闭动画时才设置激活状态
+        // 保存角度
         G::G_L4D2Portal.g_OrangePortal.angles = pInfo.angles;
-        if (!G::G_L4D2Portal.g_OrangePortal.bIsClosing) {
-            G::G_L4D2Portal.g_OrangePortal.bIsActive = true;
-        }
+        // 注意：bIsActive 由动画系统自动管理，不再在这里设置
     }
 
     if (isBluePortal || isOrangePortal) {

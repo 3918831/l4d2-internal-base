@@ -230,9 +230,8 @@ void CWeaponPortalgun::FirePortal(bool bPortal2, Vector* pVector /*= 0*/, bool b
                vFinalPosition.x, vFinalPosition.y, vFinalPosition.z);
         pPortal->Teleport(&vFinalPosition, &qFinalAngles, nullptr);
 
-        // 更新传送门信息
-        portalInfo.bIsActive = true;
-        portalInfo.origin = vFinalPosition;
+        // 触发打开动画（统一管理 bIsActive 和缩放动画）
+        G::G_L4D2Portal.StartPortalOpenAnimation(&portalInfo, vFinalPosition);
         portalInfo.angles = qFinalAngles;
         U::Math.AngleVectors(qFinalAngles, &portalInfo.normal, nullptr, nullptr);
         U::LogInfo("Portal %s updated successfully.\n", bPortal2 ? "orange" : "blue");

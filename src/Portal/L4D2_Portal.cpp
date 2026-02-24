@@ -1010,13 +1010,50 @@ namespace ScaleCurves
 
 #include "../SDK/L4D2/Entities/C_BaseAnimating.h"
 
+// ============================================================================
+// 统一的动画管理函数
+// ============================================================================
+
+bool L4D2_Portal::CanStartAnimation(const PortalInfo_t* pPortal) const
+{
+    if (!pPortal) return false;
+
+    // 只有在空闲或已关闭状态才能开始新动画
+    return (pPortal->animState == PORTAL_ANIM_IDLE ||
+            pPortal->animState == PORTAL_ANIM_CLOSED);
+}
+
+void L4D2_Portal::StartPortalOpenAnimation(PortalInfo_t* pPortal, const Vector& newPosition)
+{
+    if (!pPortal || !I::EngineClient) return;
+
+    // 检查是否可以开始新动画（如果正在关闭，需要等待完成）
+    if (pPortal->animState == PORTAL_ANIM_CLOSING) {
+        return; // 正在关闭，不允许打断
+    }
+
+    // 设置新位置
+    pPortal->origin = newPosition;
+    pPortal->lastOrigin = newPosition;
+
+    // 开始打开动画
+    pPortal->animState = PORTAL_ANIM_OPENING;
+    pPortal->isAnimating = true;
+    pPortal->bIsActive = true;
+    pPortal->bIsClosing = false;
+    pPortal->currentScale = 0.0f;
+    pPortal->animStartTime = I::EngineClient->OBSOLETE_Time();
+}
+
 void L4D2_Portal::StartPortalCloseAnimation(PortalInfo_t* pPortal)
 {
-    // 跳过空指针、未激活的、或已经缩放到0的传送门
-    if (!pPortal || !pPortal->bIsActive || pPortal->currentScale <= 0.0f) {
+    // 跳过空指针、未激活的、已经缩放到0的、或正在关闭中的传送门
+    if (!pPortal || !pPortal->bIsActive || pPortal->currentScale <= 0.0f || pPortal->animState == PORTAL_ANIM_CLOSING) {
         return;
     }
 
+    // 使用新状态
+    pPortal->animState = PORTAL_ANIM_CLOSING;
     pPortal->bIsClosing = true;
     pPortal->isAnimating = true;
     pPortal->closeAnimStartTime = I::EngineClient->OBSOLETE_Time();
@@ -1028,104 +1065,103 @@ bool L4D2_Portal::UpdatePortalScaleAnimation(PortalInfo_t* pPortal, const Vector
         return false;
     }
 
-    // 0. 处理关闭动画（优先于打开动画）
-    if (pPortal->bIsClosing) {
-        float flCurrentTime = I::EngineClient->OBSOLETE_Time();
-        float flElapsedTime = flCurrentTime - pPortal->closeAnimStartTime;
-        float t = flElapsedTime / pPortal->closeAnimDuration;  // 归一化时间 [0,1]
+    float flCurrentTime = I::EngineClient->OBSOLETE_Time();
 
-        // 线性插值: 1.0 → 0.0
-        float scale = 1.0f - t;
+    // === 使用统一的 animState 状态机 ===
 
-        // 限制在 [0,1] 范围内
-        if (scale < 0.0f) scale = 0.0f;
-        if (scale > 1.0f) scale = 1.0f;
-        pPortal->currentScale = scale;
+    switch (pPortal->animState) {
+        case PORTAL_ANIM_CLOSING:
+        {
+            // 关闭动画: 1.0 → 0.0 (线性)
+            float flElapsedTime = flCurrentTime - pPortal->closeAnimStartTime;
+            float t = flElapsedTime / pPortal->closeAnimDuration;
 
-        // 检查动画完成
-        if (t >= 1.0f) {
-            pPortal->currentScale = 0.0f;
-            pPortal->bIsActive = false;
-            pPortal->bIsClosing = false;
-            pPortal->isAnimating = false;
-        }
+            float scale = 1.0f - t;
+            if (scale < 0.0f) scale = 0.0f;
+            if (scale > 1.0f) scale = 1.0f;
+            pPortal->currentScale = scale;
 
-        // 应用到模型
-        if (pEntity) {
-            float* pScale = (float*)((uintptr_t)pEntity + 0x728);
-            if (pScale) {
-                *pScale = pPortal->currentScale;
+            // 动画完成
+            if (t >= 1.0f) {
+                pPortal->currentScale = 0.0f;
+                pPortal->animState = PORTAL_ANIM_CLOSED;
+                pPortal->bIsActive = false;
+                pPortal->bIsClosing = false;
+                pPortal->isAnimating = false;
             }
+            break;
         }
 
-        return true;
-    }
+        case PORTAL_ANIM_OPENING:
+        {
+            // 打开动画: 0.0 → 1.0 (使用配置的曲线)
+            float flElapsedTime = flCurrentTime - pPortal->animStartTime;
+            float t = flElapsedTime / pPortal->animDuration;
 
-    // 1. 检测位置变化，触发动画
-    float flDistToLast = currentPos.DistTo(pPortal->lastOrigin);
-    if (flDistToLast > 1.0f) {
-        pPortal->isAnimating = true;
-        pPortal->currentScale = 0.0f;
-        pPortal->animStartTime = I::EngineClient->OBSOLETE_Time();
-        pPortal->lastTime = pPortal->animStartTime;  // 兼容旧成员
-    }
+            float scale = 0.0f;
+            switch (pPortal->animType) {
+                case SCALE_LINEAR:
+                    scale = ScaleCurves::Linear(t);
+                    break;
+                case SCALE_EASE_IN:
+                    scale = ScaleCurves::EaseInQuad(t);
+                    break;
+                case SCALE_EASE_OUT:
+                    scale = ScaleCurves::EaseOutQuad(t);
+                    break;
+                case SCALE_EASE_IN_OUT:
+                    scale = ScaleCurves::EaseInOut(t);
+                    break;
+                case SCALE_ELASTIC:
+                    scale = ScaleCurves::Elastic(t);
+                    break;
+                default:
+                    scale = ScaleCurves::Linear(t);
+                    break;
+            }
 
-    // 2. 更新动画状态
-    if (pPortal->isAnimating) {
-        float flCurrentTime = I::EngineClient->OBSOLETE_Time();
-        float flElapsedTime = flCurrentTime - pPortal->animStartTime;
-        float t = flElapsedTime / pPortal->animDuration;  // 归一化时间 [0,1]
+            if (scale < 0.0f) scale = 0.0f;
+            if (scale > 1.0f) scale = 1.0f;
+            pPortal->currentScale = scale;
 
-        // 3. 应用缩放曲线
-        float scale = 0.0f;
-        switch (pPortal->animType) {
-            case SCALE_LINEAR:
-                scale = ScaleCurves::Linear(t);
-                break;
-            case SCALE_EASE_IN:
-                scale = ScaleCurves::EaseInQuad(t);
-                break;
-            case SCALE_EASE_OUT:
-                scale = ScaleCurves::EaseOutQuad(t);
-                break;
-            case SCALE_EASE_IN_OUT:
-                scale = ScaleCurves::EaseInOut(t);
-                break;
-            case SCALE_ELASTIC:
-                scale = ScaleCurves::Elastic(t);
-                break;
-            default:
-                scale = ScaleCurves::Linear(t);
-                break;
+            // 动画完成
+            if (t >= 1.0f) {
+                pPortal->currentScale = 1.0f;
+                pPortal->animState = PORTAL_ANIM_OPEN;
+                pPortal->isAnimating = false;
+            }
+            break;
         }
 
-        // 限制在 [0,1] 范围内
-        if (scale < 0.0f) scale = 0.0f;
-        if (scale > 1.0f) scale = 1.0f;
-        pPortal->currentScale = scale;
-
-        // 4. 检查动画完成
-        if (t >= 1.0f) {
-            pPortal->currentScale = 1.0f;
-            pPortal->isAnimating = false;
-        }
-
-        // 更新 lastTime 以保持兼容性
-        pPortal->lastTime = flCurrentTime;
+        case PORTAL_ANIM_IDLE:
+        case PORTAL_ANIM_OPEN:
+        case PORTAL_ANIM_CLOSED:
+        default:
+            // 空闲状态，不需要更新动画
+            // 但保持兼容性：检测位置变化（旧的触发方式，仅在没有使用新触发方式时生效）
+            float flDistToLast = currentPos.DistTo(pPortal->lastOrigin);
+            if (flDistToLast > 1.0f && pPortal->bIsActive && !pPortal->bIsClosing) {
+                // 位置变化，触发打开动画
+                pPortal->animState = PORTAL_ANIM_OPENING;
+                pPortal->isAnimating = true;
+                pPortal->currentScale = 0.0f;
+                pPortal->animStartTime = flCurrentTime;
+            }
+            break;
     }
 
-    // 5. 应用到模型
+    // 应用到模型
     if (pEntity) {
-        float* pScale = (float*)((uintptr_t)pEntity + 0x728); //0x728是m_flModelScale的offset
+        float* pScale = (float*)((uintptr_t)pEntity + 0x728); // m_flModelScale offset
         if (pScale) {
             *pScale = pPortal->currentScale;
         }
     }
 
-    // 6. 保存状态
+    // 保存位置状态
     pPortal->lastOrigin = currentPos;
     pPortal->origin = currentPos;
+    pPortal->lastTime = flCurrentTime;
 
-    // 返回是否触发了新的动画
-    return flDistToLast > 1.0f;
+    return pPortal->isAnimating;
 }
