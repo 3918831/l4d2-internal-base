@@ -1010,10 +1010,55 @@ namespace ScaleCurves
 
 #include "../SDK/L4D2/Entities/C_BaseAnimating.h"
 
+void L4D2_Portal::StartPortalCloseAnimation(PortalInfo_t* pPortal)
+{
+    // 跳过空指针、未激活的、或已经缩放到0的传送门
+    if (!pPortal || !pPortal->bIsActive || pPortal->currentScale <= 0.0f) {
+        return;
+    }
+
+    pPortal->bIsClosing = true;
+    pPortal->isAnimating = true;
+    pPortal->closeAnimStartTime = I::EngineClient->OBSOLETE_Time();
+}
+
 bool L4D2_Portal::UpdatePortalScaleAnimation(PortalInfo_t* pPortal, const Vector& currentPos, C_BaseAnimating* pEntity)
 {
     if (!pPortal || !I::EngineClient) {
         return false;
+    }
+
+    // 0. 处理关闭动画（优先于打开动画）
+    if (pPortal->bIsClosing) {
+        float flCurrentTime = I::EngineClient->OBSOLETE_Time();
+        float flElapsedTime = flCurrentTime - pPortal->closeAnimStartTime;
+        float t = flElapsedTime / pPortal->closeAnimDuration;  // 归一化时间 [0,1]
+
+        // 线性插值: 1.0 → 0.0
+        float scale = 1.0f - t;
+
+        // 限制在 [0,1] 范围内
+        if (scale < 0.0f) scale = 0.0f;
+        if (scale > 1.0f) scale = 1.0f;
+        pPortal->currentScale = scale;
+
+        // 检查动画完成
+        if (t >= 1.0f) {
+            pPortal->currentScale = 0.0f;
+            pPortal->bIsActive = false;
+            pPortal->bIsClosing = false;
+            pPortal->isAnimating = false;
+        }
+
+        // 应用到模型
+        if (pEntity) {
+            float* pScale = (float*)((uintptr_t)pEntity + 0x728);
+            if (pScale) {
+                *pScale = pPortal->currentScale;
+            }
+        }
+
+        return true;
     }
 
     // 1. 检测位置变化，触发动画

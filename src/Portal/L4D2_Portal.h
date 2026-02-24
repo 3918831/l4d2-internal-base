@@ -45,6 +45,11 @@ struct PortalInfo_t
     float animDuration = 0.5f;     // 动画持续时间（秒）
     float animStartTime = 0.0f;    // 动画开始时间戳
 
+    // 关闭动画配置
+    bool bIsClosing = false;              // 是否正在执行关闭动画
+    float closeAnimDuration = 0.5f;       // 关闭动画持续时间（秒）
+    float closeAnimStartTime = 0.0f;      // 关闭动画开始时间戳
+
     // 兼容性：保留旧成员用于平滑迁移
     float lastTime = 0.0f;
     const float SCALE_SPEED = 2.0f;
@@ -115,6 +120,10 @@ public:
     // @param pEntity    - 实体指针（用于应用缩放）
     // @return           - 是否触发了新的动画
     bool UpdatePortalScaleAnimation(PortalInfo_t* pPortal, const Vector& currentPos, class C_BaseAnimating* pEntity);
+
+    // 开始传送门关闭动画
+    // @param pPortal - 传送门信息
+    void StartPortalCloseAnimation(PortalInfo_t* pPortal);
 
     PortalInfo_t g_BluePortal;
     PortalInfo_t g_OrangePortal;

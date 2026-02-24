@@ -17,7 +17,16 @@
       "Bash(\"D:/Program Files/Microsoft Visual Studio/2022/Community/MSBuild/Current/Bin/MSBuild.exe\" /p:Configuration=Debug /p:Platform=x86 \"l4d2_base.sln\" /t:Clean /nologo /v:minimal)",
       "Bash(\"D:/Program Files/Microsoft Visual Studio/2022/Community/MSBuild/Current/Bin/MSBuild.exe\" \"src\\\\l4d2_base.sln\" /p:Configuration=Debug /p:Platform=x86 /t:Clean /nologo /v:minimal)",
       "Bash(\"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\2022\\\\Community\\\\MSBuild\\\\Current\\\\Bin\\\\MSBuild.exe\" \"l4d2_base.sln\" -p:Configuration=Debug -p:Platform=x86 -t:Clean -nologo)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(openspec new:*)",
+      "Bash(openspec status:*)",
+      "Bash(openspec instructions proposal:*)",
+      "Bash(openspec instructions design --change \"portal-close-animation\" --json)",
+      "Bash(openspec instructions specs:*)",
+      "Bash(openspec instructions tasks:*)",
+      "Bash(openspec instructions apply:*)",
+      "Bash(openspec instructions design:*)",
+      "Bash(openspec list:*)"
     ]
   }
 }

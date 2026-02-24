@@ -103,6 +103,14 @@ void CWeaponPortalgun::FirePortal(bool bPortal2, Vector* pVector /*= 0*/, bool b
         return;
     }
 
+    // 【检查】如果传送门正在关闭，忽略创建请求
+    PortalInfo_t& portalInfo = bPortal2 ? G::G_L4D2Portal.g_OrangePortal : G::G_L4D2Portal.g_BluePortal;
+    if (portalInfo.isAnimating && portalInfo.bIsClosing)
+    {
+        U::LogDebug("Portal creation blocked: close animation in progress.\n");
+        return;
+    }
+
     int localPlayerIndex = I::EngineClient->GetLocalPlayer();
     if (localPlayerIndex == -1)
     {

@@ -7,6 +7,11 @@ using namespace Hooks;
 void __fastcall Pistol::Reload::Detour(C_TerrorWeapon* pThis, void* edx)
 {
 	U::LogDebug("Pistol::Reload::Detour is called.\n");
+
+	// 触发两个传送门的关闭动画
+	G::G_L4D2Portal.StartPortalCloseAnimation(&G::G_L4D2Portal.g_BluePortal);
+	G::G_L4D2Portal.StartPortalCloseAnimation(&G::G_L4D2Portal.g_OrangePortal);
+
 	Func.Original<FN>()(pThis, edx);
 }
 
