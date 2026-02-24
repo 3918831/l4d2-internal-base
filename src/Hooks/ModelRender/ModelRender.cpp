@@ -137,8 +137,8 @@ void __fastcall ModelRender::DrawModelExecute::Detour(void* ecx, void* edx, cons
         PortalInfo_t* entryPortal = isBluePortal ? &G::G_L4D2Portal.g_BluePortal : &G::G_L4D2Portal.g_OrangePortal;
         PortalInfo_t* exitPortal = isBluePortal ? &G::G_L4D2Portal.g_OrangePortal : &G::G_L4D2Portal.g_BluePortal;
 
-        // 如果只有一扇门激活，直接画模型返回
-        if (!G::G_L4D2Portal.g_BluePortal.bIsActive || !G::G_L4D2Portal.g_BluePortal.bIsActive || G::G_L4D2Portal.m_vViewStack.empty()) {
+        // 如果只有一扇门激活或视图栈为空，直接画模型返回
+        if (!G::G_L4D2Portal.g_BluePortal.bIsActive || !G::G_L4D2Portal.g_OrangePortal.bIsActive || G::G_L4D2Portal.m_vViewStack.empty()) {
             Table.Original<FN>(Index)(ecx, edx, state, pInfo, pCustomBoneToWorld);
             return;
         }
@@ -301,7 +301,7 @@ void __fastcall ModelRender::DrawModelExecute::Detour(void* ecx, void* edx, cons
             IMaterial* pPortalFrameMaterial = isBluePortal
                 ? I::MaterialSystem->FindMaterial("sprites/blborder", TEXTURE_GROUP_OTHER)
                 : I::MaterialSystem->FindMaterial("sprites/ogborder", TEXTURE_GROUP_OTHER);
-            
+
             // 阶段 1: 写入模板
             // (这段模板测试逻辑本身是完美的，我们保持原样)
             pRenderContext->OverrideDepthEnable(false, true);
