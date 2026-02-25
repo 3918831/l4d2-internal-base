@@ -3,6 +3,7 @@
 #include "../../Features/Vars.h"
 #include "../../Features/EnginePrediction/EnginePrediction.h"
 #include "../../Features/NoSpread/NoSpread.h"
+#include "../../SDK/L4D2/Interfaces/ICvar.h"
 
 using namespace Hooks;
 
@@ -13,49 +14,60 @@ bool __fastcall ClientMode::ShouldDrawFog::Detour(void* ecx, void* edx)
 
 bool __fastcall ClientMode::CreateMove::Detour(void* ecx, void* edx, float input_sample_frametime, CUserCmd* cmd)
 {
-	if (!cmd || !cmd->command_number)
-		return Table.Original<FN>(Index)(ecx, edx, input_sample_frametime, cmd);
+    // if (!cmd || !cmd->command_number)
+    // return Table.Original<FN>(Index)(ecx, edx, input_sample_frametime, cmd);
 
-	if (Table.Original<FN>(Index)(ecx, edx, input_sample_frametime, cmd))
-		I::Prediction->SetLocalViewAngles(cmd->viewangles);
+    // if (Table.Original<FN>(Index)(ecx, edx, input_sample_frametime, cmd))
+    // 	I::Prediction->SetLocalViewAngles(cmd->viewangles);
 
-	//uintptr_t _ebp; __asm mov _ebp, ebp;
-	//bool* pSendPacket = (bool*)(***(uintptr_t***)_ebp - 0x1D);
+	// //uintptr_t _ebp; __asm mov _ebp, ebp;
+    // //bool* pSendPacket = (bool*)(***(uintptr_t***)_ebp - 0x1D);
 
-	C_TerrorPlayer* pLocal = I::ClientEntityList->GetClientEntity(I::EngineClient->GetLocalPlayer())->As<C_TerrorPlayer*>();
+    // C_TerrorPlayer* pLocal = I::ClientEntityList->GetClientEntity(I::EngineClient->GetLocalPlayer())->As<C_TerrorPlayer*>();
 
-	if (pLocal && !pLocal->deadflag())
-	{
-		C_TerrorWeapon* pWeapon = pLocal->GetActiveWeapon()->As<C_TerrorWeapon*>();
+    // if (pLocal && !pLocal->deadflag())
+    // {
+    // 	C_TerrorWeapon* pWeapon = pLocal->GetActiveWeapon()->As<C_TerrorWeapon*>();
 
-		if (pWeapon)
-		{
-			F::EnginePrediction.Start(pLocal, cmd);
-			{
-				F::NoSpread.Run(pLocal, pWeapon, cmd);
-			}
-			F::EnginePrediction.Finish(pLocal, cmd);
-		}
-	}
+    // 	if (pWeapon)
+    // 	{
+    // 	    F::EnginePrediction.Start(pLocal, cmd);
+    // 	    {
+    // 	        F::NoSpread.Run(pLocal, pWeapon, cmd);
+    // 	    }
+    // 	    F::EnginePrediction.Finish(pLocal, cmd);
+    // 	}
+    // }
+	// if (cmd->buttons & IN_ATTACK) {
+	// 	I::Cvar->ConsolePrintf("Button Attack is pressed.");
+	// }
+	// if (cmd->buttons & IN_ATTACK2) {
+	// 	I::Cvar->ConsolePrintf("Button Attack2 is pressed.");
+	// 	// cmd->buttons & ~IN_ATTACK2;
+	// 	// cmd->buttons | IN_ATTACK;
+	// }
+	// if (cmd->buttons & IN_RELOAD) {
+	// 	I::Cvar->ConsolePrintf("Button Reload is pressed.");
+	// }
 
-	return false;
+    return Table.Original<FN>(Index)(ecx, edx, input_sample_frametime, cmd);
 }
 
 void __fastcall ClientMode::DoPostScreenSpaceEffects::Detour(void* ecx, void* edx, const void* pSetup)
 {
-	Table.Original<FN>(Index)(ecx, edx, pSetup);
+    Table.Original<FN>(Index)(ecx, edx, pSetup);
 }
 
 float __fastcall ClientMode::GetViewModelFOV::Detour(void* ecx, void* edx)
 {
-	return Table.Original<FN>(Index)(ecx, edx);
+    return Table.Original<FN>(Index)(ecx, edx);
 }
 
 void ClientMode::Init()
 {
-	XASSERT(Table.Init(I::ClientMode) == false);
-	XASSERT(Table.Hook(&ShouldDrawFog::Detour, ShouldDrawFog::Index) == false);
-	//XASSERT(Table.Hook(&CreateMove::Detour, CreateMove::Index) == false); //启用这条hook目前导致游戏出现异常:人物不停跳跃和右键
-	XASSERT(Table.Hook(&DoPostScreenSpaceEffects::Detour, DoPostScreenSpaceEffects::Index) == false);
-	XASSERT(Table.Hook(&GetViewModelFOV::Detour, GetViewModelFOV::Index) == false);
+    XASSERT(Table.Init(I::ClientMode) == false);
+    XASSERT(Table.Hook(&ShouldDrawFog::Detour, ShouldDrawFog::Index) == false);
+    XASSERT(Table.Hook(&CreateMove::Detour, CreateMove::Index) == false); //启用这条hook目前导致游戏出现异常:人物不停跳跃和右键
+    XASSERT(Table.Hook(&DoPostScreenSpaceEffects::Detour, DoPostScreenSpaceEffects::Index) == false);
+    XASSERT(Table.Hook(&GetViewModelFOV::Detour, GetViewModelFOV::Index) == false);
 }
