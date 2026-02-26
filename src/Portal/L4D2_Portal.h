@@ -216,6 +216,11 @@ public:
 #endif
 
     std::unique_ptr<CWeaponPortalgun> m_pWeaponPortalgun;
+
+    // 传送门操作冷却时间
+    float m_flPortalCooldown = 0.5f;           // 可调节的冷却时间
+    float m_flNextBluePortalTime = 0.0f;       // 蓝色传送门下次可用时间（创建和关闭共用）
+    float m_flNextOrangePortalTime = 0.0f;     // 橙色传送门下次可用时间（创建和关闭共用）
 };
 
 namespace G { inline L4D2_Portal G_L4D2Portal; }
