@@ -4,7 +4,9 @@
 #include "../../Features/EnginePrediction/EnginePrediction.h"
 #include "../../Features/NoSpread/NoSpread.h"
 #include "../../SDK/L4D2/Interfaces/ICvar.h"
+#include "../../SDK/L4D2/Entities/C_TerrorPlayer.h"
 #include "../../Portal/L4D2_Portal.h"
+#include <cstring>
 
 using namespace Hooks;
 
@@ -21,6 +23,20 @@ bool __fastcall ClientMode::CreateMove::Detour(void* ecx, void* edx, float input
     if (!cmd || !cmd->command_number) {
         return result;
     }
+
+    // === Weapon check - only execute portal logic when holding Magnum ===
+    C_TerrorPlayer* pLocal = I::ClientEntityList->GetClientEntity(I::EngineClient->GetLocalPlayer())->As<C_TerrorPlayer*>();
+    if (!pLocal || pLocal->deadflag())
+        return result;
+
+    C_TerrorWeapon* pWeapon = pLocal->GetActiveWeapon()->As<C_TerrorWeapon*>();
+    if (!pWeapon)
+        return result;
+
+    const char* weapon_name = pWeapon->GetName();
+    if (strcmp(weapon_name, "weapon_pistol_magnum") != 0)
+        return result;
+    // === END: Weapon check ===
 
     // 获取当前时间
     float curtime = I::EngineClient->OBSOLETE_Time();

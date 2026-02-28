@@ -47,5 +47,5 @@ void EngineVGui::Init()
 	XASSERT(Table.Hook(&GetPanel::Detour, GetPanel::Index) == false);
 	XASSERT(Table.Hook(&IsGameUIVisible::Detour, IsGameUIVisible::Index) == false);
 	XASSERT(Table.Hook(&ActivateGameUI::Detour, ActivateGameUI::Index) == false);
-	//XASSERT(Table.Hook(&Paint::Detour, Paint::Index) == false);
+	// XASSERT(Table.Hook(&Paint::Detour, Paint::Index) == false);
 }
