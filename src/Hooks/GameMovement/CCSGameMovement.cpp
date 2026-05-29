@@ -26,6 +26,11 @@ void __fastcall CCSGameMovement::TracePlayerBBox::Detour(void* ecx, void* edx, c
 
 	//// 清除命中实体信息
 	//pm->m_pEnt = NULL;
+
+	if (pm)
+	{
+		G::G_L4D2Portal.m_PortalTransition.ShouldBypassPlayerBBoxTrace(start, end, fMask, collisionGroup, pm);
+	}
 	return;
 }
 

@@ -5,6 +5,7 @@
 #include "../SDK/L4D2/Interfaces/Vphysics.h"
 #include "../SDK/L4D2/Interfaces/CServerTools.h"
 #include "../SDK/L4D2/Interfaces/IVEngineServer.h"
+#include "../SDK/L4D2/Interfaces/IPlayerInfoManager.h"
 #include "../Portal/L4D2_Portal.h"
 #include "../Util/CVar/CVarManager.h"
 #include "../Util/Logger/Logger.h"
@@ -375,6 +376,10 @@ void CGlobal_ModuleEntry::Load()
 
 		I::EngineServer = U::Interface.Get<IVEngineServer*>("engine.dll", "VEngineServer022");
 		U::LogInfo("EngineServer: %p\n", I::EngineServer);
+
+		I::PlayerInfoManager = U::Interface.Get<IPlayerInfoManager*>("server.dll", "PlayerInfoManager002");
+		XASSERT(I::PlayerInfoManager == nullptr);
+		U::LogInfo("IPlayerInfoManager: %p\n", I::PlayerInfoManager);
 
 	}
 

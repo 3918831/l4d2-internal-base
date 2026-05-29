@@ -178,6 +178,8 @@
     <ClCompile Include="Hooks\WndProc\WndProc.cpp" />
     <ClCompile Include="Portal\client\weapon_portalgun.cpp" />
     <ClCompile Include="Portal\L4D2_Portal.cpp" />
+    <ClCompile Include="Portal\PortalTransition.cpp" />
+    <ClCompile Include="Portal\PortalTransform.cpp" />
     <ClCompile Include="Portal\server\prop_portal.cpp" />
     <ClCompile Include="SDK\DrawManager\DrawManager.cpp" />
     <ClCompile Include="SDK\GameUtil\GameUtil.cpp" />
@@ -229,6 +231,8 @@
     <ClInclude Include="Portal\client\weapon_portalgun.h" />
     <ClInclude Include="Portal\CustomRender.h" />
     <ClInclude Include="Portal\L4D2_Portal.h" />
+    <ClInclude Include="Portal\PortalTransition.h" />
+    <ClInclude Include="Portal\PortalTransform.h" />
     <ClInclude Include="Portal\public\worldsize.h" />
     <ClInclude Include="Portal\server\portal_shareddefs.h" />
     <ClInclude Include="Portal\server\prop_portal.h" />
@@ -259,8 +263,11 @@
     <ClInclude Include="SDK\L4D2\Includes\dt_common.h" />
     <ClInclude Include="SDK\L4D2\Includes\dt_recv.h" />
     <ClInclude Include="SDK\L4D2\Includes\ehandle.h" />
+    <ClInclude Include="SDK\L4D2\Includes\edict.h" />
     <ClInclude Include="SDK\L4D2\Includes\globalvars_base.h" />
+    <ClInclude Include="SDK\L4D2\Includes\ihandleentity.h" />
     <ClInclude Include="SDK\L4D2\Includes\iconvar.h" />
+    <ClInclude Include="SDK\L4D2\Includes\iserverunknown.h" />
     <ClInclude Include="SDK\L4D2\Includes\usercmd.h" />
     <ClInclude Include="SDK\L4D2\Interfaces\BaseClientDLL.h" />
     <ClInclude Include="SDK\L4D2\Interfaces\CServerTools.h" />
@@ -271,6 +278,7 @@
     <ClInclude Include="SDK\L4D2\Interfaces\EngineVGui.h" />
     <ClInclude Include="SDK\L4D2\Interfaces\GameMovement.h" />
     <ClInclude Include="SDK\L4D2\Interfaces\ICvar.h" />
+    <ClInclude Include="SDK\L4D2\Interfaces\IPlayerInfoManager.h" />
     <ClInclude Include="SDK\L4D2\Interfaces\IInput.h" />
     <ClInclude Include="SDK\L4D2\Interfaces\MaterialSystem.h" />
     <ClInclude Include="SDK\L4D2\Interfaces\MatRenderContext.h" />

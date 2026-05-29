@@ -284,7 +284,7 @@ enum EClientClass {
 	CBaseToggle = 27,
 	CBasePlayer = 20,
 	CBaseFlex = 16,
-	CBaseEntity = 15,
+	CBaseEntityClass = 15,
 	CBaseDoor = 14,
 	CBaseCombatCharacter = 10,
 	CBaseAnimatingOverlay = 5,

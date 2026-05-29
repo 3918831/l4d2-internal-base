@@ -68,6 +68,8 @@ struct PortalInfo_t
     const float SCALE_SPEED = 2.0f;
 };
 
+#include "PortalTransition.h"
+
 // 缩放曲线计算函数（纯函数，无副作用）
 // 输入 t ∈ [0,1]，输出 ∈ [0,1]
 namespace ScaleCurves
@@ -216,6 +218,7 @@ public:
 #endif
 
     std::unique_ptr<CWeaponPortalgun> m_pWeaponPortalgun;
+    CPortalTransition m_PortalTransition;
 
     // 传送门操作冷却时间
     float m_flPortalCooldown = 0.5f;           // 可调节的冷却时间

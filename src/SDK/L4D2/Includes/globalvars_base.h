@@ -5,6 +5,15 @@
 class CGlobalVarsBase
 {
 public:
+	CGlobalVarsBase( bool bIsClient );
+
+	// This can be used to filter debug output or to catch the client or server in the act.
+	bool IsClient() const;
+
+	// for encoding m_flSimulationTime, m_flAnimTime
+	int GetNetworkBase( int nTick, int nEntity );
+
+public:
 	float			realtime;
 	int				framecount;
 	float			absoluteframetime;
@@ -21,6 +30,13 @@ public:
 	int				nTimestampNetworkingBase;
 	int				nTimestampRandomizeWindow;
 };
+
+inline CGlobalVarsBase::CGlobalVarsBase( bool bIsClient ) :
+	m_bClient( bIsClient ),
+	nTimestampNetworkingBase( 100 ),
+	nTimestampRandomizeWindow( 32 )
+{
+}
 
 namespace I { inline CGlobalVarsBase* GlobalVars = nullptr; }
 
