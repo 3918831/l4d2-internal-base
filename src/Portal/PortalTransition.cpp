@@ -4,11 +4,15 @@
 
 #include "../SDK/L4D2/Entities/C_TerrorPlayer.h"
 #include "../SDK/L4D2/Includes/usercmd.h"
+#include "../SDK/L4D2/Includes/edict.h"
+#include "../SDK/L4D2/Includes/iserverunknown.h"
 #include "../SDK/L4D2/Interfaces/ClientEntityList.h"
+#include "../SDK/L4D2/Interfaces/CServerTools.h"
 #include "../SDK/L4D2/Interfaces/EngineClient.h"
 #include "../SDK/L4D2/Interfaces/GameMovement.h"
 #include "../SDK/L4D2/Interfaces/IPlayerInfoManager.h"
 #include "../Util/Logger/Logger.h"
+#include "../Util/Offsets/Offsets.h"
 #pragma warning(push)
 #pragma warning(disable: 4819)
 #include "L4D2_Portal.h"
@@ -17,6 +21,7 @@
 namespace
 {
     constexpr float kExitPushDistance = 8.0f;
+    constexpr float kExitEyeClearance = 32.0f;
     constexpr float kTeleportCooldown = 0.20f;
     constexpr float kPortalTouchDistance = 24.0f;
     constexpr float kMoveIntoPortalDot = -20.0f;
@@ -25,8 +30,9 @@ namespace
     constexpr float kPortalSessionTimeout = 1.25f;
     constexpr float kPortalClampForward = 28.0f;
     constexpr float kPortalClampBack = -18.0f;
-    constexpr size_t kTeleportVTableIndex = 118;
-    constexpr bool kDebugSkipUnsafeTeleportCall = true;
+    constexpr size_t kServerTeleportVTableIndex = 118;
+    constexpr bool kDryRunServerSetAbsTeleport = false;
+    constexpr bool kUseServerSetAbsTeleport = false;
 
     PortalTransform::PortalAperture DefaultAperture()
     {
@@ -75,6 +81,11 @@ namespace
     bool IsFiniteVector(const Vector& value)
     {
         return std::isfinite(value.x) && std::isfinite(value.y) && std::isfinite(value.z);
+    }
+
+    const char* MatchText(bool value)
+    {
+        return value ? "match" : "different";
     }
 }
 
@@ -598,23 +609,36 @@ bool CPortalTransition::TeleportLocalPlayer(C_TerrorPlayer* player, PortalInfo_t
     Vector newOrigin = newEye - currentAnchor.viewOffset;
     newOrigin += exit.normal * kExitPushDistance;
 
+    const Vector pushedEye = newOrigin + currentAnchor.viewOffset;
+    const float exitEyeDistance = SignedDistanceToPortal(exit, pushedEye);
+    float clearancePush = 0.0f;
+    if (exitEyeDistance < kExitEyeClearance)
+    {
+        clearancePush = kExitEyeClearance - exitEyeDistance;
+        newOrigin += exit.normal * clearancePush;
+    }
+
     Vector newVelocity = PortalTransform::TransformVector(entryToExit, currentVelocity);
     QAngle newAngles = PortalTransform::TransformAngles(entryToExit, viewAngles);
 
-    U::LogInfo("[PortalTransition] Teleport request entryOrigin=(%.1f %.1f %.1f) exitOrigin=(%.1f %.1f %.1f) oldOrigin=(%.1f %.1f %.1f) oldEye=(%.1f %.1f %.1f) newOrigin=(%.1f %.1f %.1f) newEye=(%.1f %.1f %.1f) oldVel=(%.1f %.1f %.1f) newVel=(%.1f %.1f %.1f) oldAng=(%.1f %.1f %.1f) newAng=(%.1f %.1f %.1f).\n",
+    const Vector finalEye = newOrigin + currentAnchor.viewOffset;
+    const float finalExitEyeDistance = SignedDistanceToPortal(exit, finalEye);
+
+    U::LogInfo("[PortalTransition] Teleport request entryOrigin=(%.1f %.1f %.1f) exitOrigin=(%.1f %.1f %.1f) oldOrigin=(%.1f %.1f %.1f) oldEye=(%.1f %.1f %.1f) newOrigin=(%.1f %.1f %.1f) newEye=(%.1f %.1f %.1f) oldVel=(%.1f %.1f %.1f) newVel=(%.1f %.1f %.1f) oldAng=(%.1f %.1f %.1f) newAng=(%.1f %.1f %.1f) exitEyeD=%.2f clearancePush=%.2f finalExitEyeD=%.2f.\n",
         entry.origin.x, entry.origin.y, entry.origin.z,
         exit.origin.x, exit.origin.y, exit.origin.z,
         currentOrigin.x, currentOrigin.y, currentOrigin.z,
         currentEye.x, currentEye.y, currentEye.z,
         newOrigin.x, newOrigin.y, newOrigin.z,
-        newEye.x, newEye.y, newEye.z,
+        finalEye.x, finalEye.y, finalEye.z,
         currentVelocity.x, currentVelocity.y, currentVelocity.z,
         newVelocity.x, newVelocity.y, newVelocity.z,
         viewAngles.x, viewAngles.y, viewAngles.z,
-        newAngles.x, newAngles.y, newAngles.z);
+        newAngles.x, newAngles.y, newAngles.z,
+        exitEyeDistance, clearancePush, finalExitEyeDistance);
 
-    U::LogInfo("[PortalTransition][DIAG] About to teleport local player entity=%p exit=%s. Unsafe vfunc call is %s in this build.\n",
-        player, SideName(exitSide), kDebugSkipUnsafeTeleportCall ? "SKIPPED" : "ENABLED");
+    U::LogInfo("[PortalTransition][DIAG] About to resolve server-side teleport target clientPlayer=%p exit=%s dryRun=%s useSetAbs=%s.\n",
+        player, SideName(exitSide), BoolText(kDryRunServerSetAbsTeleport), BoolText(kUseServerSetAbsTeleport));
 
     if (!EntityTeleport(player, &newOrigin, &newAngles, &newVelocity))
     {
@@ -638,23 +662,54 @@ bool CPortalTransition::EntityTeleport(void* entity, const Vector* origin, const
 {
     if (!entity)
     {
-        U::LogWarning("[PortalTransition] EntityTeleport rejected: entity is null.\n");
+        U::LogWarning("[PortalTransition] Server SetAbs teleport rejected: client entity is null.\n");
         return false;
     }
 
-    void** vtable = *reinterpret_cast<void***>(entity);
-    if (!vtable || !vtable[kTeleportVTableIndex])
+    if (!I::EngineClient || !I::ClientEntityList)
     {
-        U::LogWarning("[PortalTransition] EntityTeleport rejected: vtable/index %u is not available.\n",
-            static_cast<unsigned int>(kTeleportVTableIndex));
+        U::LogWarning("[PortalTransition] Server SetAbs teleport rejected: client interfaces are not ready.\n");
         return false;
     }
 
-    U::LogInfo("[PortalTransition][DIAG] EntityTeleport candidate entity=%p vtable=%p index=%u fn=%p origin=(%.1f %.1f %.1f) angles=(%.1f %.1f %.1f) velocity=(%.1f %.1f %.1f).\n",
+    const int localIndex = I::EngineClient->GetLocalPlayer();
+    IClientEntity* clientLocal = localIndex > 0 ? I::ClientEntityList->GetClientEntity(localIndex) : nullptr;
+
+    IServerEntity* toolsServerEntity = nullptr;
+    CBaseEntity* toolsBaseEntity = nullptr;
+    if (I::CServerTools && clientLocal)
+    {
+        toolsServerEntity = I::CServerTools->GetIServerEntity(clientLocal);
+        toolsBaseEntity = toolsServerEntity ? toolsServerEntity->GetBaseEntity() : nullptr;
+    }
+
+    CGlobalVars* globals = I::PlayerInfoManager ? I::PlayerInfoManager->GetGlobalVars() : nullptr;
+    edict_t* localEdict = globals && globals->pEdicts && localIndex > 0 ? &globals->pEdicts[localIndex] : nullptr;
+    IServerUnknown* edictUnknown = localEdict ? localEdict->GetUnknown() : nullptr;
+    CBaseEntity* edictBaseEntity = edictUnknown ? edictUnknown->GetBaseEntity() : nullptr;
+
+    CBaseEntity* serverBaseEntity = toolsBaseEntity ? toolsBaseEntity : edictBaseEntity;
+    const bool resolverAgree = toolsBaseEntity && edictBaseEntity && toolsBaseEntity == edictBaseEntity;
+
+    U::LogInfo("[PortalTransition][DIAG] Server teleport resolver localIndex=%d clientArg=%p clientLocal=%p tools=%p toolsServer=%p toolsBase=%p globals=%p pEdicts=%p edict=%p edictUnknown=%p edictBase=%p resolver=%s chosen=%p.\n",
+        localIndex,
         entity,
-        vtable,
-        static_cast<unsigned int>(kTeleportVTableIndex),
-        vtable[kTeleportVTableIndex],
+        clientLocal,
+        I::CServerTools,
+        toolsServerEntity,
+        toolsBaseEntity,
+        globals,
+        globals ? globals->pEdicts : nullptr,
+        localEdict,
+        edictUnknown,
+        edictBaseEntity,
+        MatchText(resolverAgree),
+        serverBaseEntity);
+
+    U::LogInfo("[PortalTransition][DIAG] Server SetAbs functions origin=%p angles=%p velocity=%p targetOrigin=(%.1f %.1f %.1f) targetAngles=(%.1f %.1f %.1f) targetVelocity=(%.1f %.1f %.1f).\n",
+        reinterpret_cast<void*>(U::Offsets.m_dwSetAbsOrigin),
+        reinterpret_cast<void*>(U::Offsets.m_dwSetAbsAngles),
+        reinterpret_cast<void*>(U::Offsets.m_dwSetAbsVelocity),
         origin ? origin->x : 0.0f,
         origin ? origin->y : 0.0f,
         origin ? origin->z : 0.0f,
@@ -665,15 +720,59 @@ bool CPortalTransition::EntityTeleport(void* entity, const Vector* origin, const
         velocity ? velocity->y : 0.0f,
         velocity ? velocity->z : 0.0f);
 
-    if (kDebugSkipUnsafeTeleportCall)
+    if (!serverBaseEntity)
     {
-        U::LogWarning("[PortalTransition][DIAG] Skipping legacy client-entity vfunc teleport call. This path is known unsafe for C_TerrorPlayer and will be replaced by server-side SetAbs* teleport.\n");
+        U::LogWarning("[PortalTransition] Server SetAbs teleport rejected: could not resolve server-side local player.\n");
         return false;
     }
 
+    if (kUseServerSetAbsTeleport)
+    {
+        if (!U::Offsets.m_dwSetAbsOrigin || !U::Offsets.m_dwSetAbsAngles || !U::Offsets.m_dwSetAbsVelocity)
+        {
+            U::LogError("[PortalTransition] Server SetAbs teleport rejected: one or more SetAbs signatures were not found.\n");
+            return false;
+        }
+
+        if (kDryRunServerSetAbsTeleport)
+        {
+            U::LogWarning("[PortalTransition][DIAG] Dry-run only: server-side SetAbs teleport target resolved, but movement calls are disabled for crash-safe validation.\n");
+            return false;
+        }
+
+        using FnSetAbsOrigin = void(__thiscall*)(void*, const Vector&);
+        using FnSetAbsAngles = void(__thiscall*)(void*, const QAngle&);
+        using FnSetAbsVelocity = void(__thiscall*)(void*, const Vector&);
+
+        FnSetAbsOrigin setAbsOrigin = reinterpret_cast<FnSetAbsOrigin>(U::Offsets.m_dwSetAbsOrigin);
+        FnSetAbsAngles setAbsAngles = reinterpret_cast<FnSetAbsAngles>(U::Offsets.m_dwSetAbsAngles);
+        FnSetAbsVelocity setAbsVelocity = reinterpret_cast<FnSetAbsVelocity>(U::Offsets.m_dwSetAbsVelocity);
+
+        const Vector stopVelocity(0.0f, 0.0f, 0.0f);
+        setAbsVelocity(serverBaseEntity, stopVelocity);
+        setAbsOrigin(serverBaseEntity, *origin);
+        setAbsAngles(serverBaseEntity, *angles);
+        setAbsVelocity(serverBaseEntity, *velocity);
+        return true;
+    }
+
+    void** serverVTable = *reinterpret_cast<void***>(serverBaseEntity);
+    if (!serverVTable || !serverVTable[kServerTeleportVTableIndex])
+    {
+        U::LogError("[PortalTransition] Server vtable teleport rejected: vtable/index %u is not available. serverBase=%p vtable=%p.\n",
+            static_cast<unsigned int>(kServerTeleportVTableIndex), serverBaseEntity, serverVTable);
+        return false;
+    }
+
+    U::LogInfo("[PortalTransition][DIAG] Calling server-side vtable teleport serverBase=%p vtable=%p index=%u fn=%p.\n",
+        serverBaseEntity,
+        serverVTable,
+        static_cast<unsigned int>(kServerTeleportVTableIndex),
+        serverVTable[kServerTeleportVTableIndex]);
+
     using FnTeleport = void(__thiscall*)(void*, const Vector*, const QAngle*, const Vector*);
-    FnTeleport teleport = reinterpret_cast<FnTeleport>(vtable[kTeleportVTableIndex]);
-    teleport(entity, origin, angles, velocity);
+    FnTeleport teleport = reinterpret_cast<FnTeleport>(serverVTable[kServerTeleportVTableIndex]);
+    teleport(serverBaseEntity, origin, angles, velocity);
     return true;
 }
 

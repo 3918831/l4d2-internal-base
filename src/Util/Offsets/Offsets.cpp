@@ -69,8 +69,28 @@ void CUtil_Offsets::Init()
 	XASSERT(m_dwRenderView == 0x0);
 
 	//m_dwTracePlayerBBox = U::Pattern.Find(_("server.dll"), _("53 8B DC 83 EC 08 83 E4 F0 83 C4 04 55 8B 6B 04 89 6C 24 04 8B EC 83 EC 6C 56 8B F1"));//插件方给出的完整签名
-	m_dwTracePlayerBBox = U::Pattern.Find(_("server.dll"), _("53 8B DC 83 EC 08 83 E4 F0 83 C4 04 55 8B 6B ? 89 6C 24 ? 8B EC 83 EC 6C 56 8B F1"));//根据ds建议增加了通配符															  
+	m_dwTracePlayerBBox = U::Pattern.Find(_("server.dll"), _("53 8B DC 83 EC 08 83 E4 F0 83 C4 04 55 8B 6B ? 89 6C 24 ? 8B EC 83 EC 6C 56 8B F1"));//根据ds建议增加了通配�?
 	XASSERT(m_dwTracePlayerBBox == 0x0);
+
+	// Server-side CBaseEntity movement functions used by portal traversal dry-run diagnostics.
+	// 当前的m_dwSetAbsAngles/m_dwSetAbsOrigin/m_dwSetAbsVelocity签名并不正确
+	m_dwSetAbsAngles = U::Pattern.Find(_("server.dll"), _("? ? ? ? ? ? A1 ? ? ? ? 33 ? 89 ? ? 56 57 8B ? ? 8B ? E8 ? ? ? ? F3 ? ? ? 0F 2E ? ? ? ? ? 9F F6 ? ? 7A ? F3 ? ? ? ? 0F 2E ? ? ? ? ? 9F F6 ? ? 7A ? F3 ? ? ? ? 0F 2E ? ? ? ? ? 9F F6 ? ? 0F 8B ? ? ? ? 53"));
+	if (!m_dwSetAbsAngles)
+		U::LogError("CBaseEntity::SetAbsAngles signature not found in server.dll.\n");
+	else
+		U::LogInfo("CBaseEntity::SetAbsAngles: %p\n", reinterpret_cast<void*>(m_dwSetAbsAngles));
+
+	m_dwSetAbsOrigin = U::Pattern.Find(_("server.dll"), _("? ? ? ? ? ? A1 ? ? ? ? 33 ? 89 ? ? 56 57 8B ? ? 8B ? E8 ? ? ? ? F3 ? ? ? 0F 2E ? ? ? ? ? 9F F6 ? ? 7A ? F3 ? ? ? ? 0F 2E ? ? ? ? ? 9F F6 ? ? 7A ? F3 ? ? ? ? 0F 2E ? ? ? ? ? 9F F6 ? ? 0F 8B ? ? ? ? 6A"));
+	if (!m_dwSetAbsOrigin)
+		U::LogError("CBaseEntity::SetAbsOrigin signature not found in server.dll.\n");
+	else
+		U::LogInfo("CBaseEntity::SetAbsOrigin: %p\n", reinterpret_cast<void*>(m_dwSetAbsOrigin));
+
+	m_dwSetAbsVelocity = U::Pattern.Find(_("server.dll"), _("? ? ? ? ? ? 56 8B ? ? F3 ? ? ? 57 8B ? 0F"));
+	if (!m_dwSetAbsVelocity)
+		U::LogError("CBaseEntity::SetAbsVelocity signature not found in server.dll.\n");
+	else
+		U::LogInfo("CBaseEntity::SetAbsVelocity: %p\n", reinterpret_cast<void*>(m_dwSetAbsVelocity));
 
 	//自行再次添加的Hook
 	I::CustomRender = *(IRender**)*(DWORD*)(U::Pattern.Find("client.dll", Sigs_RenderInstance) + 0x2);
