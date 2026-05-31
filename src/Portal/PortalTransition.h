@@ -61,6 +61,7 @@ private:
         PortalSide entrySide = PortalSide::None;
         PortalSide exitSide = PortalSide::None;
         float enterTime = 0.0f;
+        float lastAssistTime = 0.0f;
         float nextLogTime = 0.0f;
         bool usingNoclip = false;
         unsigned char savedMoveType = 0;
@@ -73,6 +74,7 @@ private:
     float m_nextTeleportTime = 0.0f;
     float m_nextStatusLogTime = 0.0f;
     float m_nextDistanceLogTime = 0.0f;
+    float m_nextCrossingLogTime = 0.0f;
     float m_nextTraceLogTime = 0.0f;
 
     C_TerrorPlayer* GetLocalPlayer() const;
@@ -87,10 +89,11 @@ private:
     bool TryBeginTraversal(C_TerrorPlayer* player, CUserCmd* cmd, PortalSide side, PortalInfo_t& entry, PortalInfo_t& exit);
     void UpdateTraversalExitState(C_TerrorPlayer* player);
     void ClearTraversalSession(C_TerrorPlayer* player, const char* reason);
+    bool AssistPortalEmbedding(C_TerrorPlayer* player, CUserCmd* cmd, PortalInfo_t& entry, PortalInfo_t& exit);
     void ClampMoveToPortalAperture(C_TerrorPlayer* player, CMoveData* move, PortalInfo_t& entry);
     bool UpdatePortalCrossing(C_TerrorPlayer* player, CUserCmd* cmd, PortalSide side, PortalInfo_t& entry, PortalInfo_t& exit);
     bool TeleportLocalPlayer(C_TerrorPlayer* player, PortalInfo_t& entry, PortalInfo_t& exit, PortalSide exitSide, const PlayerAnchor* anchor = nullptr);
-    bool EntityTeleport(void* entity, const Vector* origin, const QAngle* angles, const Vector* velocity) const;
+    bool EntityTeleport(void* entity, const Vector* origin, const QAngle* angles, const Vector* velocity, bool verbose = true) const;
     void RefreshPortalDistance(C_TerrorPlayer* player, PortalSide side, PortalInfo_t& portal);
     bool ShouldLog(float currentTime, float& nextLogTime, float intervalSeconds);
     const char* SideName(PortalSide side) const;

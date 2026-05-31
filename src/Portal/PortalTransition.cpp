@@ -1,5 +1,6 @@
 #include "PortalTransition.h"
 
+#include <algorithm>
 #include <cmath>
 
 #include "../SDK/L4D2/Entities/C_TerrorPlayer.h"
@@ -23,13 +24,16 @@ namespace
     constexpr float kExitPushDistance = 8.0f;
     constexpr float kExitEyeClearance = 32.0f;
     constexpr float kTeleportCooldown = 0.20f;
-    constexpr float kPortalTouchDistance = 24.0f;
     constexpr float kMoveIntoPortalDot = -20.0f;
     constexpr float kPortalEnterDistance = 34.0f;
     constexpr float kPortalExitDistance = 48.0f;
-    constexpr float kPortalSessionTimeout = 1.25f;
+    constexpr float kPortalSessionTimeout = 2.50f;
+    constexpr float kPortalHardSessionTimeout = 4.00f;
     constexpr float kPortalClampForward = 28.0f;
-    constexpr float kPortalClampBack = -18.0f;
+    constexpr float kPortalTransitBackDepth = 48.0f;
+    constexpr float kPortalEmbedTargetDistance = -2.0f;
+    constexpr float kPortalEmbedMaxStep = 4.0f;
+    constexpr float kPortalEmbedFallbackFrameTime = 0.015f;
     constexpr size_t kServerTeleportVTableIndex = 118;
     constexpr bool kDryRunServerSetAbsTeleport = false;
     constexpr bool kUseServerSetAbsTeleport = false;
@@ -96,6 +100,7 @@ void CPortalTransition::Reset()
     m_session = {};
     m_lastExitPortal = PortalSide::None;
     m_nextTeleportTime = 0.0f;
+    m_nextCrossingLogTime = 0.0f;
 }
 
 void CPortalTransition::Update(CUserCmd* cmd)
@@ -158,6 +163,16 @@ void CPortalTransition::Update(CUserCmd* cmd)
         if (TryBeginTraversal(player, cmd, PortalSide::Orange, *orangeEntry, *orangeExit))
             return;
     }
+    else if (m_session.mode == TraversalMode::InPortal)
+    {
+        PortalInfo_t* assistEntry = nullptr;
+        PortalInfo_t* assistExit = nullptr;
+        if (TryGetPortalPair(m_session.entrySide, assistEntry, assistExit) && assistEntry && assistExit)
+        {
+            if (AssistPortalEmbedding(player, cmd, *assistEntry, *assistExit))
+                return;
+        }
+    }
 
     if (UpdatePortalCrossing(player, cmd, PortalSide::Blue, *blueEntry, *blueExit))
         return;
@@ -167,6 +182,8 @@ void CPortalTransition::Update(CUserCmd* cmd)
 
 void CPortalTransition::OnFinishMove(C_BasePlayer* basePlayer, CUserCmd* cmd, CMoveData* move)
 {
+    (void)cmd;
+
     if (!move || !IsLocalPlayer(basePlayer) || !ArePortalsReady())
         return;
 
@@ -199,24 +216,6 @@ void CPortalTransition::OnFinishMove(C_BasePlayer* basePlayer, CUserCmd* cmd, CM
             move->m_vecAbsOrigin.x, move->m_vecAbsOrigin.y, move->m_vecAbsOrigin.z,
             BoolText(moveDataLooksValid),
             move->m_vecVelocity.x, move->m_vecVelocity.y, move->m_vecVelocity.z);
-    }
-
-    const Vector commandMove = cmd ? BuildCommandMoveDirection(*cmd) : Vector();
-    const float commandIntoPortal = commandMove.Dot(entry->normal);
-    const float velocityIntoPortal = anchor.velocity.Dot(entry->normal);
-    const bool touchingAndEntering = insideAperture
-        && eyeDistance <= kPortalTouchDistance
-        && (commandIntoPortal < kMoveIntoPortalDot || velocityIntoPortal < -15.0f);
-
-    if (touchingAndEntering)
-    {
-        U::LogInfo("[PortalTransition] FinishMove touch crossing confirmed entry=%s exit=%s eyeD=%.2f cmdDot=%.2f velDot=%.2f.\n",
-            SideName(m_session.entrySide), SideName(m_session.exitSide), eyeDistance, commandIntoPortal, velocityIntoPortal);
-
-        if (TeleportLocalPlayer(player, *entry, *exit, m_session.exitSide, &anchor))
-            m_session.mode = TraversalMode::ExitingPortal;
-
-        return;
     }
 
     ClampMoveToPortalAperture(player, move, *entry);
@@ -268,12 +267,19 @@ bool CPortalTransition::ShouldBypassPlayerBBoxTrace(
         const bool closeToPortal = std::fabs(startDistance) < 128.0f || std::fabs(endDistance) < 128.0f;
         Vector intersection;
         const bool crossingAperture = IsPointCrossingPortalAperture(*entry, start, end, &intersection);
-        const bool sessionAperture =
+        const bool entrySessionAperture =
             m_session.mode == TraversalMode::InPortal
             && m_session.entrySide == side
             && PortalTransform::IsPointInsideAperture(*entry, end, DefaultAperture())
             && endDistance <= kPortalEnterDistance
-            && endDistance >= kPortalClampBack - 4.0f;
+            && endDistance >= -kPortalTransitBackDepth;
+        const bool exitSessionAperture =
+            m_session.mode == TraversalMode::ExitingPortal
+            && m_session.exitSide == side
+            && PortalTransform::IsPointInsideAperture(*entry, end, DefaultAperture())
+            && endDistance <= kPortalEnterDistance
+            && endDistance >= -kPortalTransitBackDepth;
+        const bool sessionAperture = entrySessionAperture || exitSessionAperture;
 
         if (!crossingAperture && !sessionAperture)
         {
@@ -449,10 +455,15 @@ bool CPortalTransition::TryBeginTraversal(C_TerrorPlayer* player, CUserCmd* cmd,
     m_session.entrySide = side;
     m_session.exitSide = side == PortalSide::Blue ? PortalSide::Orange : PortalSide::Blue;
     m_session.enterTime = currentTime;
+    m_session.lastAssistTime = currentTime;
     m_session.nextLogTime = 0.0f;
+    m_session.savedMoveType = player->m_MoveType();
+    m_session.usingNoclip = true;
+    player->m_MoveType() = MOVETYPE_NOCLIP;
 
-    U::LogInfo("[PortalTransition] Entered portal traversal state entry=%s exit=%s eyeD=%.2f cmdDot=%.2f velDot=%.2f origin=(%.1f %.1f %.1f) eye=(%.1f %.1f %.1f).\n",
+    U::LogInfo("[PortalTransition] Entered portal traversal state entry=%s exit=%s eyeD=%.2f cmdDot=%.2f velDot=%.2f moveType=%u->%u origin=(%.1f %.1f %.1f) eye=(%.1f %.1f %.1f).\n",
         SideName(m_session.entrySide), SideName(m_session.exitSide), eyeDistance, commandIntoPortal, velocityIntoPortal,
+        static_cast<unsigned int>(m_session.savedMoveType), static_cast<unsigned int>(player->m_MoveType()),
         anchor.origin.x, anchor.origin.y, anchor.origin.z, anchor.eye.x, anchor.eye.y, anchor.eye.z);
     return true;
 }
@@ -463,21 +474,49 @@ void CPortalTransition::UpdateTraversalExitState(C_TerrorPlayer* player)
         return;
 
     const float currentTime = I::EngineClient->OBSOLETE_Time();
-
     PortalInfo_t* portal = nullptr;
     PortalInfo_t* other = nullptr;
-    if (!TryGetPortalPair(m_session.exitSide, portal, other) || !portal)
+    const PortalSide trackingSide = m_session.mode == TraversalMode::InPortal ? m_session.entrySide : m_session.exitSide;
+    if (!TryGetPortalPair(trackingSide, portal, other) || !portal)
+    {
+        ClearTraversalSession(player, "tracking portal unavailable");
         return;
+    }
 
     const PlayerAnchor anchor = BuildPlayerAnchor(player);
     const float eyeDistance = SignedDistanceToPortal(*portal, anchor.eye);
-    const bool inExitAperture = IsPlayerInsidePortalAperture(player, *portal, anchor);
-    const bool timedOut = (currentTime - m_session.enterTime) > kPortalSessionTimeout;
-    const bool clearOfExit = m_session.mode == TraversalMode::ExitingPortal && (!inExitAperture || eyeDistance > kPortalExitDistance);
+    const float centerDistance = SignedDistanceToPortal(*portal, anchor.center);
+    const bool insideAperture = IsPlayerInsidePortalAperture(player, *portal, anchor);
+    const float sessionAge = currentTime - m_session.enterTime;
+    const bool hardTimedOut = sessionAge > kPortalHardSessionTimeout;
 
-    if (clearOfExit || timedOut)
+    if (m_session.mode == TraversalMode::InPortal)
     {
-        ClearTraversalSession(player, clearOfExit ? "left exit portal" : "session timeout");
+        const bool backedOutOfEntry = !insideAperture && eyeDistance > kPortalExitDistance && centerDistance > kPortalExitDistance;
+        const bool staleInPortal = sessionAge > kPortalSessionTimeout && !insideAperture;
+        if (hardTimedOut)
+        {
+            ClearTraversalSession(player, "hard session timeout");
+            return;
+        }
+
+        if (backedOutOfEntry)
+            ClearTraversalSession(player, "left entry portal");
+        else if (staleInPortal)
+            ClearTraversalSession(player, "session timeout outside aperture");
+        return;
+    }
+
+    if (sessionAge > kPortalSessionTimeout)
+    {
+        ClearTraversalSession(player, "session timeout");
+        return;
+    }
+
+    const bool clearOfExit = !insideAperture || eyeDistance > kPortalExitDistance;
+    if (clearOfExit)
+    {
+        ClearTraversalSession(player, "left exit portal");
     }
 }
 
@@ -497,12 +536,88 @@ void CPortalTransition::ClearTraversalSession(C_TerrorPlayer* player, const char
     m_session = {};
 }
 
+bool CPortalTransition::AssistPortalEmbedding(C_TerrorPlayer* player, CUserCmd* cmd, PortalInfo_t& entry, PortalInfo_t& exit)
+{
+    if (!player || !I::EngineClient)
+        return false;
+
+    const float currentTime = I::EngineClient->OBSOLETE_Time();
+    const PlayerAnchor anchor = BuildPlayerAnchor(player);
+    const float centerDistance = SignedDistanceToPortal(entry, anchor.center);
+    const float eyeDistance = SignedDistanceToPortal(entry, anchor.eye);
+
+    if (centerDistance <= kPortalEmbedTargetDistance)
+        return false;
+
+    if (!IsPlayerInsidePortalAperture(player, entry, anchor))
+        return false;
+
+    const Vector commandMove = cmd ? BuildCommandMoveDirection(*cmd) : Vector();
+    const float commandIntoPortal = commandMove.Dot(entry.normal);
+    const float velocityIntoPortal = anchor.velocity.Dot(entry.normal);
+    if (commandIntoPortal >= kMoveIntoPortalDot && velocityIntoPortal >= -15.0f)
+        return false;
+
+    float frameTime = currentTime - m_session.lastAssistTime;
+    if (frameTime <= 0.0f || frameTime > 0.10f)
+        frameTime = kPortalEmbedFallbackFrameTime;
+    m_session.lastAssistTime = currentTime;
+
+    const float requestedSpeed = std::max(-velocityIntoPortal, -commandIntoPortal * 0.45f);
+    const float requestedStep = U::Math.Clamp(requestedSpeed * frameTime, 1.0f, kPortalEmbedMaxStep);
+    const float remainingStep = centerDistance - kPortalEmbedTargetDistance;
+    const float step = U::Math.Clamp(remainingStep, 0.0f, requestedStep);
+    if (step <= 0.0f)
+        return false;
+
+    const Vector nudgedOrigin = anchor.origin - entry.normal * step;
+    if (!IsFiniteVector(nudgedOrigin))
+        return false;
+
+    const float predictedCenterDistance = centerDistance - step;
+    if (centerDistance > 0.0f && predictedCenterDistance <= 0.0f)
+    {
+        PlayerAnchor predictedAnchor = anchor;
+        const Vector delta = nudgedOrigin - anchor.origin;
+        predictedAnchor.origin = nudgedOrigin;
+        predictedAnchor.eye = anchor.eye + delta;
+        predictedAnchor.center = anchor.center + delta;
+
+        U::LogInfo("[PortalTransition] Assisted embed reaches crossing entry=%s exit=%s centerD=%.2f predictedD=%.2f step=%.2f; teleporting without rendering an entry-wall frame.\n",
+            SideName(m_session.entrySide), SideName(m_session.exitSide), centerDistance, predictedCenterDistance, step);
+
+        if (!TeleportLocalPlayer(player, entry, exit, m_session.exitSide, &predictedAnchor))
+            return false;
+
+        m_session.mode = TraversalMode::ExitingPortal;
+        m_session.enterTime = currentTime;
+        m_session.nextLogTime = 0.0f;
+        m_blueState.hasPreviousDistance = false;
+        m_orangeState.hasPreviousDistance = false;
+        m_blueState.hasPreviousEyeDistance = false;
+        m_orangeState.hasPreviousEyeDistance = false;
+        return true;
+    }
+
+    if (ShouldLog(currentTime, m_session.nextLogTime, 0.12f))
+    {
+        U::LogInfo("[PortalTransition] Assisted in-portal embed entry=%s centerD=%.2f eyeD=%.2f step=%.2f cmdDot=%.2f velDot=%.2f oldOrigin=(%.1f %.1f %.1f) newOrigin=(%.1f %.1f %.1f).\n",
+            SideName(m_session.entrySide), centerDistance, eyeDistance, step, commandIntoPortal, velocityIntoPortal,
+            anchor.origin.x, anchor.origin.y, anchor.origin.z,
+            nudgedOrigin.x, nudgedOrigin.y, nudgedOrigin.z);
+    }
+
+    EntityTeleport(player, &nudgedOrigin, nullptr, nullptr, false);
+    return false;
+}
+
 void CPortalTransition::ClampMoveToPortalAperture(C_TerrorPlayer* player, CMoveData* move, PortalInfo_t& entry)
 {
     if (!player || !move)
         return;
 
-    PortalTransform::PortalLocalPoint local = PortalTransform::WorldToPortalLocal(entry, move->m_vecAbsOrigin + player->m_vecViewOffset());
+    const PlayerAnchor anchor = BuildPlayerAnchor(player);
+    PortalTransform::PortalLocalPoint local = PortalTransform::WorldToPortalLocal(entry, anchor.eye);
     const PortalTransform::PortalAperture aperture = DefaultAperture();
 
     const float currentTime = I::EngineClient ? I::EngineClient->OBSOLETE_Time() : 0.0f;
@@ -544,20 +659,15 @@ bool CPortalTransition::UpdatePortalCrossing(C_TerrorPlayer* player, CUserCmd* c
         && eyeDistance <= 0.0f
         && insideAperture;
 
-    const bool touchingPortalSurface = insideAperture
-        && eyeDistance > 0.0f
-        && eyeDistance <= kPortalTouchDistance
-        && commandIntoPortal < kMoveIntoPortalDot;
-
-    const bool crossedPortalPlane = centerCrossedPortalPlane || eyeCrossedPortalPlane || touchingPortalSurface;
+    const bool crossedPortalPlane = centerCrossedPortalPlane;
 
     const float currentTime = I::EngineClient ? I::EngineClient->OBSOLETE_Time() : 0.0f;
     if ((std::fabs(eyeDistance) < 96.0f || insideAperture || crossedPortalPlane)
-        && ShouldLog(currentTime, m_nextDistanceLogTime, 0.25f))
+        && ShouldLog(currentTime, m_nextCrossingLogTime, 0.12f))
     {
-        U::LogDebug("[PortalTransition] Crossing probe side=%s hasPrev=%s prevD=%.2f curD=%.2f prevEye=%.2f eyeD=%.2f inside=%s centerCrossed=%s eyeCrossed=%s touch=%s cmdDot=%.2f velDot=%.2f crossed=%s center=(%.1f %.1f %.1f).\n",
+        U::LogDebug("[PortalTransition] Crossing probe side=%s hasPrev=%s prevD=%.2f curD=%.2f prevEye=%.2f eyeD=%.2f inside=%s centerCrossed=%s eyeCrossed=%s cmdDot=%.2f velDot=%.2f crossed=%s center=(%.1f %.1f %.1f).\n",
             SideName(side), BoolText(state.hasPreviousDistance), state.previousDistance, distance, state.previousEyeDistance, eyeDistance,
-            BoolText(insideAperture), BoolText(centerCrossedPortalPlane), BoolText(eyeCrossedPortalPlane), BoolText(touchingPortalSurface),
+            BoolText(insideAperture), BoolText(centerCrossedPortalPlane), BoolText(eyeCrossedPortalPlane),
             commandIntoPortal, velocityIntoPortal, BoolText(crossedPortalPlane), center.x, center.y, center.z);
     }
 
@@ -575,8 +685,15 @@ bool CPortalTransition::UpdatePortalCrossing(C_TerrorPlayer* player, CUserCmd* c
     if (!TeleportLocalPlayer(player, entry, exit, exitSide))
         return false;
 
+    m_session.mode = TraversalMode::ExitingPortal;
+    m_session.entrySide = side;
+    m_session.exitSide = exitSide;
+    m_session.enterTime = currentTime;
+    m_session.nextLogTime = 0.0f;
     m_blueState.hasPreviousDistance = false;
     m_orangeState.hasPreviousDistance = false;
+    m_blueState.hasPreviousEyeDistance = false;
+    m_orangeState.hasPreviousEyeDistance = false;
     return true;
 }
 
@@ -658,7 +775,7 @@ bool CPortalTransition::TeleportLocalPlayer(C_TerrorPlayer* player, PortalInfo_t
     return true;
 }
 
-bool CPortalTransition::EntityTeleport(void* entity, const Vector* origin, const QAngle* angles, const Vector* velocity) const
+bool CPortalTransition::EntityTeleport(void* entity, const Vector* origin, const QAngle* angles, const Vector* velocity, bool verbose) const
 {
     if (!entity)
     {
@@ -691,34 +808,37 @@ bool CPortalTransition::EntityTeleport(void* entity, const Vector* origin, const
     CBaseEntity* serverBaseEntity = toolsBaseEntity ? toolsBaseEntity : edictBaseEntity;
     const bool resolverAgree = toolsBaseEntity && edictBaseEntity && toolsBaseEntity == edictBaseEntity;
 
-    U::LogInfo("[PortalTransition][DIAG] Server teleport resolver localIndex=%d clientArg=%p clientLocal=%p tools=%p toolsServer=%p toolsBase=%p globals=%p pEdicts=%p edict=%p edictUnknown=%p edictBase=%p resolver=%s chosen=%p.\n",
-        localIndex,
-        entity,
-        clientLocal,
-        I::CServerTools,
-        toolsServerEntity,
-        toolsBaseEntity,
-        globals,
-        globals ? globals->pEdicts : nullptr,
-        localEdict,
-        edictUnknown,
-        edictBaseEntity,
-        MatchText(resolverAgree),
-        serverBaseEntity);
+    if (verbose)
+    {
+        U::LogInfo("[PortalTransition][DIAG] Server teleport resolver localIndex=%d clientArg=%p clientLocal=%p tools=%p toolsServer=%p toolsBase=%p globals=%p pEdicts=%p edict=%p edictUnknown=%p edictBase=%p resolver=%s chosen=%p.\n",
+            localIndex,
+            entity,
+            clientLocal,
+            I::CServerTools,
+            toolsServerEntity,
+            toolsBaseEntity,
+            globals,
+            globals ? globals->pEdicts : nullptr,
+            localEdict,
+            edictUnknown,
+            edictBaseEntity,
+            MatchText(resolverAgree),
+            serverBaseEntity);
 
-    U::LogInfo("[PortalTransition][DIAG] Server SetAbs functions origin=%p angles=%p velocity=%p targetOrigin=(%.1f %.1f %.1f) targetAngles=(%.1f %.1f %.1f) targetVelocity=(%.1f %.1f %.1f).\n",
-        reinterpret_cast<void*>(U::Offsets.m_dwSetAbsOrigin),
-        reinterpret_cast<void*>(U::Offsets.m_dwSetAbsAngles),
-        reinterpret_cast<void*>(U::Offsets.m_dwSetAbsVelocity),
-        origin ? origin->x : 0.0f,
-        origin ? origin->y : 0.0f,
-        origin ? origin->z : 0.0f,
-        angles ? angles->x : 0.0f,
-        angles ? angles->y : 0.0f,
-        angles ? angles->z : 0.0f,
-        velocity ? velocity->x : 0.0f,
-        velocity ? velocity->y : 0.0f,
-        velocity ? velocity->z : 0.0f);
+        U::LogInfo("[PortalTransition][DIAG] Server SetAbs functions origin=%p angles=%p velocity=%p targetOrigin=(%.1f %.1f %.1f) targetAngles=(%.1f %.1f %.1f) targetVelocity=(%.1f %.1f %.1f).\n",
+            reinterpret_cast<void*>(U::Offsets.m_dwSetAbsOrigin),
+            reinterpret_cast<void*>(U::Offsets.m_dwSetAbsAngles),
+            reinterpret_cast<void*>(U::Offsets.m_dwSetAbsVelocity),
+            origin ? origin->x : 0.0f,
+            origin ? origin->y : 0.0f,
+            origin ? origin->z : 0.0f,
+            angles ? angles->x : 0.0f,
+            angles ? angles->y : 0.0f,
+            angles ? angles->z : 0.0f,
+            velocity ? velocity->x : 0.0f,
+            velocity ? velocity->y : 0.0f,
+            velocity ? velocity->z : 0.0f);
+    }
 
     if (!serverBaseEntity)
     {
@@ -764,11 +884,14 @@ bool CPortalTransition::EntityTeleport(void* entity, const Vector* origin, const
         return false;
     }
 
-    U::LogInfo("[PortalTransition][DIAG] Calling server-side vtable teleport serverBase=%p vtable=%p index=%u fn=%p.\n",
-        serverBaseEntity,
-        serverVTable,
-        static_cast<unsigned int>(kServerTeleportVTableIndex),
-        serverVTable[kServerTeleportVTableIndex]);
+    if (verbose)
+    {
+        U::LogInfo("[PortalTransition][DIAG] Calling server-side vtable teleport serverBase=%p vtable=%p index=%u fn=%p.\n",
+            serverBaseEntity,
+            serverVTable,
+            static_cast<unsigned int>(kServerTeleportVTableIndex),
+            serverVTable[kServerTeleportVTableIndex]);
+    }
 
     using FnTeleport = void(__thiscall*)(void*, const Vector*, const QAngle*, const Vector*);
     FnTeleport teleport = reinterpret_cast<FnTeleport>(serverVTable[kServerTeleportVTableIndex]);
