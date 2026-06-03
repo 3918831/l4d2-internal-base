@@ -15,6 +15,7 @@ public:
     void Reset();
     void Update(CUserCmd* cmd);
     void OnFinishMove(C_BasePlayer* player, CUserCmd* cmd, CMoveData* move);
+    void ApplyVisualTransition(CViewSetup& view);
 
     bool ShouldBypassPlayerBBoxTrace(
         const Vector& start,
@@ -63,13 +64,29 @@ private:
         float enterTime = 0.0f;
         float lastAssistTime = 0.0f;
         float nextLogTime = 0.0f;
+        Vector entryVelocity;
         bool usingNoclip = false;
+        bool hasEntryVelocity = false;
         unsigned char savedMoveType = 0;
+    };
+
+    struct VisualTransitionState
+    {
+        bool active = false;
+        bool loggedStart = false;
+        PortalSide exitSide = PortalSide::None;
+        float startTime = 0.0f;
+        float endTime = 0.0f;
+        float physicalExitDistance = 0.0f;
+        float visualExitDistance = 0.0f;
+        Vector exitNormal;
+        Vector physicalEye;
     };
 
     PortalRuntimeState m_blueState;
     PortalRuntimeState m_orangeState;
     TraversalSession m_session;
+    VisualTransitionState m_visualTransition;
     PortalSide m_lastExitPortal = PortalSide::None;
     float m_nextTeleportTime = 0.0f;
     float m_nextStatusLogTime = 0.0f;

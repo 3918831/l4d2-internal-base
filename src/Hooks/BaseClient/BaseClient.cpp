@@ -101,6 +101,8 @@ void __fastcall BaseClient::FrameStageNotify::Detour(void* ecx, void* edx, Clien
 // 模式1: DrawModelExecute中递归渲染 - 完整递归，不丢模型，首次创建有卡顿
 void __fastcall BaseClient::RenderView::Detour(void* ecx, void* edx, CViewSetup& setup, CViewSetup& hudViewSetup, int nClearFlags, int whatToDraw)
 {
+	G::G_L4D2Portal.m_PortalTransition.ApplyVisualTransition(setup);
+
 	// 每帧开始时，重置状态
 	G::G_L4D2Portal.m_nPortalRenderDepth = 0;
 	G::G_L4D2Portal.m_vViewStack.clear();
@@ -122,6 +124,8 @@ void __fastcall BaseClient::RenderView::Detour(void* ecx, void* edx, CViewSetup&
 
 void __fastcall Hooks::BaseClient::RenderView::Detour(void* ecx, void* edx, CViewSetup& setup, CViewSetup& hudViewSetup, int nClearFlags, int whatToDraw)
 {
+    G::G_L4D2Portal.m_PortalTransition.ApplyVisualTransition(setup);
+
     // 1. 如果已经在渲染传送门纹理，或者是递归保护，直接调用原始函数
     // if (g_bIsRenderingPortalTexture || !I::EngineClient->IsInGame()) {
     //     Func.Original<FN>()(ecx, edx, setup, hudViewSetup, nClearFlags, whatToDraw);
@@ -183,6 +187,8 @@ void __fastcall Hooks::BaseClient::RenderView::Detour(void* ecx, void* edx, CVie
 // 模式3: RenderView构建队列+独立渲染 - 待完善
 void __fastcall Hooks::BaseClient::RenderView::Detour(void* ecx, void* edx, CViewSetup& setup, CViewSetup& hudViewSetup, int nClearFlags, int whatToDraw)
 {
+    G::G_L4D2Portal.m_PortalTransition.ApplyVisualTransition(setup);
+
     // 0. 初始化
     G::G_L4D2Portal.m_renderQueue.clear();
     G::G_L4D2Portal.m_nProcessingDepth = 0; // 0 表示主视角

@@ -1,6 +1,7 @@
 #include "PortalTransition.h"
 
 #include <algorithm>
+#include <cstddef>
 #include <cmath>
 
 #include "../SDK/L4D2/Entities/C_TerrorPlayer.h"
@@ -34,6 +35,12 @@ namespace
     constexpr float kPortalEmbedTargetDistance = -2.0f;
     constexpr float kPortalEmbedMaxStep = 4.0f;
     constexpr float kPortalEmbedFallbackFrameTime = 0.015f;
+    constexpr float kPortalAssistStartDistance = 17.0f;
+    constexpr float kPortalAssistBlockedVelocity = -20.0f;
+    constexpr float kPortalRestoreVelocityThresholdSqr = 400.0f;
+    constexpr bool kEnableVisualTransition = false;
+    constexpr float kVisualExitEyeClearance = 16.0f;
+    constexpr float kVisualTransitionDuration = 0.08f;
     constexpr size_t kServerTeleportVTableIndex = 118;
     constexpr bool kDryRunServerSetAbsTeleport = false;
     constexpr bool kUseServerSetAbsTeleport = false;
@@ -87,6 +94,11 @@ namespace
         return std::isfinite(value.x) && std::isfinite(value.y) && std::isfinite(value.z);
     }
 
+    float VectorLengthSqr(const Vector& value)
+    {
+        return value.x * value.x + value.y * value.y + value.z * value.z;
+    }
+
     const char* MatchText(bool value)
     {
         return value ? "match" : "different";
@@ -98,9 +110,50 @@ void CPortalTransition::Reset()
     m_blueState = {};
     m_orangeState = {};
     m_session = {};
+    m_visualTransition = {};
     m_lastExitPortal = PortalSide::None;
     m_nextTeleportTime = 0.0f;
     m_nextCrossingLogTime = 0.0f;
+}
+
+void CPortalTransition::ApplyVisualTransition(CViewSetup& view)
+{
+    if (!kEnableVisualTransition || !m_visualTransition.active || !I::EngineClient)
+        return;
+
+    const float currentTime = I::EngineClient->OBSOLETE_Time();
+    if (currentTime >= m_visualTransition.endTime)
+    {
+        U::LogDebug("[PortalTransition][Visual] Compensation expired exit=%s physicalD=%.2f visualD=%.2f.\n",
+            SideName(m_visualTransition.exitSide),
+            m_visualTransition.physicalExitDistance,
+            m_visualTransition.visualExitDistance);
+        m_visualTransition = {};
+        return;
+    }
+
+    const float duration = std::max(0.001f, m_visualTransition.endTime - m_visualTransition.startTime);
+    const float elapsed = U::Math.Clamp(currentTime - m_visualTransition.startTime, 0.0f, duration);
+    const float fade = elapsed / duration;
+    const float offsetDistance = std::max(0.0f, m_visualTransition.physicalExitDistance - m_visualTransition.visualExitDistance);
+    const float remainingOffset = offsetDistance * (1.0f - fade);
+    if (remainingOffset <= 0.01f)
+        return;
+
+    const Vector visualOffset = m_visualTransition.exitNormal * -remainingOffset;
+    view.origin += visualOffset;
+
+    if (!m_visualTransition.loggedStart)
+    {
+        U::LogInfo("[PortalTransition][Visual] Applying view compensation exit=%s physicalD=%.2f visualD=%.2f offset=%.2f duration=%.3f viewOrigin=(%.1f %.1f %.1f).\n",
+            SideName(m_visualTransition.exitSide),
+            m_visualTransition.physicalExitDistance,
+            m_visualTransition.visualExitDistance,
+            remainingOffset,
+            duration,
+            view.origin.x, view.origin.y, view.origin.z);
+        m_visualTransition.loggedStart = true;
+    }
 }
 
 void CPortalTransition::Update(CUserCmd* cmd)
@@ -190,6 +243,33 @@ void CPortalTransition::OnFinishMove(C_BasePlayer* basePlayer, CUserCmd* cmd, CM
     C_TerrorPlayer* player = static_cast<C_TerrorPlayer*>(basePlayer);
     if (!player || player->deadflag())
         return;
+
+    static bool loggedMoveDataLayout = false;
+    if (!loggedMoveDataLayout)
+    {
+        const PlayerAnchor anchor = BuildPlayerAnchor(player);
+        const Vector originDelta = move->m_vecAbsOrigin - anchor.origin;
+        const float originDeltaSqr = VectorLengthSqr(originDelta);
+        const bool moveDataLooksValid = IsFiniteVector(move->m_vecAbsOrigin)
+            && std::fabs(move->m_vecAbsOrigin.x) < 100000.0f
+            && std::fabs(move->m_vecAbsOrigin.y) < 100000.0f
+            && std::fabs(move->m_vecAbsOrigin.z) < 100000.0f
+            && originDeltaSqr < 4096.0f;
+
+        U::LogInfo("[PortalTransition][MoveData] layout sizeof=%u offVelocity=%u offAngles=%u offWishVel=%u offConstraintPastRadius=%u offAbsOrigin=%u samplePlayerOrigin=(%.1f %.1f %.1f) sampleMoveOrigin=(%.1f %.1f %.1f) originDelta=(%.1f %.1f %.1f) sampleMoveVelocity=(%.1f %.1f %.1f) valid=%s.\n",
+            static_cast<unsigned int>(sizeof(CMoveData)),
+            static_cast<unsigned int>(offsetof(CMoveData, m_vecVelocity)),
+            static_cast<unsigned int>(offsetof(CMoveData, m_vecAngles)),
+            static_cast<unsigned int>(offsetof(CMoveData, m_outWishVel)),
+            static_cast<unsigned int>(offsetof(CMoveData, m_bConstraintPastRadius)),
+            static_cast<unsigned int>(offsetof(CMoveData, m_vecAbsOrigin)),
+            anchor.origin.x, anchor.origin.y, anchor.origin.z,
+            move->m_vecAbsOrigin.x, move->m_vecAbsOrigin.y, move->m_vecAbsOrigin.z,
+            originDelta.x, originDelta.y, originDelta.z,
+            move->m_vecVelocity.x, move->m_vecVelocity.y, move->m_vecVelocity.z,
+            BoolText(moveDataLooksValid));
+        loggedMoveDataLayout = true;
+    }
 
     if (m_session.mode != TraversalMode::InPortal)
         return;
@@ -457,13 +537,16 @@ bool CPortalTransition::TryBeginTraversal(C_TerrorPlayer* player, CUserCmd* cmd,
     m_session.enterTime = currentTime;
     m_session.lastAssistTime = currentTime;
     m_session.nextLogTime = 0.0f;
+    m_session.entryVelocity = anchor.velocity;
+    m_session.hasEntryVelocity = VectorLengthSqr(anchor.velocity) > kPortalRestoreVelocityThresholdSqr;
     m_session.savedMoveType = player->m_MoveType();
     m_session.usingNoclip = true;
     player->m_MoveType() = MOVETYPE_NOCLIP;
 
-    U::LogInfo("[PortalTransition] Entered portal traversal state entry=%s exit=%s eyeD=%.2f cmdDot=%.2f velDot=%.2f moveType=%u->%u origin=(%.1f %.1f %.1f) eye=(%.1f %.1f %.1f).\n",
+    U::LogInfo("[PortalTransition] Entered portal traversal state entry=%s exit=%s eyeD=%.2f cmdDot=%.2f velDot=%.2f moveType=%u->%u preserveVel=%s origin=(%.1f %.1f %.1f) eye=(%.1f %.1f %.1f).\n",
         SideName(m_session.entrySide), SideName(m_session.exitSide), eyeDistance, commandIntoPortal, velocityIntoPortal,
         static_cast<unsigned int>(m_session.savedMoveType), static_cast<unsigned int>(player->m_MoveType()),
+        BoolText(m_session.hasEntryVelocity),
         anchor.origin.x, anchor.origin.y, anchor.origin.z, anchor.eye.x, anchor.eye.y, anchor.eye.z);
     return true;
 }
@@ -558,6 +641,11 @@ bool CPortalTransition::AssistPortalEmbedding(C_TerrorPlayer* player, CUserCmd* 
     if (commandIntoPortal >= kMoveIntoPortalDot && velocityIntoPortal >= -15.0f)
         return false;
 
+    const bool closeToBlockedHull = centerDistance <= kPortalAssistStartDistance;
+    const bool blockedByPortalSurface = velocityIntoPortal > kPortalAssistBlockedVelocity;
+    if (!closeToBlockedHull || !blockedByPortalSurface)
+        return false;
+
     float frameTime = currentTime - m_session.lastAssistTime;
     if (frameTime <= 0.0f || frameTime > 0.10f)
         frameTime = kPortalEmbedFallbackFrameTime;
@@ -582,9 +670,12 @@ bool CPortalTransition::AssistPortalEmbedding(C_TerrorPlayer* player, CUserCmd* 
         predictedAnchor.origin = nudgedOrigin;
         predictedAnchor.eye = anchor.eye + delta;
         predictedAnchor.center = anchor.center + delta;
+        if (m_session.hasEntryVelocity && VectorLengthSqr(predictedAnchor.velocity) < kPortalRestoreVelocityThresholdSqr)
+            predictedAnchor.velocity = m_session.entryVelocity;
 
-        U::LogInfo("[PortalTransition] Assisted embed reaches crossing entry=%s exit=%s centerD=%.2f predictedD=%.2f step=%.2f; teleporting without rendering an entry-wall frame.\n",
-            SideName(m_session.entrySide), SideName(m_session.exitSide), centerDistance, predictedCenterDistance, step);
+        U::LogInfo("[PortalTransition] Assisted embed reaches crossing entry=%s exit=%s centerD=%.2f predictedD=%.2f step=%.2f restoredVel=%s; teleporting without rendering an entry-wall frame.\n",
+            SideName(m_session.entrySide), SideName(m_session.exitSide), centerDistance, predictedCenterDistance, step,
+            BoolText(m_session.hasEntryVelocity && VectorLengthSqr(anchor.velocity) < kPortalRestoreVelocityThresholdSqr));
 
         if (!TeleportLocalPlayer(player, entry, exit, m_session.exitSide, &predictedAnchor))
             return false;
@@ -607,7 +698,12 @@ bool CPortalTransition::AssistPortalEmbedding(C_TerrorPlayer* player, CUserCmd* 
             nudgedOrigin.x, nudgedOrigin.y, nudgedOrigin.z);
     }
 
-    EntityTeleport(player, &nudgedOrigin, nullptr, nullptr, false);
+    Vector preservedVelocity = anchor.velocity;
+    if (m_session.hasEntryVelocity && VectorLengthSqr(preservedVelocity) < kPortalRestoreVelocityThresholdSqr)
+        preservedVelocity = m_session.entryVelocity;
+
+    EntityTeleport(player, &nudgedOrigin, nullptr, &preservedVelocity, false);
+    player->m_vecVelocity() = preservedVelocity;
     return false;
 }
 
@@ -720,7 +816,13 @@ bool CPortalTransition::TeleportLocalPlayer(C_TerrorPlayer* player, PortalInfo_t
     const PlayerAnchor currentAnchor = anchor ? *anchor : BuildPlayerAnchor(player);
     const Vector currentOrigin = currentAnchor.origin;
     const Vector currentEye = currentAnchor.eye;
-    const Vector currentVelocity = currentAnchor.velocity;
+    Vector currentVelocity = currentAnchor.velocity;
+    const bool restoredTraversalVelocity =
+        m_session.mode == TraversalMode::InPortal
+        && m_session.hasEntryVelocity
+        && VectorLengthSqr(currentVelocity) < kPortalRestoreVelocityThresholdSqr;
+    if (restoredTraversalVelocity)
+        currentVelocity = m_session.entryVelocity;
 
     const Vector newEye = PortalTransform::TransformPoint(entryToExit, currentEye);
     Vector newOrigin = newEye - currentAnchor.viewOffset;
@@ -741,7 +843,7 @@ bool CPortalTransition::TeleportLocalPlayer(C_TerrorPlayer* player, PortalInfo_t
     const Vector finalEye = newOrigin + currentAnchor.viewOffset;
     const float finalExitEyeDistance = SignedDistanceToPortal(exit, finalEye);
 
-    U::LogInfo("[PortalTransition] Teleport request entryOrigin=(%.1f %.1f %.1f) exitOrigin=(%.1f %.1f %.1f) oldOrigin=(%.1f %.1f %.1f) oldEye=(%.1f %.1f %.1f) newOrigin=(%.1f %.1f %.1f) newEye=(%.1f %.1f %.1f) oldVel=(%.1f %.1f %.1f) newVel=(%.1f %.1f %.1f) oldAng=(%.1f %.1f %.1f) newAng=(%.1f %.1f %.1f) exitEyeD=%.2f clearancePush=%.2f finalExitEyeD=%.2f.\n",
+    U::LogInfo("[PortalTransition] Teleport request entryOrigin=(%.1f %.1f %.1f) exitOrigin=(%.1f %.1f %.1f) oldOrigin=(%.1f %.1f %.1f) oldEye=(%.1f %.1f %.1f) newOrigin=(%.1f %.1f %.1f) newEye=(%.1f %.1f %.1f) oldVel=(%.1f %.1f %.1f) newVel=(%.1f %.1f %.1f) restoredVel=%s oldAng=(%.1f %.1f %.1f) newAng=(%.1f %.1f %.1f) exitEyeD=%.2f clearancePush=%.2f finalExitEyeD=%.2f.\n",
         entry.origin.x, entry.origin.y, entry.origin.z,
         exit.origin.x, exit.origin.y, exit.origin.z,
         currentOrigin.x, currentOrigin.y, currentOrigin.z,
@@ -750,6 +852,7 @@ bool CPortalTransition::TeleportLocalPlayer(C_TerrorPlayer* player, PortalInfo_t
         finalEye.x, finalEye.y, finalEye.z,
         currentVelocity.x, currentVelocity.y, currentVelocity.z,
         newVelocity.x, newVelocity.y, newVelocity.z,
+        BoolText(restoredTraversalVelocity),
         viewAngles.x, viewAngles.y, viewAngles.z,
         newAngles.x, newAngles.y, newAngles.z,
         exitEyeDistance, clearancePush, finalExitEyeDistance);
@@ -761,6 +864,31 @@ bool CPortalTransition::TeleportLocalPlayer(C_TerrorPlayer* player, PortalInfo_t
     {
         U::LogWarning("[PortalTransition] Player Teleport call failed.\n");
         return false;
+    }
+
+    if (kEnableVisualTransition && finalExitEyeDistance > kVisualExitEyeClearance)
+    {
+        const float visualDuration = std::max(0.001f, kVisualTransitionDuration);
+        m_visualTransition.active = true;
+        m_visualTransition.loggedStart = false;
+        m_visualTransition.exitSide = exitSide;
+        m_visualTransition.startTime = I::EngineClient->OBSOLETE_Time();
+        m_visualTransition.endTime = m_visualTransition.startTime + visualDuration;
+        m_visualTransition.physicalExitDistance = finalExitEyeDistance;
+        m_visualTransition.visualExitDistance = kVisualExitEyeClearance;
+        m_visualTransition.exitNormal = exit.normal;
+        m_visualTransition.physicalEye = finalEye;
+
+        U::LogInfo("[PortalTransition][Visual] Armed view compensation exit=%s physicalD=%.2f visualD=%.2f duration=%.3f physicalEye=(%.1f %.1f %.1f).\n",
+            SideName(exitSide),
+            m_visualTransition.physicalExitDistance,
+            m_visualTransition.visualExitDistance,
+            visualDuration,
+            finalEye.x, finalEye.y, finalEye.z);
+    }
+    else
+    {
+        m_visualTransition = {};
     }
 
     Vector engineAngles(newAngles.x, newAngles.y, newAngles.z);
