@@ -72,6 +72,12 @@ void CUtil_Offsets::Init()
 	m_dwTracePlayerBBox = U::Pattern.Find(_("server.dll"), _("53 8B DC 83 EC 08 83 E4 F0 83 C4 04 55 8B 6B ? 89 6C 24 ? 8B EC 83 EC 6C 56 8B F1"));//根据ds建议增加了通配�?
 	XASSERT(m_dwTracePlayerBBox == 0x0);
 
+	m_dwCategorizePosition = U::Pattern.Find(_("server.dll"), _("55 8B EC 51 56 57 8B F9 8B B7 E0 07 00 00 85 F6 0F 84 ? ? ? ? F3 0F 10 86 54 28 00 00 0F 57 D2 0F 2F C2 0F 86 ? ? ? ? A1 ? ? ? ? F3 0F 10 58 10 F3 0F 59 1D ? ? ? ? 0F 28 C8 F3"));
+	if (!m_dwCategorizePosition)
+		U::LogError("CGameMovement::CategorizePosition(void) signature not found in server.dll.\n");
+	else
+		U::LogInfo("CGameMovement::CategorizePosition(void): %p\n", reinterpret_cast<void*>(m_dwCategorizePosition));
+
 	// Server-side CBaseEntity movement functions used by portal traversal dry-run diagnostics.
 	// 当前的m_dwSetAbsAngles/m_dwSetAbsOrigin/m_dwSetAbsVelocity签名并不正确
 	m_dwSetAbsAngles = U::Pattern.Find(_("server.dll"), _("? ? ? ? ? ? A1 ? ? ? ? 33 ? 89 ? ? 56 57 8B ? ? 8B ? E8 ? ? ? ? F3 ? ? ? 0F 2E ? ? ? ? ? 9F F6 ? ? 7A ? F3 ? ? ? ? 0F 2E ? ? ? ? ? 9F F6 ? ? 7A ? F3 ? ? ? ? 0F 2E ? ? ? ? ? 9F F6 ? ? 0F 8B ? ? ? ? 53"));

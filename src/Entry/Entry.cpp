@@ -315,6 +315,9 @@ void CGlobal_ModuleEntry::Load()
 		I::GameMovement     = U::Interface.Get<IGameMovement*>("client.dll", "GameMovement001");
         U::LogInfo("Client::GameMovement: %p\n", I::GameMovement);
 
+		I::ServerGameMovement = U::Interface.Get<IGameMovement*>("server.dll", "GameMovement001");
+		U::LogInfo("Server::GameMovement: %p\n", I::ServerGameMovement);
+
 		I::EngineClient     = U::Interface.Get<IVEngineClient*>("engine.dll", "VEngineClient013");
         U::LogInfo("EngineClient: %p\n", I::EngineClient);
 

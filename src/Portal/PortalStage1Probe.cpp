@@ -95,6 +95,174 @@ void CPortalStage1Probe::DumpNow(const CPortalTransitionSimulator& simulator, co
     LogRuntimeSnapshot(nullptr, simulator, bridge);
 }
 
+PortalMoveFrameDiagnostics CPortalStage1Probe::CaptureMoveFrame(C_BasePlayer* player, CUserCmd* cmd, CMoveData* move, const CPortalTransitionSimulator& simulator) const
+{
+    PortalMoveFrameDiagnostics frame;
+    if (!player || !move)
+        return frame;
+
+    const PortalTransitionContext& context = simulator.GetContext();
+    frame.valid = true;
+    frame.commandNumber = cmd ? cmd->command_number : 0;
+    frame.bridgePhase = simulator.IsInCollisionBridgePhase();
+    frame.phase = context.phase;
+    frame.entrySide = context.entrySide;
+    frame.moveOrigin = move->m_vecAbsOrigin;
+    frame.moveVelocity = move->m_vecVelocity;
+    frame.stepHeight = move->m_outStepHeight;
+    frame.gameCodeMovedPlayer = move->m_bGameCodeMovedPlayer;
+    frame.playerOrigin = player->m_vecOrigin();
+    frame.playerVelocity = player->m_vecVelocity();
+    frame.playerFlags = player->m_fFlags();
+    frame.groundEntity = player->m_hGroundEntity().ToInt();
+    return frame;
+}
+
+void CPortalStage1Probe::LogFinishMoveDiagnostics(const PortalMoveFrameDiagnostics& before, const PortalMoveFrameDiagnostics& after) const
+{
+    if (!before.valid || !after.valid)
+        return;
+
+    if (!before.bridgePhase && !after.bridgePhase)
+        return;
+
+    const Vector moveDelta = after.moveOrigin - before.moveOrigin;
+    const Vector playerDelta = after.playerOrigin - before.playerOrigin;
+    const Vector movePlayerGap = after.moveOrigin - after.playerOrigin;
+
+    U::LogWarning("[PortalStage1Probe][FinishMove] cmd=%d phase=%s->%s entry=%s bridge=%s->%s moveOrigin=(%.1f %.1f %.1f)->(%.1f %.1f %.1f) d=(%.2f %.2f %.2f) playerOrigin=(%.1f %.1f %.1f)->(%.1f %.1f %.1f) pd=(%.2f %.2f %.2f) gap=(%.2f %.2f %.2f).\n",
+        before.commandNumber,
+        PhaseName(before.phase),
+        PhaseName(after.phase),
+        SideName(before.entrySide),
+        BoolText(before.bridgePhase),
+        BoolText(after.bridgePhase),
+        before.moveOrigin.x, before.moveOrigin.y, before.moveOrigin.z,
+        after.moveOrigin.x, after.moveOrigin.y, after.moveOrigin.z,
+        moveDelta.x, moveDelta.y, moveDelta.z,
+        before.playerOrigin.x, before.playerOrigin.y, before.playerOrigin.z,
+        after.playerOrigin.x, after.playerOrigin.y, after.playerOrigin.z,
+        playerDelta.x, playerDelta.y, playerDelta.z,
+        movePlayerGap.x, movePlayerGap.y, movePlayerGap.z);
+
+    U::LogWarning("[PortalStage1Probe][FinishMoveState] cmd=%d moveVel=(%.1f %.1f %.1f)->(%.1f %.1f %.1f) playerVel=(%.1f %.1f %.1f)->(%.1f %.1f %.1f) step=%.2f->%.2f gameMoved=%s->%s flags=0x%X->0x%X ground=%d->%d.\n",
+        before.commandNumber,
+        before.moveVelocity.x, before.moveVelocity.y, before.moveVelocity.z,
+        after.moveVelocity.x, after.moveVelocity.y, after.moveVelocity.z,
+        before.playerVelocity.x, before.playerVelocity.y, before.playerVelocity.z,
+        after.playerVelocity.x, after.playerVelocity.y, after.playerVelocity.z,
+        before.stepHeight,
+        after.stepHeight,
+        BoolText(before.gameCodeMovedPlayer),
+        BoolText(after.gameCodeMovedPlayer),
+        before.playerFlags,
+        after.playerFlags,
+        before.groundEntity,
+        after.groundEntity);
+}
+
+void CPortalStage1Probe::LogFrameTraceDiagnostics(const CPortalCollisionBridge& bridge, const PortalMoveFrameDiagnostics& after) const
+{
+    if (!after.valid || !after.bridgePhase)
+        return;
+
+    const PortalCollisionBridgeDiagnostics& diag = bridge.GetDiagnostics();
+    if (diag.frameTotal == 0)
+        return;
+
+    U::LogWarning("[PortalStage1Probe][TraceFrame] cmd=%d bridgeCmd=%d phase=%s entry=%s total=%u horiz=%u zero=%u verticalGround=%u step=%u other=%u accepted=%u rejectPhase=%u rejectPair=%u rejectAperture=%u stepAccepted=%u stepRejected=%u moveOrigin=(%.1f %.1f %.1f) playerOrigin=(%.1f %.1f %.1f) flags=0x%X ground=%d.\n",
+        after.commandNumber,
+        diag.frameCommandNumber,
+        PhaseName(after.phase),
+        SideName(after.entrySide),
+        diag.frameTotal,
+        diag.frameHorizontal,
+        diag.frameZeroLength,
+        diag.frameVerticalGround,
+        diag.frameStepUpDown,
+        diag.frameOther,
+        diag.frameAccepted,
+        diag.frameRejectedByPhase,
+        diag.frameRejectedByPair,
+        diag.frameRejectedByAperture,
+        diag.frameStepAccepted,
+        diag.frameStepRejected,
+        after.moveOrigin.x, after.moveOrigin.y, after.moveOrigin.z,
+        after.playerOrigin.x, after.playerOrigin.y, after.playerOrigin.z,
+        after.playerFlags,
+        after.groundEntity);
+
+    const PortalFrameTraceSnapshot& horizontal = diag.frameLastHorizontalTrace;
+    if (horizontal.hasTrace)
+    {
+        U::LogWarning("[PortalStage1Probe][TraceHorizontal] cmd=%d eligible=%s accepted=%s phase=%s entry=%s start=(%.1f %.1f %.1f) end=(%.1f %.1f %.1f) endpos=(%.1f %.1f %.1f) plane=(%.2f %.2f %.2f) frac=%.3f startsolid=%s allsolid=%s d=(%.2f->%.2f) playerOrigin=(%.1f %.1f %.1f) playerVel=(%.1f %.1f %.1f) flags=0x%X ground=%d.\n",
+            after.commandNumber,
+            BoolText(horizontal.eligible),
+            BoolText(horizontal.accepted),
+            PhaseName(horizontal.phase),
+            SideName(horizontal.entrySide),
+            horizontal.start.x, horizontal.start.y, horizontal.start.z,
+            horizontal.end.x, horizontal.end.y, horizontal.end.z,
+            horizontal.endPos.x, horizontal.endPos.y, horizontal.endPos.z,
+            horizontal.planeNormal.x, horizontal.planeNormal.y, horizontal.planeNormal.z,
+            horizontal.fraction,
+            BoolText(horizontal.startSolid),
+            BoolText(horizontal.allSolid),
+            horizontal.startDistance,
+            horizontal.endDistance,
+            horizontal.playerOrigin.x, horizontal.playerOrigin.y, horizontal.playerOrigin.z,
+            horizontal.playerVelocity.x, horizontal.playerVelocity.y, horizontal.playerVelocity.z,
+            horizontal.playerFlags,
+            horizontal.groundEntity);
+    }
+
+    const PortalFrameTraceSnapshot& other = diag.frameLastOtherTrace;
+    if (other.hasTrace)
+    {
+        U::LogWarning("[PortalStage1Probe][TraceOther] cmd=%d eligible=%s accepted=%s phase=%s entry=%s start=(%.1f %.1f %.1f) end=(%.1f %.1f %.1f) endpos=(%.1f %.1f %.1f) plane=(%.2f %.2f %.2f) frac=%.3f startsolid=%s allsolid=%s d=(%.2f->%.2f) playerOrigin=(%.1f %.1f %.1f) playerVel=(%.1f %.1f %.1f) flags=0x%X ground=%d.\n",
+            after.commandNumber,
+            BoolText(other.eligible),
+            BoolText(other.accepted),
+            PhaseName(other.phase),
+            SideName(other.entrySide),
+            other.start.x, other.start.y, other.start.z,
+            other.end.x, other.end.y, other.end.z,
+            other.endPos.x, other.endPos.y, other.endPos.z,
+            other.planeNormal.x, other.planeNormal.y, other.planeNormal.z,
+            other.fraction,
+            BoolText(other.startSolid),
+            BoolText(other.allSolid),
+            other.startDistance,
+            other.endDistance,
+            other.playerOrigin.x, other.playerOrigin.y, other.playerOrigin.z,
+            other.playerVelocity.x, other.playerVelocity.y, other.playerVelocity.z,
+            other.playerFlags,
+            other.groundEntity);
+    }
+
+    if (!diag.frameHasStepTrace)
+        return;
+
+    U::LogWarning("[PortalStage1Probe][TraceStep] cmd=%d accepted=%s phase=%s entry=%s start=(%.1f %.1f %.1f) end=(%.1f %.1f %.1f) endpos=(%.1f %.1f %.1f) plane=(%.2f %.2f %.2f) frac=%.3f startsolid=%s allsolid=%s d=(%.2f->%.2f) playerOrigin=(%.1f %.1f %.1f) playerVel=(%.1f %.1f %.1f) flags=0x%X ground=%d.\n",
+        after.commandNumber,
+        BoolText(diag.frameLastStepAccepted),
+        PhaseName(diag.frameLastStepPhase),
+        SideName(diag.frameLastStepEntrySide),
+        diag.frameLastStepStart.x, diag.frameLastStepStart.y, diag.frameLastStepStart.z,
+        diag.frameLastStepEnd.x, diag.frameLastStepEnd.y, diag.frameLastStepEnd.z,
+        diag.frameLastStepEndPos.x, diag.frameLastStepEndPos.y, diag.frameLastStepEndPos.z,
+        diag.frameLastStepPlaneNormal.x, diag.frameLastStepPlaneNormal.y, diag.frameLastStepPlaneNormal.z,
+        diag.frameLastStepFraction,
+        BoolText(diag.frameLastStepStartSolid),
+        BoolText(diag.frameLastStepAllSolid),
+        diag.frameLastStepStartDistance,
+        diag.frameLastStepEndDistance,
+        diag.frameLastStepPlayerOrigin.x, diag.frameLastStepPlayerOrigin.y, diag.frameLastStepPlayerOrigin.z,
+        diag.frameLastStepPlayerVelocity.x, diag.frameLastStepPlayerVelocity.y, diag.frameLastStepPlayerVelocity.z,
+        diag.frameLastStepPlayerFlags,
+        diag.frameLastStepGroundEntity);
+}
+
 void CPortalStage1Probe::LogInterfaceSnapshot() const
 {
     const bool stage1Ready = I::EngineClient
@@ -232,14 +400,22 @@ void CPortalStage1Probe::LogRuntimeSnapshot(CUserCmd* cmd, const CPortalTransiti
         BoolText(context.movingIntoPortal),
         BoolText(simulator.IsInCollisionBridgePhase()));
 
-    U::LogWarning("[PortalStage1Probe][Bridge] total=%u eligible=%u accepted=%u rejectPhase=%u rejectPair=%u rejectAperture=%u lastAccepted=%s lastPhase=%s lastEntry=%s lastFrac=%.3f lastStartSolid=%s lastAllSolid=%s lastStart=(%.1f %.1f %.1f) lastEnd=(%.1f %.1f %.1f) lastRejectD=(%.2f->%.2f) lastAcceptD=(%.2f->%.2f) lastAcceptFrac=%.3f lastAcceptStart=(%.1f %.1f %.1f) lastAcceptEnd=(%.1f %.1f %.1f) lastAcceptHit=(%.1f %.1f %.1f).\n",
+    U::LogWarning("[PortalStage1Probe][Bridge] total=%u eligible=%u accepted=%u horizAcc=%u zeroAcc=%u startSolidAcc=%u verticalRej=%u groundLikeRej=%u rejectPhase=%u rejectPair=%u rejectAperture=%u lastAccepted=%s lastClass=%s lastAcceptedClass=%s lastRejectedClass=%s lastPhase=%s lastEntry=%s lastFrac=%.3f lastStartSolid=%s lastAllSolid=%s lastStart=(%.1f %.1f %.1f) lastEnd=(%.1f %.1f %.1f) lastRejectD=(%.2f->%.2f) lastAcceptD=(%.2f->%.2f) lastAcceptFrac=%.3f lastAcceptStart=(%.1f %.1f %.1f) lastAcceptEnd=(%.1f %.1f %.1f) lastAcceptHit=(%.1f %.1f %.1f).\n",
         diag.totalRequests,
         diag.eligibleRequests,
         diag.acceptedBypasses,
+        diag.horizontalAccepted,
+        diag.zeroLengthAccepted,
+        diag.startSolidAccepted,
+        diag.verticalRejected,
+        diag.groundLikeRejected,
         diag.rejectedByPhase,
         diag.rejectedByPortalPair,
         diag.rejectedByAperture,
         BoolText(diag.lastAccepted),
+        TraceClassName(diag.lastClass),
+        TraceClassName(diag.lastAcceptedClass),
+        TraceClassName(diag.lastRejectedClass),
         PhaseName(diag.lastPhase),
         SideName(diag.lastEntrySide),
         diag.lastOriginalFraction,
@@ -280,6 +456,20 @@ const char* CPortalStage1Probe::SideName(PortalTransitionSide side) const
     case PortalTransitionSide::None:
     default:
         return "None";
+    }
+}
+
+const char* CPortalStage1Probe::TraceClassName(PortalTraceClass traceClass) const
+{
+    switch (traceClass)
+    {
+    case PortalTraceClass::HorizontalMove: return "HorizontalMove";
+    case PortalTraceClass::ZeroLengthPositionTest: return "ZeroLengthPositionTest";
+    case PortalTraceClass::VerticalGroundProbe: return "VerticalGroundProbe";
+    case PortalTraceClass::StepUpDownProbe: return "StepUpDownProbe";
+    case PortalTraceClass::Other:
+    default:
+        return "Other";
     }
 }
 

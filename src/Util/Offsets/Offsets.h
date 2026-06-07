@@ -29,6 +29,7 @@ public:
 	DWORD m_dwIInput = 0x0;
 
 	DWORD m_dwTracePlayerBBox = 0x0;
+	DWORD m_dwCategorizePosition = 0x0;
 	DWORD m_dwSetAbsAngles = 0x0;
 	DWORD m_dwSetAbsOrigin = 0x0;
 	DWORD m_dwSetAbsVelocity = 0x0;

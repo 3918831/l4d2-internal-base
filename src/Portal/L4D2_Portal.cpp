@@ -307,6 +307,8 @@ void L4D2_Portal::PortalInit()
     m_PortalTransitionSimulator.Reset();
     m_PortalCollisionBridge.Reset();
     m_PortalStage1Probe.Reset();
+    U::PortalFileLog::Reset();
+    U::LogWarning("[PortalFileLog] writing portal diagnostics to D:\\portal_l4d2_trace.log.\n");
     U::LogWarning("[PortalStage1Probe] installed. Use console command portal_stage1_probe for an immediate stage-1 interface dump.\n");
 }
 

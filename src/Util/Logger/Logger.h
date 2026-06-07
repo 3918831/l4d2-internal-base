@@ -2,6 +2,7 @@
 
 #include <cstdarg>
 #include <cstdio>
+#include "PortalFileLog.h"
 #include "../../SDK/L4D2/Interfaces/ICvar.h"
 #include "../../SDK/L4D2/Includes/color.h"
 
@@ -29,6 +30,7 @@ namespace U {
         va_end(args);
 
         sprintf_s(finalBuffer, "%s%s", LOG_PREFIX, buffer);
+        PortalFileLog::Write(finalBuffer);
         I::Cvar->ConsolePrintf("%s", finalBuffer);
     }
 
@@ -45,6 +47,7 @@ namespace U {
         va_end(args);
 
         sprintf_s(finalBuffer, "%s%s", LOG_DEBUG_PREFIX, buffer);
+        PortalFileLog::Write(finalBuffer);
         I::Cvar->ConsoleColorPrintf(COLOR_INFO, "%s", finalBuffer);
     }
 
@@ -61,6 +64,7 @@ namespace U {
         va_end(args);
 
         sprintf_s(finalBuffer, "%s%s", LOG_PREFIX, buffer);
+        PortalFileLog::Write(finalBuffer);
         I::Cvar->ConsoleColorPrintf(COLOR_WARNING, "%s", finalBuffer);
     }
 
@@ -77,6 +81,7 @@ namespace U {
         va_end(args);
 
         sprintf_s(finalBuffer, "%s%s", LOG_PREFIX, buffer);
+        PortalFileLog::Write(finalBuffer);
         I::Cvar->ConsoleColorPrintf(COLOR_ERROR, "%s", finalBuffer);
     }
 

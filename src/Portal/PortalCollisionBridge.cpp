@@ -46,8 +46,46 @@ void CPortalCollisionBridge::Reset()
     m_diagnostics = {};
 }
 
+void CPortalCollisionBridge::BeginFrame(int commandNumber)
+{
+    m_diagnostics.frameCommandNumber = commandNumber;
+    m_diagnostics.frameTotal = 0;
+    m_diagnostics.frameHorizontal = 0;
+    m_diagnostics.frameZeroLength = 0;
+    m_diagnostics.frameVerticalGround = 0;
+    m_diagnostics.frameStepUpDown = 0;
+    m_diagnostics.frameOther = 0;
+    m_diagnostics.frameAccepted = 0;
+    m_diagnostics.frameRejectedByAperture = 0;
+    m_diagnostics.frameRejectedByPhase = 0;
+    m_diagnostics.frameRejectedByPair = 0;
+    m_diagnostics.frameStepAccepted = 0;
+    m_diagnostics.frameStepRejected = 0;
+    m_diagnostics.frameHasStepTrace = false;
+    m_diagnostics.frameLastStepAccepted = false;
+    m_diagnostics.frameLastStepStart = Vector();
+    m_diagnostics.frameLastStepEnd = Vector();
+    m_diagnostics.frameLastStepEndPos = Vector();
+    m_diagnostics.frameLastStepPlaneNormal = Vector();
+    m_diagnostics.frameLastStepFraction = 0.0f;
+    m_diagnostics.frameLastStepStartSolid = false;
+    m_diagnostics.frameLastStepAllSolid = false;
+    m_diagnostics.frameLastStepStartDistance = 0.0f;
+    m_diagnostics.frameLastStepEndDistance = 0.0f;
+    m_diagnostics.frameLastStepPhase = PortalTransitionPhase::Idle;
+    m_diagnostics.frameLastStepEntrySide = PortalTransitionSide::None;
+    m_diagnostics.frameLastStepPlayerOrigin = Vector();
+    m_diagnostics.frameLastStepPlayerVelocity = Vector();
+    m_diagnostics.frameLastStepPlayerFlags = 0;
+    m_diagnostics.frameLastStepGroundEntity = -1;
+    m_diagnostics.frameLastHorizontalTrace = {};
+    m_diagnostics.frameLastOtherTrace = {};
+}
+
 bool CPortalCollisionBridge::TryBypassPlayerBBoxTrace(const PortalTraceRequest& request, const CPortalTransitionSimulator& simulator)
 {
+    const PortalTraceClass traceClass = ClassifyTrace(request);
+    CountFrameTrace(traceClass);
     ++m_diagnostics.totalRequests;
     m_diagnostics.lastStart = request.start;
     m_diagnostics.lastEnd = request.end;
@@ -56,27 +94,41 @@ bool CPortalCollisionBridge::TryBypassPlayerBBoxTrace(const PortalTraceRequest& 
     m_diagnostics.lastOriginalAllSolid = request.trace ? request.trace->allsolid : false;
     m_diagnostics.lastPhase = simulator.GetContext().phase;
     m_diagnostics.lastEntrySide = simulator.GetContext().entrySide;
+    m_diagnostics.lastClass = traceClass;
     m_diagnostics.lastAccepted = false;
 
     if (!IsTraceEligible(request))
+    {
+        RecordFrameTraceSnapshot(request, simulator, traceClass, false, false, nullptr);
         return false;
+    }
     ++m_diagnostics.eligibleRequests;
 
     const PortalTransitionContext& context = simulator.GetContext();
     if (!simulator.IsInCollisionBridgePhase() || context.entrySide == PortalTransitionSide::None)
     {
         ++m_diagnostics.rejectedByPhase;
+        ++m_diagnostics.frameRejectedByPhase;
+        RecordFrameTraceSnapshot(request, simulator, traceClass, true, false, nullptr);
+        RecordFrameDecision(traceClass, false);
         return false;
     }
 
     if (!I::EngineClient || !I::EngineClient->IsInGame())
+    {
+        RecordFrameTraceSnapshot(request, simulator, traceClass, true, false, nullptr);
+        RecordFrameDecision(traceClass, false);
         return false;
+    }
 
     PortalInfo_t* entry = nullptr;
     PortalInfo_t* exit = nullptr;
     if (!TryGetPortalPair(context.entrySide, entry, exit) || !entry || !exit)
     {
         ++m_diagnostics.rejectedByPortalPair;
+        ++m_diagnostics.frameRejectedByPair;
+        RecordFrameTraceSnapshot(request, simulator, traceClass, true, false, nullptr);
+        RecordFrameDecision(traceClass, false);
         return false;
     }
 
@@ -85,6 +137,13 @@ bool CPortalCollisionBridge::TryBypassPlayerBBoxTrace(const PortalTraceRequest& 
     if (!IsTraceThroughActiveAperture(request, *entry, context, &intersection))
     {
         ++m_diagnostics.rejectedByAperture;
+        ++m_diagnostics.frameRejectedByAperture;
+        m_diagnostics.lastRejectedClass = traceClass;
+        if (traceClass == PortalTraceClass::VerticalGroundProbe)
+            ++m_diagnostics.verticalRejected;
+        if (traceClass == PortalTraceClass::VerticalGroundProbe || traceClass == PortalTraceClass::StepUpDownProbe)
+            ++m_diagnostics.groundLikeRejected;
+
         const float startDistance = SignedDistanceToPortal(*entry, request.start);
         const float endDistance = SignedDistanceToPortal(*entry, request.end);
         m_diagnostics.lastRejectedApertureStartDistance = startDistance;
@@ -95,7 +154,8 @@ bool CPortalCollisionBridge::TryBypassPlayerBBoxTrace(const PortalTraceRequest& 
 
         if (closeToPortal && ShouldLog(currentTime, m_nextTraceLogTime, 0.25f))
         {
-            U::LogDebug("[PortalBridge] rejected side=%s phase=%s startD=%.2f endD=%.2f ctxDepth=%.2f inside=%s moving=%s fraction=%.3f startsolid=%s allsolid=%s.\n",
+            U::LogDebug("[PortalBridge] rejected class=%s side=%s phase=%s startD=%.2f endD=%.2f ctxDepth=%.2f inside=%s moving=%s fraction=%.3f startsolid=%s allsolid=%s.\n",
+                TraceClassName(traceClass),
                 SideName(context.entrySide),
                 PhaseName(context.phase),
                 startDistance,
@@ -107,6 +167,9 @@ bool CPortalCollisionBridge::TryBypassPlayerBBoxTrace(const PortalTraceRequest& 
                 BoolText(request.trace ? request.trace->startsolid : false),
                 BoolText(request.trace ? request.trace->allsolid : false));
         }
+        RecordStepTrace(request, simulator, traceClass, false, entry);
+        RecordFrameTraceSnapshot(request, simulator, traceClass, true, false, entry);
+        RecordFrameDecision(traceClass, false);
         return false;
     }
 
@@ -114,9 +177,21 @@ bool CPortalCollisionBridge::TryBypassPlayerBBoxTrace(const PortalTraceRequest& 
     const float originalFraction = trace->fraction;
     const bool originalStartSolid = trace->startsolid;
     const bool originalAllSolid = trace->allsolid;
+    RecordStepTrace(request, simulator, traceClass, true, entry);
+    RecordFrameTraceSnapshot(request, simulator, traceClass, true, true, entry);
+    RecordFrameDecision(traceClass, true);
     ClearTraceHit(request);
     ++m_diagnostics.acceptedBypasses;
+    ++m_diagnostics.frameAccepted;
+    if (traceClass == PortalTraceClass::HorizontalMove)
+        ++m_diagnostics.horizontalAccepted;
+    if (traceClass == PortalTraceClass::ZeroLengthPositionTest)
+        ++m_diagnostics.zeroLengthAccepted;
+    if (originalStartSolid || originalAllSolid)
+        ++m_diagnostics.startSolidAccepted;
+
     m_diagnostics.lastAccepted = true;
+    m_diagnostics.lastAcceptedClass = traceClass;
     m_diagnostics.lastAcceptedStart = request.start;
     m_diagnostics.lastAcceptedEnd = request.end;
     m_diagnostics.lastAcceptedHit = intersection;
@@ -128,7 +203,8 @@ bool CPortalCollisionBridge::TryBypassPlayerBBoxTrace(const PortalTraceRequest& 
 
     if (ShouldLog(currentTime, m_nextTraceLogTime, 0.20f))
     {
-        U::LogInfo("[PortalBridge] bypass accepted side=%s phase=%s start=(%.1f %.1f %.1f) end=(%.1f %.1f %.1f) hit=(%.1f %.1f %.1f) ctxDepth=%.2f fraction=%.3f->%.3f startsolid=%s->false allsolid=%s->false.\n",
+        U::LogInfo("[PortalBridge] bypass accepted class=%s side=%s phase=%s start=(%.1f %.1f %.1f) end=(%.1f %.1f %.1f) hit=(%.1f %.1f %.1f) ctxDepth=%.2f fraction=%.3f->%.3f startsolid=%s->false allsolid=%s->false.\n",
+            TraceClassName(traceClass),
             SideName(context.entrySide),
             PhaseName(context.phase),
             request.start.x, request.start.y, request.start.z,
@@ -141,6 +217,104 @@ bool CPortalCollisionBridge::TryBypassPlayerBBoxTrace(const PortalTraceRequest& 
             BoolText(originalAllSolid));
     }
     return true;
+}
+
+void CPortalCollisionBridge::CountFrameTrace(PortalTraceClass traceClass)
+{
+    ++m_diagnostics.frameTotal;
+    switch (traceClass)
+    {
+    case PortalTraceClass::HorizontalMove:
+        ++m_diagnostics.frameHorizontal;
+        break;
+    case PortalTraceClass::ZeroLengthPositionTest:
+        ++m_diagnostics.frameZeroLength;
+        break;
+    case PortalTraceClass::VerticalGroundProbe:
+        ++m_diagnostics.frameVerticalGround;
+        break;
+    case PortalTraceClass::StepUpDownProbe:
+        ++m_diagnostics.frameStepUpDown;
+        break;
+    case PortalTraceClass::Other:
+    default:
+        ++m_diagnostics.frameOther;
+        break;
+    }
+}
+
+void CPortalCollisionBridge::RecordFrameDecision(PortalTraceClass traceClass, bool accepted)
+{
+    if (traceClass != PortalTraceClass::StepUpDownProbe)
+        return;
+
+    if (accepted)
+        ++m_diagnostics.frameStepAccepted;
+    else
+        ++m_diagnostics.frameStepRejected;
+}
+
+void CPortalCollisionBridge::RecordStepTrace(const PortalTraceRequest& request, const CPortalTransitionSimulator& simulator, PortalTraceClass traceClass, bool accepted, const PortalInfo_t* entry)
+{
+    if (traceClass != PortalTraceClass::StepUpDownProbe)
+        return;
+
+    trace_t* trace = request.trace;
+    const PortalTransitionContext& context = simulator.GetContext();
+    C_TerrorPlayer* player = GetLocalPlayer();
+
+    m_diagnostics.frameHasStepTrace = true;
+    m_diagnostics.frameLastStepAccepted = accepted;
+    m_diagnostics.frameLastStepStart = request.start;
+    m_diagnostics.frameLastStepEnd = request.end;
+    m_diagnostics.frameLastStepEndPos = trace ? trace->endpos : Vector();
+    m_diagnostics.frameLastStepPlaneNormal = trace ? trace->plane.normal : Vector();
+    m_diagnostics.frameLastStepFraction = trace ? trace->fraction : 0.0f;
+    m_diagnostics.frameLastStepStartSolid = trace ? trace->startsolid : false;
+    m_diagnostics.frameLastStepAllSolid = trace ? trace->allsolid : false;
+    m_diagnostics.frameLastStepStartDistance = entry ? SignedDistanceToPortal(*entry, request.start) : 0.0f;
+    m_diagnostics.frameLastStepEndDistance = entry ? SignedDistanceToPortal(*entry, request.end) : 0.0f;
+    m_diagnostics.frameLastStepPhase = context.phase;
+    m_diagnostics.frameLastStepEntrySide = context.entrySide;
+    m_diagnostics.frameLastStepPlayerOrigin = player ? player->m_vecOrigin() : Vector();
+    m_diagnostics.frameLastStepPlayerVelocity = player ? player->m_vecVelocity() : Vector();
+    m_diagnostics.frameLastStepPlayerFlags = player ? player->m_fFlags() : 0;
+    m_diagnostics.frameLastStepGroundEntity = player ? player->m_hGroundEntity().ToInt() : -1;
+}
+
+void CPortalCollisionBridge::RecordFrameTraceSnapshot(const PortalTraceRequest& request, const CPortalTransitionSimulator& simulator, PortalTraceClass traceClass, bool eligible, bool accepted, const PortalInfo_t* entry)
+{
+    if (traceClass != PortalTraceClass::HorizontalMove && traceClass != PortalTraceClass::Other)
+        return;
+
+    trace_t* trace = request.trace;
+    const PortalTransitionContext& context = simulator.GetContext();
+    C_TerrorPlayer* player = GetLocalPlayer();
+
+    PortalFrameTraceSnapshot snapshot;
+    snapshot.hasTrace = true;
+    snapshot.eligible = eligible;
+    snapshot.accepted = accepted;
+    snapshot.start = request.start;
+    snapshot.end = request.end;
+    snapshot.endPos = trace ? trace->endpos : Vector();
+    snapshot.planeNormal = trace ? trace->plane.normal : Vector();
+    snapshot.fraction = trace ? trace->fraction : 0.0f;
+    snapshot.startSolid = trace ? trace->startsolid : false;
+    snapshot.allSolid = trace ? trace->allsolid : false;
+    snapshot.startDistance = entry ? SignedDistanceToPortal(*entry, request.start) : 0.0f;
+    snapshot.endDistance = entry ? SignedDistanceToPortal(*entry, request.end) : 0.0f;
+    snapshot.phase = context.phase;
+    snapshot.entrySide = context.entrySide;
+    snapshot.playerOrigin = player ? player->m_vecOrigin() : Vector();
+    snapshot.playerVelocity = player ? player->m_vecVelocity() : Vector();
+    snapshot.playerFlags = player ? player->m_fFlags() : 0;
+    snapshot.groundEntity = player ? player->m_hGroundEntity().ToInt() : -1;
+
+    if (traceClass == PortalTraceClass::HorizontalMove)
+        m_diagnostics.frameLastHorizontalTrace = snapshot;
+    else
+        m_diagnostics.frameLastOtherTrace = snapshot;
 }
 
 bool CPortalCollisionBridge::TryGetPortalPair(PortalTransitionSide entrySide, PortalInfo_t*& entry, PortalInfo_t*& exit) const
@@ -182,6 +356,27 @@ bool CPortalCollisionBridge::IsTraceEligible(const PortalTraceRequest& request) 
     // TracePlayerBBox(pos, pos). Portal aperture positions must be allowed there
     // too, otherwise movement traces succeed but the final origin write is rejected.
     return true;
+}
+
+PortalTraceClass CPortalCollisionBridge::ClassifyTrace(const PortalTraceRequest& request) const
+{
+    const Vector delta = request.end - request.start;
+    const float horizontalSqr = delta.x * delta.x + delta.y * delta.y;
+    const float verticalAbs = std::fabs(delta.z);
+
+    if (horizontalSqr < 0.0001f && verticalAbs < 0.0001f)
+        return PortalTraceClass::ZeroLengthPositionTest;
+
+    if (horizontalSqr < 0.25f && verticalAbs > 0.5f && delta.z < 0.0f && verticalAbs <= 4.0f)
+        return PortalTraceClass::VerticalGroundProbe;
+
+    if (horizontalSqr < 16.0f && verticalAbs > kMaxVerticalTraceZ)
+        return PortalTraceClass::StepUpDownProbe;
+
+    if (horizontalSqr >= 0.25f && verticalAbs <= kMaxVerticalTraceZ)
+        return PortalTraceClass::HorizontalMove;
+
+    return PortalTraceClass::Other;
 }
 
 bool CPortalCollisionBridge::IsTraceThroughActiveAperture(const PortalTraceRequest& request, const PortalInfo_t& entry, const PortalTransitionContext& context, Vector* intersection) const
@@ -385,6 +580,20 @@ const char* CPortalCollisionBridge::PhaseName(PortalTransitionPhase phase) const
     case PortalTransitionPhase::ExitingPortal: return "ExitingPortal";
     case PortalTransitionPhase::Cooldown: return "Cooldown";
     default: return "Unknown";
+    }
+}
+
+const char* CPortalCollisionBridge::TraceClassName(PortalTraceClass traceClass) const
+{
+    switch (traceClass)
+    {
+    case PortalTraceClass::HorizontalMove: return "HorizontalMove";
+    case PortalTraceClass::ZeroLengthPositionTest: return "ZeroLengthPositionTest";
+    case PortalTraceClass::VerticalGroundProbe: return "VerticalGroundProbe";
+    case PortalTraceClass::StepUpDownProbe: return "StepUpDownProbe";
+    case PortalTraceClass::Other:
+    default:
+        return "Other";
     }
 }
 

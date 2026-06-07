@@ -57,4 +57,8 @@ public:
 	virtual void			SetupMovementBounds(CMoveData* pMove) = 0;
 };
 
-namespace I { inline IGameMovement* GameMovement = nullptr; }
+namespace I
+{
+	inline IGameMovement* GameMovement = nullptr;
+	inline IGameMovement* ServerGameMovement = nullptr;
+}

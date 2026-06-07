@@ -15,10 +15,21 @@ void __fastcall ClientPrediction::SetupMove::Detour(void* ecx, void* edx, C_Base
 
 void __fastcall ClientPrediction::FinishMove::Detour(void* ecx, void* edx, C_BasePlayer* player, CUserCmd* ucmd, CMoveData* move)
 {
+	const PortalMoveFrameDiagnostics before = G::G_L4D2Portal.m_PortalStage1Probe.CaptureMoveFrame(
+		player,
+		ucmd,
+		move,
+		G::G_L4D2Portal.m_PortalTransitionSimulator);
 	Table.Original<FN>(Index)(ecx, edx, player, ucmd, move);
-	(void)player;
-	(void)ucmd;
-	(void)move;
+	const PortalMoveFrameDiagnostics after = G::G_L4D2Portal.m_PortalStage1Probe.CaptureMoveFrame(
+		player,
+		ucmd,
+		move,
+		G::G_L4D2Portal.m_PortalTransitionSimulator);
+	G::G_L4D2Portal.m_PortalStage1Probe.LogFinishMoveDiagnostics(before, after);
+	G::G_L4D2Portal.m_PortalStage1Probe.LogFrameTraceDiagnostics(
+		G::G_L4D2Portal.m_PortalCollisionBridge,
+		after);
 }
 
 void ClientPrediction::Init()

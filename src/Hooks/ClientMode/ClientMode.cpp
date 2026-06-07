@@ -25,6 +25,7 @@ bool __fastcall ClientMode::CreateMove::Detour(void* ecx, void* edx, float input
     }
 
     G::G_L4D2Portal.m_PortalTransitionSimulator.Update(cmd);
+    G::G_L4D2Portal.m_PortalCollisionBridge.BeginFrame(cmd->command_number);
     G::G_L4D2Portal.m_PortalStage1Probe.Update(
         cmd,
         G::G_L4D2Portal.m_PortalTransitionSimulator,
