@@ -105,6 +105,27 @@ bool InjectDLL(DWORD processId, const char* dllPath)
     return true;
 }
 
+HANDLE OpenProcessWaitHandle(DWORD processId)
+{
+    HANDLE hProcess = OpenProcess(SYNCHRONIZE, FALSE, processId);
+    if (!hProcess)
+    {
+        std::cerr << "Failed to open process wait handle. Error: " << GetLastError() << std::endl;
+    }
+
+    return hProcess;
+}
+
+void WaitForGameExit(HANDLE hProcess)
+{
+    if (!hProcess)
+        return;
+
+    std::cout << "\nLauncher is monitoring L4D2. It will exit when the game closes." << std::endl;
+    WaitForSingleObject(hProcess, INFINITE);
+    CloseHandle(hProcess);
+}
+
 // 启动游戏进程
 PROCESS_INFORMATION LaunchGame(const char* gameExe, const char* commandLine)
 {
@@ -167,13 +188,18 @@ int main(int argc, char* argv[])
     if (existingPid != 0)
     {
         std::cout << "\nL4D2 is already running. Injecting DLL..." << std::endl;
+        HANDLE hGameProcess = OpenProcessWaitHandle(existingPid);
 
         if (InjectDLL(existingPid, dllPath))
         {
             std::cout << "DLL injected successfully!" << std::endl;
+            WaitForGameExit(hGameProcess);
         }
         else
         {
+            if (hGameProcess)
+                CloseHandle(hGameProcess);
+
             std::cerr << "Failed to inject DLL!" << std::endl;
             std::cout << "\nPress any key to exit..." << std::endl;
             getchar();
@@ -207,6 +233,8 @@ int main(int argc, char* argv[])
         if (InjectDLL(pi.dwProcessId, dllPath))
         {
             std::cout << "DLL injected successfully!" << std::endl;
+            CloseHandle(pi.hThread);
+            WaitForGameExit(pi.hProcess);
         }
         else
         {
@@ -217,14 +245,9 @@ int main(int argc, char* argv[])
             getchar();
             return 1;
         }
-
-        CloseHandle(pi.hProcess);
-        CloseHandle(pi.hThread);
     }
 
-    std::cout << "\nDone! You can now close this window." << std::endl;
-    std::cout << "Press any key to exit..." << std::endl;
-    getchar();
+    std::cout << "\nL4D2 closed. Launcher exiting." << std::endl;
 
     return 0;
 }
