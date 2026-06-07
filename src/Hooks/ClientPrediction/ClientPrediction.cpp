@@ -16,7 +16,9 @@ void __fastcall ClientPrediction::SetupMove::Detour(void* ecx, void* edx, C_Base
 void __fastcall ClientPrediction::FinishMove::Detour(void* ecx, void* edx, C_BasePlayer* player, CUserCmd* ucmd, CMoveData* move)
 {
 	Table.Original<FN>(Index)(ecx, edx, player, ucmd, move);
-	G::G_L4D2Portal.m_PortalTransition.OnFinishMove(player, ucmd, move);
+	(void)player;
+	(void)ucmd;
+	(void)move;
 }
 
 void ClientPrediction::Init()

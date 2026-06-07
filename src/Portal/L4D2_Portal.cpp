@@ -304,12 +304,19 @@ void L4D2_Portal::PortalInit()
 #endif
     m_pWeaponPortalgun = std::make_unique<CWeaponPortalgun>();
     m_PortalTransition.Reset();
+    m_PortalTransitionSimulator.Reset();
+    m_PortalCollisionBridge.Reset();
+    m_PortalStage1Probe.Reset();
+    U::LogWarning("[PortalStage1Probe] installed. Use console command portal_stage1_probe for an immediate stage-1 interface dump.\n");
 }
 
 // 清理函数，在不需要传送门时调用
 void L4D2_Portal::PortalShutdown()
 {
     m_PortalTransition.Reset();
+    m_PortalTransitionSimulator.Reset();
+    m_PortalCollisionBridge.Reset();
+    m_PortalStage1Probe.Reset();
 
     // 1. 释放全局材质引用
     if (g_pPortalMaterial)
@@ -1051,6 +1058,9 @@ void L4D2_Portal::StartPortalOpenAnimation(PortalInfo_t* pPortal, const Vector& 
 void L4D2_Portal::StartPortalCloseAnimation(PortalInfo_t* pPortal)
 {
     m_PortalTransition.Reset();
+    m_PortalTransitionSimulator.Reset();
+    m_PortalCollisionBridge.Reset();
+    m_PortalStage1Probe.Reset();
 
     // 跳过空指针、未激活的、已经缩放到0的、或正在关闭中的传送门
     if (!pPortal || !pPortal->bIsActive || pPortal->currentScale <= 0.0f || pPortal->animState == PORTAL_ANIM_CLOSING) {

@@ -69,6 +69,9 @@ struct PortalInfo_t
 };
 
 #include "PortalTransition.h"
+#include "PortalTransitionSimulator.h"
+#include "PortalCollisionBridge.h"
+#include "PortalStage1Probe.h"
 
 // 缩放曲线计算函数（纯函数，无副作用）
 // 输入 t ∈ [0,1]，输出 ∈ [0,1]
@@ -219,6 +222,9 @@ public:
 
     std::unique_ptr<CWeaponPortalgun> m_pWeaponPortalgun;
     CPortalTransition m_PortalTransition;
+    CPortalTransitionSimulator m_PortalTransitionSimulator;
+    CPortalCollisionBridge m_PortalCollisionBridge;
+    CPortalStage1Probe m_PortalStage1Probe;
 
     // 传送门操作冷却时间
     float m_flPortalCooldown = 0.5f;           // 可调节的冷却时间

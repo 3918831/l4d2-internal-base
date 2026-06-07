@@ -15,6 +15,16 @@ void __fastcall CCSGameMovement::TracePlayerBBox::Detour(void* ecx, void* edx, c
 
 	// 调用原始函数
 	Func.Original<FN>()(ecx, edx, start, end, fMask, collisionGroup, pm);
+
+	PortalTraceRequest request;
+	request.start = start;
+	request.end = end;
+	request.mask = fMask;
+	request.collisionGroup = collisionGroup;
+	request.trace = pm;
+	G::G_L4D2Portal.m_PortalCollisionBridge.TryBypassPlayerBBoxTrace(
+		request,
+		G::G_L4D2Portal.m_PortalTransitionSimulator);
 	//pm->fraction = 1.0f;  // 设置为1.0表示射线到达终点，没有发生碰撞
 	//pm->allsolid = true;     // 不是完全固体
 	//pm->startsolid = true;   // 起始点不在固体中
@@ -27,10 +37,11 @@ void __fastcall CCSGameMovement::TracePlayerBBox::Detour(void* ecx, void* edx, c
 	//// 清除命中实体信息
 	//pm->m_pEnt = NULL;
 
-	if (pm)
-	{
-		G::G_L4D2Portal.m_PortalTransition.ShouldBypassPlayerBBoxTrace(start, end, fMask, collisionGroup, pm);
-	}
+	(void)start;
+	(void)end;
+	(void)fMask;
+	(void)collisionGroup;
+	(void)pm;
 	return;
 }
 

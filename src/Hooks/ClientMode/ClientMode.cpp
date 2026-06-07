@@ -24,7 +24,11 @@ bool __fastcall ClientMode::CreateMove::Detour(void* ecx, void* edx, float input
         return result;
     }
 
-    G::G_L4D2Portal.m_PortalTransition.Update(cmd);
+    G::G_L4D2Portal.m_PortalTransitionSimulator.Update(cmd);
+    G::G_L4D2Portal.m_PortalStage1Probe.Update(
+        cmd,
+        G::G_L4D2Portal.m_PortalTransitionSimulator,
+        G::G_L4D2Portal.m_PortalCollisionBridge);
 
     // === Weapon check - only execute portal logic when holding Magnum ===
     C_TerrorPlayer* pLocal = I::ClientEntityList->GetClientEntity(I::EngineClient->GetLocalPlayer())->As<C_TerrorPlayer*>();

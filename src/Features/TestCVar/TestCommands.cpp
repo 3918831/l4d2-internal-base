@@ -1,5 +1,6 @@
 #include "TestCVar.h"
 #include "../../SDK/SDK.h"
+#include "../../Portal/L4D2_Portal.h"
 
 // Test console args using CON_COMMAND macro
 // This args prints all test cvar values to the console
@@ -78,4 +79,11 @@ CON_COMMAND(test_toggle, "Toggle test_var_bool between 0 and 1")
 	bool current = F::TestCVar::test_var_bool->GetBool();
 	F::TestCVar::test_var_bool->SetValue(current ? 0 : 1);
 	I::Cvar->ConsolePrintf("test_var_bool toggled: %d -> %d\n", current ? 1 : 0, F::TestCVar::test_var_bool->GetInt());
+}
+
+CON_COMMAND(portal_stage1_probe, "Dump Portal stage-1 traversal interface diagnostics")
+{
+	G::G_L4D2Portal.m_PortalStage1Probe.DumpNow(
+		G::G_L4D2Portal.m_PortalTransitionSimulator,
+		G::G_L4D2Portal.m_PortalCollisionBridge);
 }

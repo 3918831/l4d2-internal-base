@@ -182,7 +182,10 @@
     <ClCompile Include="Hooks\WndProc\WndProc.cpp" />
     <ClCompile Include="Portal\client\weapon_portalgun.cpp" />
     <ClCompile Include="Portal\L4D2_Portal.cpp" />
+    <ClCompile Include="Portal\PortalCollisionBridge.cpp" />
+    <ClCompile Include="Portal\PortalStage1Probe.cpp" />
     <ClCompile Include="Portal\PortalTransition.cpp" />
+    <ClCompile Include="Portal\PortalTransitionSimulator.cpp" />
     <ClCompile Include="Portal\PortalTransform.cpp" />
     <ClCompile Include="Portal\server\prop_portal.cpp" />
     <ClCompile Include="SDK\DrawManager\DrawManager.cpp" />
@@ -235,7 +238,10 @@
     <ClInclude Include="Portal\client\weapon_portalgun.h" />
     <ClInclude Include="Portal\CustomRender.h" />
     <ClInclude Include="Portal\L4D2_Portal.h" />
+    <ClInclude Include="Portal\PortalCollisionBridge.h" />
+    <ClInclude Include="Portal\PortalStage1Probe.h" />
     <ClInclude Include="Portal\PortalTransition.h" />
+    <ClInclude Include="Portal\PortalTransitionSimulator.h" />
     <ClInclude Include="Portal\PortalTransform.h" />
     <ClInclude Include="Portal\public\worldsize.h" />
     <ClInclude Include="Portal\server\portal_shareddefs.h" />
