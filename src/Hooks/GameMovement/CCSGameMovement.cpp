@@ -86,6 +86,63 @@ namespace
 
 	thread_local MovementStage g_CurrentMovementStage = MovementStage::None;
 	thread_local const char* g_CurrentMovementDomain = "none";
+	void* g_ServerStayOnGroundCandidateA = nullptr;
+
+	bool IsReadableAddressRange(const void* address, size_t size)
+	{
+		if (!address || size == 0)
+			return false;
+
+		const uintptr_t start = reinterpret_cast<uintptr_t>(address);
+		const uintptr_t end = start + size - 1u;
+		MEMORY_BASIC_INFORMATION info = {};
+		if (!VirtualQuery(reinterpret_cast<const void*>(start), &info, sizeof(info)))
+			return false;
+
+		const bool firstReadable = info.State == MEM_COMMIT
+			&& !(info.Protect & PAGE_NOACCESS)
+			&& !(info.Protect & PAGE_GUARD);
+		if (!firstReadable)
+			return false;
+
+		if (end < reinterpret_cast<uintptr_t>(info.BaseAddress) + info.RegionSize)
+			return true;
+
+		MEMORY_BASIC_INFORMATION endInfo = {};
+		if (!VirtualQuery(reinterpret_cast<const void*>(end), &endInfo, sizeof(endInfo)))
+			return false;
+
+		return endInfo.State == MEM_COMMIT
+			&& !(endInfo.Protect & PAGE_NOACCESS)
+			&& !(endInfo.Protect & PAGE_GUARD);
+	}
+
+	bool LooksLikeFunctionPrologue(const unsigned char* bytes)
+	{
+		return (bytes[0] == 0x55 && bytes[1] == 0x8B && bytes[2] == 0xEC)
+			|| (bytes[0] == 0x55 && bytes[1] == 0x89 && bytes[2] == 0xE5)
+			|| (bytes[0] == 0x53 && bytes[1] == 0x8B && bytes[2] == 0xDC);
+	}
+
+	void* FindNearbyFunctionPrologue(const void* address, size_t maxBack)
+	{
+		if (!address)
+			return nullptr;
+
+		const uintptr_t start = reinterpret_cast<uintptr_t>(address);
+		for (size_t back = 0; back <= maxBack; ++back)
+		{
+			const uintptr_t probe = start - back;
+			if (!IsReadableAddressRange(reinterpret_cast<const void*>(probe), 8u))
+				continue;
+
+			const unsigned char* bytes = reinterpret_cast<const unsigned char*>(probe);
+			if (LooksLikeFunctionPrologue(bytes))
+				return reinterpret_cast<void*>(probe);
+		}
+
+		return nullptr;
+	}
 
 	class MovementStageScope
 	{
@@ -143,12 +200,13 @@ namespace
 
 	bool ShouldLogServerMovement()
 	{
-		return G::G_L4D2Portal.m_PortalTransitionSimulator.IsInCollisionBridgePhase();
+		return false;
 	}
 
 	bool ShouldLogMovementHeartbeat(uint32_t counter)
 	{
-		return counter <= 8u || ((counter % 300u) == 0u);
+		(void)counter;
+		return false;
 	}
 
 	void LogTryPlayerMoveEnter(const char* domain, uint32_t heartbeat, void* gameMovement, Vector* pFirstDest, trace_t* pFirstTrace, CMoveData* move, bool detailed)
@@ -171,13 +229,15 @@ namespace
 		LogServerMoveData(domain, gameMovement, move);
 	}
 
-	void LogTryPlayerMoveExit(const char* domain, int result, void* gameMovement, Vector* pFirstDest, trace_t* pFirstTrace, CMoveData* move, bool detailed)
+	void LogTryPlayerMoveExit(const char* domain, uint32_t heartbeat, int result, void* gameMovement, Vector* pFirstDest, trace_t* pFirstTrace, CMoveData* move, bool detailed)
 	{
-		if (!detailed)
+		if (!detailed && !ShouldLogMovementHeartbeat(heartbeat))
 			return;
 
-		U::LogWarning("[PortalBridge][%s][TryPlayerMove][Exit] result=%d firstDest=%p firstTrace=%p traceEnd=(%.1f %.1f %.1f) tracePlane=(%.2f %.2f %.2f) traceFrac=%.3f startsolid=%s allsolid=%s.\n",
+		U::LogWarning("[PortalBridge][%s][TryPlayerMove][Exit] heartbeat=%u detailed=%s result=%d firstDest=%p firstTrace=%p traceEnd=(%.1f %.1f %.1f) tracePlane=(%.2f %.2f %.2f) traceFrac=%.3f startsolid=%s allsolid=%s.\n",
 			domain,
+			heartbeat,
+			BoolText(detailed),
 			result,
 			pFirstDest,
 			pFirstTrace,
@@ -276,16 +336,91 @@ namespace
 			BoolText(move->m_bGameCodeMovedPlayer));
 	}
 
+	const PortalInfo_t* GetPortalInfoForSide(PortalTransitionSide side)
+	{
+		switch (side)
+		{
+		case PortalTransitionSide::Blue:
+			return &G::G_L4D2Portal.g_BluePortal;
+		case PortalTransitionSide::Orange:
+			return &G::G_L4D2Portal.g_OrangePortal;
+		case PortalTransitionSide::None:
+		default:
+			return nullptr;
+		}
+	}
+
+	bool TryApplyPortalWalkMoveNudge(const char* domain, uint32_t heartbeat, void* gameMovement, bool detailed)
+	{
+		const PortalTransitionContext& context = G::G_L4D2Portal.m_PortalTransitionSimulator.GetContext();
+		if (!G::G_L4D2Portal.m_PortalTransitionSimulator.IsInCollisionBridgePhase()
+			|| context.phase != PortalTransitionPhase::IntersectingPortal
+			|| !context.insideAperture
+			|| !context.movingIntoPortal
+			|| context.entrySide == PortalTransitionSide::None)
+		{
+			return false;
+		}
+
+		const PortalCollisionBridgeDiagnostics& diag = G::G_L4D2Portal.m_PortalCollisionBridge.GetDiagnostics();
+		const PortalFrameTraceSnapshot& horizontalTrace = diag.frameLastHorizontalTrace;
+		if (!horizontalTrace.hasTrace || !horizontalTrace.accepted)
+			return false;
+
+		const PortalInfo_t* entry = GetPortalInfoForSide(context.entrySide);
+		if (!entry || !entry->bIsActive || entry->normal.LenghtSqr() < 0.25f)
+			return false;
+
+		CMoveData* move = TryGetMoveDataFromGameMovement(gameMovement);
+		if (!move)
+			return false;
+
+		const Vector originBefore = move->GetAbsOrigin();
+		const Vector velocityBefore = move->m_vecVelocity;
+		const float currentDepth = (originBefore - entry->origin).Dot(entry->normal);
+		if (currentDepth < -8.0f || currentDepth > 32.0f)
+			return false;
+
+		const float nudgeDistance = currentDepth > 8.0f ? 6.0f : 3.0f;
+		const Vector originAfter = originBefore - (entry->normal * nudgeDistance);
+		Vector velocityAfter = velocityBefore;
+		const float normalVelocity = velocityAfter.Dot(entry->normal);
+		if (normalVelocity > -80.0f)
+			velocityAfter = velocityAfter - (entry->normal * (normalVelocity + 80.0f));
+
+		move->SetAbsOrigin(originAfter);
+		move->m_vecVelocity = velocityAfter;
+
+		{
+			U::LogWarning("[PortalBridge][WalkMoveNudge][%s] heartbeat=%u cmd=%d phase=%s entry=%s ctxDepth=%.2f curDepth=%.2f traceEnd=(%.1f %.1f %.1f) origin=(%.1f %.1f %.1f)->(%.1f %.1f %.1f) vel=(%.1f %.1f %.1f)->(%.1f %.1f %.1f) normal=(%.2f %.2f %.2f).\n",
+				domain,
+				heartbeat,
+				diag.frameCommandNumber,
+				PortalPhaseName(context.phase),
+				PortalSideName(context.entrySide),
+				context.signedDepth,
+				currentDepth,
+				horizontalTrace.end.x, horizontalTrace.end.y, horizontalTrace.end.z,
+				originBefore.x, originBefore.y, originBefore.z,
+				originAfter.x, originAfter.y, originAfter.z,
+				velocityBefore.x, velocityBefore.y, velocityBefore.z,
+				velocityAfter.x, velocityAfter.y, velocityAfter.z,
+				entry->normal.x, entry->normal.y, entry->normal.z);
+		}
+
+		return true;
+	}
 	void LogCategorizeSnapshot(const char* domain, const char* point, uint32_t heartbeat, void* gameMovement, bool detailed)
 	{
 		if (!detailed && !ShouldLogMovementHeartbeat(heartbeat))
 			return;
 
 		const PortalCollisionBridgeDiagnostics& diag = G::G_L4D2Portal.m_PortalCollisionBridge.GetDiagnostics();
+		const PortalTransitionContext& context = G::G_L4D2Portal.m_PortalTransitionSimulator.GetContext();
 		CMoveData* move = TryGetMoveDataFromGameMovement(gameMovement);
 		if (!move)
 		{
-			U::LogWarning("[PortalBridge][PositionProbe][%s][CategorizePosition][%s] heartbeat=%u detailed=%s cmd=%d phase=%s entry=%s gm=%p mv=null.\n",
+			U::LogWarning("[PortalBridge][PositionProbe][%s][CategorizePosition][%s] heartbeat=%u detailed=%s cmd=%d phase=%s entry=%s ctxDepth=%.2f inside=%s moving=%s gm=%p mv=null.\n",
 				domain,
 				point,
 				heartbeat,
@@ -293,13 +428,16 @@ namespace
 				diag.frameCommandNumber,
 				PortalPhaseName(diag.lastPhase),
 				PortalSideName(diag.lastEntrySide),
+				context.signedDepth,
+				BoolText(context.insideAperture),
+				BoolText(context.movingIntoPortal),
 				gameMovement);
 			return;
 		}
 
-		const Vector& origin = move->GetAbsOrigin();
-		const Vector& velocity = move->m_vecVelocity;
-		U::LogWarning("[PortalBridge][PositionProbe][%s][CategorizePosition][%s] heartbeat=%u detailed=%s cmd=%d phase=%s entry=%s bridge=%s gm=%p mv=%p origin=(%.1f %.1f %.1f) vel=(%.1f %.1f %.1f) step=%.2f gameMoved=%s.\n",
+		const Vector& moveOrigin = move->GetAbsOrigin();
+		const Vector& moveVelocity = move->m_vecVelocity;
+		U::LogWarning("[PortalBridge][PositionProbe][%s][CategorizePosition][%s] heartbeat=%u detailed=%s cmd=%d phase=%s entry=%s bridge=%s ctxDepth=%.2f inside=%s moving=%s gm=%p mv=%p moveOrigin=(%.1f %.1f %.1f) moveVel=(%.1f %.1f %.1f) step=%.2f gameMoved=%s.\n",
 			domain,
 			point,
 			heartbeat,
@@ -308,10 +446,13 @@ namespace
 			PortalPhaseName(diag.lastPhase),
 			PortalSideName(diag.lastEntrySide),
 			BoolText(G::G_L4D2Portal.m_PortalTransitionSimulator.IsInCollisionBridgePhase()),
+			context.signedDepth,
+			BoolText(context.insideAperture),
+			BoolText(context.movingIntoPortal),
 			gameMovement,
 			move,
-			origin.x, origin.y, origin.z,
-			velocity.x, velocity.y, velocity.z,
+			moveOrigin.x, moveOrigin.y, moveOrigin.z,
+			moveVelocity.x, moveVelocity.y, moveVelocity.z,
 			move->m_outStepHeight,
 			BoolText(move->m_bGameCodeMovedPlayer));
 	}
@@ -362,36 +503,11 @@ static void HandleTracePlayerBBox(const char* domain, const void* caller, CCSGam
 	//	start.x, start.y, start.z);
 	//U::LogDebug("[GameMovement] pTrace: %p\n", &pm);
 
-	// 调用原始函数
 	const bool shouldInspectMoveData = G::G_L4D2Portal.m_PortalTransitionSimulator.IsInCollisionBridgePhase();
-	CMoveData* moveBefore = shouldInspectMoveData ? TryGetMoveDataFromGameMovement(ecx) : nullptr;
-	Vector moveOriginBefore{};
-	Vector moveVelocityBefore{};
-	bool gameCodeMovedBefore = false;
-	if (moveBefore)
-	{
-		moveOriginBefore = moveBefore->GetAbsOrigin();
-		moveVelocityBefore = moveBefore->m_vecVelocity;
-		gameCodeMovedBefore = moveBefore->m_bGameCodeMovedPlayer;
-	}
 
 	original(ecx, edx, start, end, fMask, collisionGroup, pm);
 	if (!shouldInspectMoveData)
 		return;
-
-	Vector originalEndPos{};
-	Vector originalPlaneNormal{};
-	float originalFraction = 0.0f;
-	bool originalStartSolid = false;
-	bool originalAllSolid = false;
-	if (pm)
-	{
-		originalEndPos = pm->endpos;
-		originalPlaneNormal = pm->plane.normal;
-		originalFraction = pm->fraction;
-		originalStartSolid = pm->startsolid;
-		originalAllSolid = pm->allsolid;
-	}
 
 	PortalTraceRequest request;
 	request.start = start;
@@ -399,55 +515,9 @@ static void HandleTracePlayerBBox(const char* domain, const void* caller, CCSGam
 	request.mask = fMask;
 	request.collisionGroup = collisionGroup;
 	request.trace = pm;
-	const bool bypassed = G::G_L4D2Portal.m_PortalCollisionBridge.TryBypassPlayerBBoxTrace(
+	(void)G::G_L4D2Portal.m_PortalCollisionBridge.TryBypassPlayerBBoxTrace(
 		request,
 		G::G_L4D2Portal.m_PortalTransitionSimulator);
-	const PortalCollisionBridgeDiagnostics& diag = G::G_L4D2Portal.m_PortalCollisionBridge.GetDiagnostics();
-	if (shouldInspectMoveData
-		&& (diag.lastClass == PortalTraceClass::HorizontalMove
-			|| diag.lastClass == PortalTraceClass::StepUpDownProbe
-			|| diag.lastClass == PortalTraceClass::Other))
-	{
-		CMoveData* moveAfter = TryGetMoveDataFromGameMovement(ecx);
-		const Vector moveOriginAfter = moveAfter ? moveAfter->GetAbsOrigin() : Vector{};
-		const Vector moveVelocityAfter = moveAfter ? moveAfter->m_vecVelocity : Vector{};
-		const bool gameCodeMovedAfter = moveAfter ? moveAfter->m_bGameCodeMovedPlayer : false;
-		U::LogWarning("[PortalBridge][TracePost] side=%s stage=%s.%s caller=%p srvOff=0x%08X cliOff=0x%08X cmd=%d class=%s bypassed=%s phase=%s entry=%s gm=%p mv=%p start=(%.1f %.1f %.1f) end=(%.1f %.1f %.1f) pm=%p origEnd=(%.1f %.1f %.1f) origPlane=(%.2f %.2f %.2f) origFrac=%.3f origStartSolid=%s origAllSolid=%s postEndPos=(%.1f %.1f %.1f) postPlane=(%.2f %.2f %.2f) postFrac=%.3f postStartSolid=%s postAllSolid=%s moveOrigin=(%.1f %.1f %.1f)->(%.1f %.1f %.1f) moveVel=(%.1f %.1f %.1f)->(%.1f %.1f %.1f) gameMoved=%s->%s frameAccepted=%u frameRejectAperture=%u.\n",
-			domain,
-			g_CurrentMovementDomain,
-			MovementStageName(g_CurrentMovementStage),
-			caller,
-			static_cast<unsigned int>(ModuleRelativeAddress("server.dll", caller)),
-			static_cast<unsigned int>(ModuleRelativeAddress("client.dll", caller)),
-			diag.frameCommandNumber,
-			PortalTraceClassName(diag.lastClass),
-			BoolText(bypassed),
-			PortalPhaseName(diag.lastPhase),
-			PortalSideName(diag.lastEntrySide),
-			ecx,
-			moveAfter,
-			start.x, start.y, start.z,
-			end.x, end.y, end.z,
-			pm,
-			originalEndPos.x, originalEndPos.y, originalEndPos.z,
-			originalPlaneNormal.x, originalPlaneNormal.y, originalPlaneNormal.z,
-			originalFraction,
-			BoolText(originalStartSolid),
-			BoolText(originalAllSolid),
-			pm ? pm->endpos.x : 0.0f, pm ? pm->endpos.y : 0.0f, pm ? pm->endpos.z : 0.0f,
-			pm ? pm->plane.normal.x : 0.0f, pm ? pm->plane.normal.y : 0.0f, pm ? pm->plane.normal.z : 0.0f,
-			pm ? pm->fraction : 0.0f,
-			BoolText(pm ? pm->startsolid : false),
-			BoolText(pm ? pm->allsolid : false),
-			moveOriginBefore.x, moveOriginBefore.y, moveOriginBefore.z,
-			moveOriginAfter.x, moveOriginAfter.y, moveOriginAfter.z,
-			moveVelocityBefore.x, moveVelocityBefore.y, moveVelocityBefore.z,
-			moveVelocityAfter.x, moveVelocityAfter.y, moveVelocityAfter.z,
-			BoolText(gameCodeMovedBefore),
-			BoolText(gameCodeMovedAfter),
-			diag.frameAccepted,
-			diag.frameRejectedByAperture);
-	}
 	//pm->fraction = 1.0f;  // 设置�?.0表示射线到达终点，没有发生碰�?	//pm->allsolid = true;     // 不是完全固体
 	//pm->startsolid = true;   // 起始点不在固体中
 	//pm->contents = 0;         // 无特殊内容标�?	//pm->endpos = end;         // 结束位置设为目标位置
@@ -493,7 +563,7 @@ int __fastcall CCSGameMovement::TryPlayerMove::Detour(void* ecx, void* edx, Vect
 	if (log)
 	{
 		move = TryGetMoveDataFromGameMovement(ecx);
-		LogTryPlayerMoveExit("server", result, ecx, pFirstDest, pFirstTrace, move, log);
+		LogTryPlayerMoveExit("server", heartbeat, result, ecx, pFirstDest, pFirstTrace, move, log);
 	}
 
 	return result;
@@ -529,7 +599,7 @@ int __fastcall CCSGameMovement::ClientTryPlayerMove::Detour(void* ecx, void* edx
 	if (log)
 	{
 		move = TryGetMoveDataFromGameMovement(ecx);
-		LogTryPlayerMoveExit("client", result, ecx, pFirstDest, pFirstTrace, move, log);
+		LogTryPlayerMoveExit("client", heartbeat, result, ecx, pFirstDest, pFirstTrace, move, log);
 	}
 
 	return result;
@@ -571,6 +641,7 @@ void __fastcall CCSGameMovement::WalkMove::Detour(void* ecx, void* edx)
 	++heartbeat;
 	LogMovementStageSnapshot("server", "WalkMove", "Enter", heartbeat, ecx, log);
 	ServerTable.Original<FN>(Index)(ecx, edx);
+	TryApplyPortalWalkMoveNudge("server", heartbeat, ecx, log);
 	LogMovementStageSnapshot("server", "WalkMove", "Exit", heartbeat, ecx, log);
 }
 
@@ -601,6 +672,43 @@ void __fastcall CCSGameMovement::CategorizePosition::Detour(void* ecx, void* edx
 	LogCategorizeSnapshot("server-signature", "Exit", heartbeat, ecx, log);
 }
 
+void __fastcall CCSGameMovement::StayOnGround::Detour(void* ecx, void* edx)
+{
+	const bool log = ShouldLogServerMovement();
+	static uint32_t heartbeat = 0u;
+	++heartbeat;
+	LogMovementStageSnapshot("server-signature", "StayOnGround", "Enter", heartbeat, ecx, log);
+
+	const PortalTransitionContext& context = G::G_L4D2Portal.m_PortalTransitionSimulator.GetContext();
+	const bool skipForPortalBridge = G::G_L4D2Portal.m_PortalTransitionSimulator.IsInCollisionBridgePhase()
+		&& context.insideAperture
+		&& context.entrySide != PortalTransitionSide::None;
+
+	if (skipForPortalBridge)
+	{
+		static uint32_t skippedLogCount = 0u;
+		++skippedLogCount;
+		if (skippedLogCount <= 3u || (skippedLogCount % 120u) == 0u)
+		{
+			U::LogInfo("[PortalBridge][StayOnGround] skipped during portal bridge count=%u heartbeat=%u phase=%s entry=%s ctxDepth=%.2f moving=%s.\n",
+				skippedLogCount,
+				heartbeat,
+				PortalPhaseName(context.phase),
+				PortalSideName(context.entrySide),
+				context.signedDepth,
+				BoolText(context.movingIntoPortal));
+		}
+		return;
+	}
+
+	const FN original = Func.Original<FN>();
+	if (original)
+		original(ecx, edx);
+	else
+		U::LogError("[PortalBridge][PositionProbe][server-signature][StayOnGround] original function is null.\n");
+
+	LogMovementStageSnapshot("server-signature", "StayOnGround", "Exit", heartbeat, ecx, log);
+}
 unsigned long __fastcall CCSGameMovement::TestPlayerPosition::Detour(void* ecx, void* edx, const Vector& pos, int collisionGroup, trace_t* pm)
 {
 	const bool log = ShouldLogServerMovement();
@@ -630,6 +738,7 @@ void __fastcall CCSGameMovement::ClientWalkMove::Detour(void* ecx, void* edx)
 	++heartbeat;
 	LogMovementStageSnapshot("client", "WalkMove", "Enter", heartbeat, ecx, log);
 	ClientTable.Original<FN>(Index)(ecx, edx);
+	TryApplyPortalWalkMoveNudge("client", heartbeat, ecx, log);
 	LogMovementStageSnapshot("client", "WalkMove", "Exit", heartbeat, ecx, log);
 }
 
@@ -698,6 +807,21 @@ void CCSGameMovement::Init()
 
 	void** serverVTable = *reinterpret_cast<void***>(I::ServerGameMovement);
 	void* serverCategorizeVTableEntry = serverVTable ? serverVTable[CategorizePosition::Index] : nullptr;
+	void* serverTryPlayerMoveVTableEntry = serverVTable ? serverVTable[TryPlayerMove::Index] : nullptr;
+	void* serverTryPlayerMoveRejected40Entry = serverVTable ? serverVTable[40u] : nullptr;
+	const HMODULE serverModule = GetModuleHandleA("server.dll");
+	if (serverModule)
+	{
+		g_ServerStayOnGroundCandidateA = reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(serverModule) + 0x000F661Bu);
+	}
+	void* serverStayOnGroundCandidateStart = FindNearbyFunctionPrologue(g_ServerStayOnGroundCandidateA, 0x700u);
+	const bool hookedStayOnGroundCandidate = serverStayOnGroundCandidateStart
+		? StayOnGround::Func.Init(serverStayOnGroundCandidateStart, &StayOnGround::Detour)
+		: false;
+	U::LogInfo("[PortalBridge] server StayOnGround candidate target=%p off=0x%08X hook=%s.\n",
+		serverStayOnGroundCandidateStart,
+		static_cast<unsigned int>(ModuleRelativeAddress("server.dll", serverStayOnGroundCandidateStart)),
+		BoolText(hookedStayOnGroundCandidate));
 	const bool serverCategorizeMatchesVTable = categorizePosition && serverCategorizeVTableEntry == reinterpret_cast<void*>(categorizePosition);
 
 	const bool hookedPlayerMove = ServerTable.Hook(&PlayerMove::Detour, PlayerMove::Index);
@@ -705,9 +829,9 @@ void CCSGameMovement::Init()
 	const bool hookedFullWalkMove = ServerTable.Hook(&FullWalkMove::Detour, FullWalkMove::Index);
 	const bool hookedCategorizePosition = hookedSignatureCategorizePosition;
 	const bool hookedTestPlayerPosition = false;
-	const bool hookedTryPlayerMove = false;
-	const bool hookedStepMove = false;
-	U::LogInfo("[PortalBridge] server GameMovement diagnostics gm=%p TracePlayerBBox=signature-hook(%s) PlayerMove[%u]=%s WalkMove[%u]=%s FullWalkMove[%u]=%s CategorizePosition(void)=%p vtable[%u]=%p match=%s hook=%s TestPlayerPosition[%u]=%s(skipped: signature unverified) TryPlayerMove[%u]=%s(skipped: index/signature unverified) StepMove[%u]=%s(skipped: index/signature unverified).\n",
+	const bool hookedTryPlayerMove = ServerTable.Hook(&TryPlayerMove::Detour, TryPlayerMove::Index);
+	const bool hookedStepMove = ServerTable.Hook(&StepMove::Detour, StepMove::Index);
+	U::LogInfo("[PortalBridge] server GameMovement diagnostics gm=%p TracePlayerBBox=signature-hook(%s) PlayerMove[%u]=%s WalkMove[%u]=%s FullWalkMove[%u]=%s CategorizePosition(void)=%p vtable[%u]=%p match=%s hook=%s TestPlayerPosition[%u]=%s(skipped: signature unverified) TryPlayerMove[%u]=%p hook=%s TryPlayerMoveRejected[40]=%p(skipped: crashed with TryPlayerMove signature) StepMove[%u]=%s(validating server index 64).\n",
 		I::ServerGameMovement,
 		BoolText(hookedSignatureTracePlayerBBox),
 		PlayerMove::Index,
@@ -724,7 +848,9 @@ void CCSGameMovement::Init()
 		TestPlayerPosition::Index,
 		BoolText(hookedTestPlayerPosition),
 		TryPlayerMove::Index,
+		serverTryPlayerMoveVTableEntry,
 		BoolText(hookedTryPlayerMove),
+		serverTryPlayerMoveRejected40Entry,
 		StepMove::Index,
 		BoolText(hookedStepMove));
 
@@ -739,6 +865,7 @@ void CCSGameMovement::Init()
 		U::LogError("[PortalBridge] failed to initialize client GameMovement vtable diagnostics table.\n");
 		return;
 	}
+
 
 
 	const bool hookedClientTracePlayerBBox = ClientTable.Hook(&ClientTracePlayerBBox::Detour, ClientTracePlayerBBox::Index);

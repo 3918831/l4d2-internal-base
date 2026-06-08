@@ -137,6 +137,7 @@ private:
     bool IsTraceEligible(const PortalTraceRequest& request) const;
     PortalTraceClass ClassifyTrace(const PortalTraceRequest& request) const;
     bool IsTraceThroughActiveAperture(const PortalTraceRequest& request, const PortalInfo_t& entry, const PortalTransitionContext& context, Vector* intersection) const;
+    bool IsStepProbeInsideActiveAperture(const PortalTraceRequest& request, const PortalInfo_t& entry, const PortalTransitionContext& context, Vector* intersection) const;
     bool IsMovementTraceTowardPortal(const PortalTraceRequest& request, const PortalInfo_t& entry) const;
     bool IsHullFrontInsideAperture(const PortalTraceRequest& request, const PortalInfo_t& entry, Vector* frontPoint) const;
     C_TerrorPlayer* GetLocalPlayer() const;

@@ -38,7 +38,7 @@ namespace Hooks
 		namespace TryPlayerMove
 		{
 			using FN = int(__fastcall*)(void*, void*, Vector*, trace_t*);
-			constexpr uint32_t Index = 40u;
+			constexpr uint32_t Index = 38u;
 
 			int __fastcall Detour(void* ecx, void* edx, Vector* pFirstDest, trace_t* pFirstTrace);
 		}
@@ -46,7 +46,7 @@ namespace Hooks
 		namespace StepMove
 		{
 			using FN = void(__fastcall*)(void*, void*, Vector&, trace_t&);
-			constexpr uint32_t Index = 66u;
+			constexpr uint32_t Index = 64u;
 
 			void __fastcall Detour(void* ecx, void* edx, Vector& vecDestination, trace_t& trace);
 		}
@@ -96,6 +96,14 @@ namespace Hooks
 			inline Hook::CFunction Func;
 			using FN = void(__fastcall*)(void*, void*);
 			constexpr uint32_t Index = 52u;
+
+			void __fastcall Detour(void* ecx, void* edx);
+		}
+
+		namespace StayOnGround
+		{
+			inline Hook::CFunction Func;
+			using FN = void(__fastcall*)(void*, void*);
 
 			void __fastcall Detour(void* ecx, void* edx);
 		}

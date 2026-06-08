@@ -120,6 +120,10 @@ PortalMoveFrameDiagnostics CPortalStage1Probe::CaptureMoveFrame(C_BasePlayer* pl
 
 void CPortalStage1Probe::LogFinishMoveDiagnostics(const PortalMoveFrameDiagnostics& before, const PortalMoveFrameDiagnostics& after) const
 {
+    constexpr bool kVerboseMoveFrameDiagnostics = false;
+    if (!kVerboseMoveFrameDiagnostics)
+        return;
+
     if (!before.valid || !after.valid)
         return;
 
@@ -163,6 +167,10 @@ void CPortalStage1Probe::LogFinishMoveDiagnostics(const PortalMoveFrameDiagnosti
 
 void CPortalStage1Probe::LogFrameTraceDiagnostics(const CPortalCollisionBridge& bridge, const PortalMoveFrameDiagnostics& after) const
 {
+    constexpr bool kVerboseMoveFrameDiagnostics = false;
+    if (!kVerboseMoveFrameDiagnostics)
+        return;
+
     if (!after.valid || !after.bridgePhase)
         return;
 

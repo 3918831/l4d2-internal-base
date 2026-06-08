@@ -19,6 +19,7 @@ namespace
     constexpr float kSessionApertureDistance = 80.0f;
     constexpr float kHullFrontBridgeDistance = 8.0f;
     constexpr float kMaxVerticalTraceZ = 8.0f;
+    constexpr bool kVerboseBridgeTraceLog = false;
 
     PortalTransform::PortalAperture BridgeAperture()
     {
@@ -136,6 +137,48 @@ bool CPortalCollisionBridge::TryBypassPlayerBBoxTrace(const PortalTraceRequest& 
     Vector intersection;
     if (!IsTraceThroughActiveAperture(request, *entry, context, &intersection))
     {
+        const bool bypassStepProbe = IsStepProbeInsideActiveAperture(request, *entry, context, &intersection);
+        if (bypassStepProbe)
+        {
+            trace_t* trace = request.trace;
+            const float originalFraction = trace->fraction;
+            const bool originalStartSolid = trace->startsolid;
+            const bool originalAllSolid = trace->allsolid;
+            RecordStepTrace(request, simulator, traceClass, true, entry);
+            RecordFrameTraceSnapshot(request, simulator, traceClass, true, true, entry);
+            RecordFrameDecision(traceClass, true);
+            ClearTraceHit(request);
+            ++m_diagnostics.acceptedBypasses;
+            ++m_diagnostics.frameAccepted;
+
+            m_diagnostics.lastAccepted = true;
+            m_diagnostics.lastAcceptedClass = traceClass;
+            m_diagnostics.lastAcceptedStart = request.start;
+            m_diagnostics.lastAcceptedEnd = request.end;
+            m_diagnostics.lastAcceptedHit = intersection;
+            m_diagnostics.lastAcceptedStartDistance = SignedDistanceToPortal(*entry, request.start);
+            m_diagnostics.lastAcceptedEndDistance = SignedDistanceToPortal(*entry, request.end);
+            m_diagnostics.lastAcceptedOriginalFraction = originalFraction;
+            m_diagnostics.lastAcceptedOriginalStartSolid = originalStartSolid;
+            m_diagnostics.lastAcceptedOriginalAllSolid = originalAllSolid;
+
+            if (kVerboseBridgeTraceLog && ShouldLog(currentTime, m_nextTraceLogTime, 0.20f))
+            {
+                U::LogInfo("[PortalBridge] step probe bypass accepted class=%s side=%s phase=%s start=(%.1f %.1f %.1f) end=(%.1f %.1f %.1f) ctxDepth=%.2f fraction=%.3f->%.3f startsolid=%s->false allsolid=%s->false.\n",
+                    TraceClassName(traceClass),
+                    SideName(context.entrySide),
+                    PhaseName(context.phase),
+                    request.start.x, request.start.y, request.start.z,
+                    request.end.x, request.end.y, request.end.z,
+                    context.signedDepth,
+                    originalFraction,
+                    trace->fraction,
+                    BoolText(originalStartSolid),
+                    BoolText(originalAllSolid));
+            }
+            return true;
+        }
+
         ++m_diagnostics.rejectedByAperture;
         ++m_diagnostics.frameRejectedByAperture;
         m_diagnostics.lastRejectedClass = traceClass;
@@ -152,7 +195,7 @@ bool CPortalCollisionBridge::TryBypassPlayerBBoxTrace(const PortalTraceRequest& 
             || std::fabs(endDistance) <= kNearPortalDistance
             || std::fabs(context.signedDepth) <= kNearPortalDistance;
 
-        if (closeToPortal && ShouldLog(currentTime, m_nextTraceLogTime, 0.25f))
+        if (kVerboseBridgeTraceLog && closeToPortal && ShouldLog(currentTime, m_nextTraceLogTime, 0.25f))
         {
             U::LogDebug("[PortalBridge] rejected class=%s side=%s phase=%s startD=%.2f endD=%.2f ctxDepth=%.2f inside=%s moving=%s fraction=%.3f startsolid=%s allsolid=%s.\n",
                 TraceClassName(traceClass),
@@ -201,7 +244,7 @@ bool CPortalCollisionBridge::TryBypassPlayerBBoxTrace(const PortalTraceRequest& 
     m_diagnostics.lastAcceptedOriginalStartSolid = originalStartSolid;
     m_diagnostics.lastAcceptedOriginalAllSolid = originalAllSolid;
 
-    if (ShouldLog(currentTime, m_nextTraceLogTime, 0.20f))
+    if (kVerboseBridgeTraceLog && ShouldLog(currentTime, m_nextTraceLogTime, 0.20f))
     {
         U::LogInfo("[PortalBridge] bypass accepted class=%s side=%s phase=%s start=(%.1f %.1f %.1f) end=(%.1f %.1f %.1f) hit=(%.1f %.1f %.1f) ctxDepth=%.2f fraction=%.3f->%.3f startsolid=%s->false allsolid=%s->false.\n",
             TraceClassName(traceClass),
@@ -423,6 +466,30 @@ bool CPortalCollisionBridge::IsTraceThroughActiveAperture(const PortalTraceReque
 
     if (intersection)
         *intersection = crossesPlane ? hit : request.end;
+
+    return true;
+}
+
+bool CPortalCollisionBridge::IsStepProbeInsideActiveAperture(const PortalTraceRequest& request, const PortalInfo_t& entry, const PortalTransitionContext& context, Vector* intersection) const
+{
+    if (ClassifyTrace(request) != PortalTraceClass::StepUpDownProbe)
+        return false;
+
+    if (context.phase != PortalTransitionPhase::IntersectingPortal || !context.insideAperture || !context.movingIntoPortal)
+        return false;
+
+    const float startDistance = SignedDistanceToPortal(entry, request.start);
+    const float endDistance = SignedDistanceToPortal(entry, request.end);
+    if (std::fabs(startDistance) > kNearPortalDistance && std::fabs(endDistance) > kNearPortalDistance)
+        return false;
+
+    const Vector midpoint = (request.start + request.end) * 0.5f;
+    const PortalTransform::PortalAperture aperture = BridgeAperture();
+    if (!PortalTransform::IsPointInsideAperture(entry, midpoint, aperture))
+        return false;
+
+    if (intersection)
+        *intersection = midpoint;
 
     return true;
 }
