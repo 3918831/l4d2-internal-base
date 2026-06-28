@@ -42,9 +42,12 @@ struct PortalTransitionContext
     float enterTime = 0.0f;
     float lastUpdateTime = 0.0f;
     float signedDepth = 0.0f;
+    float cooldownUntil = 0.0f;
+    int teleportCommandNumber = 0;
     bool insideAperture = false;
     bool movingIntoPortal = false;
     bool hasValidExitPlacement = false;
+    bool hasSignedDepth = false;
 };
 
 class CPortalTransitionSimulator
@@ -57,6 +60,9 @@ public:
     const PortalTransitionContext& GetContext() const { return m_context; }
     bool IsLocalPlayerTransitioning() const;
     bool IsInCollisionBridgePhase() const;
+    PortalTransitionSide GetCollisionBridgeSide() const;
+    bool TryCommitMovementCrossing(int commandNumber, const Vector& movementOrigin, const Vector& movementVelocity, Vector* committedOrigin, Vector* committedVelocity);
+    bool TryGetCommittedMovementForCommand(int commandNumber, Vector* committedOrigin, Vector* committedVelocity, QAngle* committedAngles = nullptr) const;
 
 private:
     struct PortalProbe
@@ -85,7 +91,12 @@ private:
     PortalProbe BuildProbe(CUserCmd* cmd, const PortalPlayerAnchor& anchor, PortalTransitionSide side, PortalInfo_t& entry, PortalInfo_t& exit) const;
     const PortalProbe* SelectBestProbe(const PortalProbe& blue, const PortalProbe& orange) const;
 
-    void UpdatePhase(C_TerrorPlayer* player, const PortalProbe* probe, float currentTime);
+    void UpdatePhase(C_TerrorPlayer* player, CUserCmd* cmd, const PortalProbe* probe, float currentTime);
+    void LogTraversalFrame(CUserCmd* cmd, C_TerrorPlayer* player, const PortalPlayerAnchor& anchor, const PortalProbe& blue, const PortalProbe& orange) const;
+    void UpdateExitPhase(const PortalProbe& exitProbe, float currentTime);
+    bool ShouldPredictPlaneCrossing(const PortalProbe& probe) const;
+    bool TryCommitPredictedPlaneCrossing(C_TerrorPlayer* player, CUserCmd* cmd, const PortalProbe& probe, float currentTime);
+    bool TryCommitTeleport(C_TerrorPlayer* player, CUserCmd* cmd, const PortalProbe& probe, float currentTime, const PortalPlayerAnchor* overrideAnchor = nullptr, Vector* committedOrigin = nullptr, Vector* committedVelocity = nullptr, int commandNumberOverride = 0);
     void SetPhase(PortalTransitionPhase phase, const PortalProbe* probe, float currentTime, const char* reason);
     void ClearPhase(float currentTime, const char* reason);
 
@@ -103,4 +114,9 @@ private:
     float m_nextReadinessLogTime = 0.0f;
     float m_nextProbeLogTime = 0.0f;
     float m_nextPhaseLogTime = 0.0f;
+    int m_lastCommittedMovementCommandNumber = 0;
+    Vector m_lastCommittedMovementOrigin;
+    Vector m_lastCommittedMovementVelocity;
+    QAngle m_lastCommittedMovementAngles;
+    bool m_hasLastCommittedMovement = false;
 };

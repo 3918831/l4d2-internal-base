@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdio>
+#include <cstdarg>
 #include <cstring>
 
 namespace U::PortalFileLog
@@ -16,6 +17,9 @@ namespace U::PortalFileLog
         return std::strstr(text, "PortalStage1Probe")
             || std::strstr(text, "PortalBridge")
             || std::strstr(text, "PortalSim")
+            || std::strstr(text, "PortalTeleport")
+            || std::strstr(text, "PortalTraversalFrame")
+            || std::strstr(text, "PortalWalkMoveFrame")
             || std::strstr(text, "PortalTransition");
     }
 
@@ -73,5 +77,18 @@ namespace U::PortalFileLog
             std::fputc('\n', file);
 
         std::fclose(file);
+    }
+
+    inline void WriteFormat(const char* format, ...)
+    {
+        if (!format)
+            return;
+
+        char buffer[2048];
+        va_list args;
+        va_start(args, format);
+        vsprintf_s(buffer, format, args);
+        va_end(args);
+        Write(buffer);
     }
 }

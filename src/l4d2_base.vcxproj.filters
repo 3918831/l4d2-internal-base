@@ -41,7 +41,9 @@
     <ClCompile Include="Portal\L4D2_Portal.cpp" />
     <ClCompile Include="Portal\PortalCollisionBridge.cpp" />
     <ClCompile Include="Portal\PortalStage1Probe.cpp" />
+    <ClCompile Include="Portal\PortalPlayerTeleport.cpp" />
     <ClCompile Include="Portal\PortalTransition.cpp" />
+    <ClCompile Include="Portal\PortalTransitionDecision.cpp" />
     <ClCompile Include="Portal\PortalTransitionSimulator.cpp" />
     <ClCompile Include="Portal\PortalTransform.cpp" />
     <ClCompile Include="Hooks\GameMovement\CCSGameMovement.cpp" />
@@ -139,7 +141,9 @@
     <ClInclude Include="Portal\L4D2_Portal.h" />
     <ClInclude Include="Portal\PortalCollisionBridge.h" />
     <ClInclude Include="Portal\PortalStage1Probe.h" />
+    <ClInclude Include="Portal\PortalPlayerTeleport.h" />
     <ClInclude Include="Portal\PortalTransition.h" />
+    <ClInclude Include="Portal\PortalTransitionDecision.h" />
     <ClInclude Include="Portal\PortalTransitionSimulator.h" />
     <ClInclude Include="Portal\CustomRender.h" />
     <ClInclude Include="Portal\PortalTransform.h" />

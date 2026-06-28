@@ -94,7 +94,7 @@ bool CPortalCollisionBridge::TryBypassPlayerBBoxTrace(const PortalTraceRequest& 
     m_diagnostics.lastOriginalStartSolid = request.trace ? request.trace->startsolid : false;
     m_diagnostics.lastOriginalAllSolid = request.trace ? request.trace->allsolid : false;
     m_diagnostics.lastPhase = simulator.GetContext().phase;
-    m_diagnostics.lastEntrySide = simulator.GetContext().entrySide;
+    m_diagnostics.lastEntrySide = simulator.GetCollisionBridgeSide();
     m_diagnostics.lastClass = traceClass;
     m_diagnostics.lastAccepted = false;
 
@@ -106,7 +106,8 @@ bool CPortalCollisionBridge::TryBypassPlayerBBoxTrace(const PortalTraceRequest& 
     ++m_diagnostics.eligibleRequests;
 
     const PortalTransitionContext& context = simulator.GetContext();
-    if (!simulator.IsInCollisionBridgePhase() || context.entrySide == PortalTransitionSide::None)
+    const PortalTransitionSide collisionSide = simulator.GetCollisionBridgeSide();
+    if (!simulator.IsInCollisionBridgePhase() || collisionSide == PortalTransitionSide::None)
     {
         ++m_diagnostics.rejectedByPhase;
         ++m_diagnostics.frameRejectedByPhase;
@@ -124,7 +125,7 @@ bool CPortalCollisionBridge::TryBypassPlayerBBoxTrace(const PortalTraceRequest& 
 
     PortalInfo_t* entry = nullptr;
     PortalInfo_t* exit = nullptr;
-    if (!TryGetPortalPair(context.entrySide, entry, exit) || !entry || !exit)
+    if (!TryGetPortalPair(collisionSide, entry, exit) || !entry || !exit)
     {
         ++m_diagnostics.rejectedByPortalPair;
         ++m_diagnostics.frameRejectedByPair;
@@ -166,7 +167,7 @@ bool CPortalCollisionBridge::TryBypassPlayerBBoxTrace(const PortalTraceRequest& 
             {
                 U::LogInfo("[PortalBridge] step probe bypass accepted class=%s side=%s phase=%s start=(%.1f %.1f %.1f) end=(%.1f %.1f %.1f) ctxDepth=%.2f fraction=%.3f->%.3f startsolid=%s->false allsolid=%s->false.\n",
                     TraceClassName(traceClass),
-                    SideName(context.entrySide),
+                    SideName(collisionSide),
                     PhaseName(context.phase),
                     request.start.x, request.start.y, request.start.z,
                     request.end.x, request.end.y, request.end.z,
@@ -199,7 +200,7 @@ bool CPortalCollisionBridge::TryBypassPlayerBBoxTrace(const PortalTraceRequest& 
         {
             U::LogDebug("[PortalBridge] rejected class=%s side=%s phase=%s startD=%.2f endD=%.2f ctxDepth=%.2f inside=%s moving=%s fraction=%.3f startsolid=%s allsolid=%s.\n",
                 TraceClassName(traceClass),
-                SideName(context.entrySide),
+                SideName(collisionSide),
                 PhaseName(context.phase),
                 startDistance,
                 endDistance,
@@ -248,7 +249,7 @@ bool CPortalCollisionBridge::TryBypassPlayerBBoxTrace(const PortalTraceRequest& 
     {
         U::LogInfo("[PortalBridge] bypass accepted class=%s side=%s phase=%s start=(%.1f %.1f %.1f) end=(%.1f %.1f %.1f) hit=(%.1f %.1f %.1f) ctxDepth=%.2f fraction=%.3f->%.3f startsolid=%s->false allsolid=%s->false.\n",
             TraceClassName(traceClass),
-            SideName(context.entrySide),
+            SideName(collisionSide),
             PhaseName(context.phase),
             request.start.x, request.start.y, request.start.z,
             request.end.x, request.end.y, request.end.z,
@@ -318,7 +319,7 @@ void CPortalCollisionBridge::RecordStepTrace(const PortalTraceRequest& request, 
     m_diagnostics.frameLastStepStartDistance = entry ? SignedDistanceToPortal(*entry, request.start) : 0.0f;
     m_diagnostics.frameLastStepEndDistance = entry ? SignedDistanceToPortal(*entry, request.end) : 0.0f;
     m_diagnostics.frameLastStepPhase = context.phase;
-    m_diagnostics.frameLastStepEntrySide = context.entrySide;
+    m_diagnostics.frameLastStepEntrySide = simulator.GetCollisionBridgeSide();
     m_diagnostics.frameLastStepPlayerOrigin = player ? player->m_vecOrigin() : Vector();
     m_diagnostics.frameLastStepPlayerVelocity = player ? player->m_vecVelocity() : Vector();
     m_diagnostics.frameLastStepPlayerFlags = player ? player->m_fFlags() : 0;
@@ -348,7 +349,7 @@ void CPortalCollisionBridge::RecordFrameTraceSnapshot(const PortalTraceRequest& 
     snapshot.startDistance = entry ? SignedDistanceToPortal(*entry, request.start) : 0.0f;
     snapshot.endDistance = entry ? SignedDistanceToPortal(*entry, request.end) : 0.0f;
     snapshot.phase = context.phase;
-    snapshot.entrySide = context.entrySide;
+    snapshot.entrySide = simulator.GetCollisionBridgeSide();
     snapshot.playerOrigin = player ? player->m_vecOrigin() : Vector();
     snapshot.playerVelocity = player ? player->m_vecVelocity() : Vector();
     snapshot.playerFlags = player ? player->m_fFlags() : 0;
