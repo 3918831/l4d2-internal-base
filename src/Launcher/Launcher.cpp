@@ -2,7 +2,7 @@
 //
 // 使用方法：
 // 1. 将编译后的Launcher.exe放到游戏目录
-// 2. 将Lak3_l4d2_hack.dll放到同一目录
+// 2. 将L4D2_Portal.dll放到同一目录
 // 3. 运行Launcher.exe即可
 
 #include <windows.h>
@@ -163,7 +163,7 @@ int main(int argc, char* argv[])
     if (GetFileAttributesA(dllPath) == INVALID_FILE_ATTRIBUTES)
     {
         std::cerr << "Error: L4D2_Portal.dll not found!" << std::endl;
-        std::cerr << "Please make sure the DLL is in the same directory as Launcher.exe" << std::endl;
+        std::cerr << "Please make sure L4D2_Portal.dll is in the same directory as L4D2_Portal.exe" << std::endl;
         std::cout << "\nPress any key to exit..." << std::endl;
         getchar();
         return 1;
@@ -177,7 +177,7 @@ int main(int argc, char* argv[])
     if (GetFileAttributesA(gameExe) == INVALID_FILE_ATTRIBUTES)
     {
         std::cerr << "Error: left4dead2.exe not found!" << std::endl;
-        std::cerr << "Please make sure Launcher.exe is in the L4D2 game directory" << std::endl;
+        std::cerr << "Please make sure L4D2_Portal.exe is in the L4D2 game directory" << std::endl;
         std::cout << "\nPress any key to exit..." << std::endl;
         getchar();
         return 1;
