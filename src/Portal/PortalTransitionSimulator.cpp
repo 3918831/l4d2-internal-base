@@ -647,6 +647,21 @@ bool CPortalTransitionSimulator::TryCommitTeleport(
         sourceAngles.z = engineAngles.z;
     }
     const QAngle newAngles = PortalTransform::TransformAngles(entryToExit, sourceAngles);
+    const Vector exitReferenceOrigin = probe.exit->origin + probe.exit->normal * 25.0f;
+    const Vector eyeFromOrigin = anchor.eye - anchor.origin;
+    const Vector finalEye = newOrigin + eyeFromOrigin;
+    G::G_L4D2Portal.m_PortalTransition.LogEnvironmentSnapshot(
+        "sim-pre-teleport",
+        player,
+        anchor.eye,
+        Vector(sourceAngles.x, sourceAngles.y, sourceAngles.z),
+        &exitReferenceOrigin);
+    G::G_L4D2Portal.m_PortalTransition.LogEnvironmentSnapshot(
+        "sim-exit-reference",
+        player,
+        exitReferenceOrigin,
+        Vector(newAngles.x, newAngles.y, newAngles.z),
+        &exitReferenceOrigin);
 
     if (!PortalPlayerTeleport::Commit(player, newOrigin, newAngles, newVelocity))
     {
@@ -664,6 +679,14 @@ bool CPortalTransitionSimulator::TryCommitTeleport(
     // the matching predicted origin/velocity. Applying the camera here can
     // render a frame with exit-facing angles while the client is still at entry.
     player->m_vecVelocity() = newVelocity;
+    G::G_L4D2Portal.m_PortalTransition.LogEnvironmentSnapshot(
+        "sim-post-teleport",
+        player,
+        finalEye,
+        Vector(newAngles.x, newAngles.y, newAngles.z),
+        &exitReferenceOrigin);
+    G::G_L4D2Portal.m_PortalTransition.ArmToneTransition("sim-teleport");
+    G::G_L4D2Portal.m_PortalTransition.ArmEnvironmentRenderTrace(8);
     if (committedOrigin)
         *committedOrigin = newOrigin;
     if (committedVelocity)

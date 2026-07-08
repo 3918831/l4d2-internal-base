@@ -21,6 +21,13 @@ void __fastcall ClientPrediction::FinishMove::Detour(void* ecx, void* edx, C_Bas
 		move,
 		G::G_L4D2Portal.m_PortalTransitionSimulator);
 	Table.Original<FN>(Index)(ecx, edx, player, ucmd, move);
+	static float nextMoveTypeProbeTime = 0.0f;
+	const float currentTime = I::EngineClient ? I::EngineClient->OBSOLETE_Time() : 0.0f;
+	if (currentTime >= nextMoveTypeProbeTime)
+	{
+		nextMoveTypeProbeTime = currentTime + 0.35f;
+		G::G_L4D2Portal.m_PortalTransition.LogMoveTypeProbe("client-prediction-finishmove", player, move);
+	}
 	const PortalMoveFrameDiagnostics after = G::G_L4D2Portal.m_PortalStage1Probe.CaptureMoveFrame(
 		player,
 		ucmd,

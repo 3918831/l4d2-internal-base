@@ -212,6 +212,26 @@ namespace
 		return false;
 	}
 
+	bool ShouldLogFocusedHookProbe(uint32_t heartbeat)
+	{
+		return heartbeat <= 3u
+			|| (heartbeat % 180u) == 0u
+			|| G::G_L4D2Portal.m_PortalTransitionSimulator.IsInCollisionBridgePhase();
+	}
+
+	void LogFocusedHookProbe(const char* domain, const char* stage, const char* point, uint32_t heartbeat, void* gameMovement)
+	{
+		if (!ShouldLogFocusedHookProbe(heartbeat))
+			return;
+
+		G::G_L4D2Portal.m_PortalTransition.LogHookProbe(
+			domain,
+			stage,
+			point,
+			gameMovement,
+			TryGetMoveDataFromGameMovement(gameMovement));
+	}
+
 	void LogTryPlayerMoveEnter(const char* domain, uint32_t heartbeat, void* gameMovement, Vector* pFirstDest, trace_t* pFirstTrace, CMoveData* move, bool detailed)
 	{
 		if (!detailed && !ShouldLogMovementHeartbeat(heartbeat))
@@ -863,7 +883,9 @@ void __fastcall CCSGameMovement::PlayerMove::Detour(void* ecx, void* edx)
 	static uint32_t heartbeat = 0u;
 	++heartbeat;
 	LogMovementStageSnapshot("server", "PlayerMove", "Enter", heartbeat, ecx, log);
+	LogFocusedHookProbe("server", "PlayerMove", "Enter", heartbeat, ecx);
 	ServerTable.Original<FN>(Index)(ecx, edx);
+	LogFocusedHookProbe("server", "PlayerMove", "Exit", heartbeat, ecx);
 	LogMovementStageSnapshot("server", "PlayerMove", "Exit", heartbeat, ecx, log);
 }
 
@@ -874,6 +896,7 @@ void __fastcall CCSGameMovement::WalkMove::Detour(void* ecx, void* edx)
 	static uint32_t heartbeat = 0u;
 	++heartbeat;
 	LogMovementStageSnapshot("server", "WalkMove", "Enter", heartbeat, ecx, log);
+	LogFocusedHookProbe("server", "WalkMove", "Enter", heartbeat, ecx);
     CMoveData* move = TryGetMoveDataFromGameMovement(ecx);
     const Vector originBefore = move ? move->GetAbsOrigin() : Vector();
     const Vector velocityBefore = move ? move->m_vecVelocity : Vector();
@@ -887,6 +910,7 @@ void __fastcall CCSGameMovement::WalkMove::Detour(void* ecx, void* edx)
     if (!bridgeApplied)
         bridgeApplied = TryPreservePortalExitVelocity("server", heartbeat, ecx, velocityBefore);
     LogPortalWalkMoveFrame("server", heartbeat, ecx, originBefore, velocityBefore, originAfterOriginal, velocityAfterOriginal, bridgeApplied);
+	LogFocusedHookProbe("server", "WalkMove", "Exit", heartbeat, ecx);
     LogMovementStageSnapshot("server", "WalkMove", "Exit", heartbeat, ecx, log);
 }
 
@@ -897,7 +921,9 @@ void __fastcall CCSGameMovement::FullWalkMove::Detour(void* ecx, void* edx)
 	static uint32_t heartbeat = 0u;
 	++heartbeat;
 	LogMovementStageSnapshot("server", "FullWalkMove", "Enter", heartbeat, ecx, log);
+	LogFocusedHookProbe("server", "FullWalkMove", "Enter", heartbeat, ecx);
 	ServerTable.Original<FN>(Index)(ecx, edx);
+	LogFocusedHookProbe("server", "FullWalkMove", "Exit", heartbeat, ecx);
 	LogMovementStageSnapshot("server", "FullWalkMove", "Exit", heartbeat, ecx, log);
 }
 
@@ -971,7 +997,9 @@ void __fastcall CCSGameMovement::ClientPlayerMove::Detour(void* ecx, void* edx)
 	static uint32_t heartbeat = 0u;
 	++heartbeat;
 	LogMovementStageSnapshot("client", "PlayerMove", "Enter", heartbeat, ecx, log);
+	LogFocusedHookProbe("client", "PlayerMove", "Enter", heartbeat, ecx);
 	ClientTable.Original<FN>(Index)(ecx, edx);
+	LogFocusedHookProbe("client", "PlayerMove", "Exit", heartbeat, ecx);
 	LogMovementStageSnapshot("client", "PlayerMove", "Exit", heartbeat, ecx, log);
 }
 
@@ -982,6 +1010,7 @@ void __fastcall CCSGameMovement::ClientWalkMove::Detour(void* ecx, void* edx)
 	static uint32_t heartbeat = 0u;
 	++heartbeat;
 	LogMovementStageSnapshot("client", "WalkMove", "Enter", heartbeat, ecx, log);
+	LogFocusedHookProbe("client", "WalkMove", "Enter", heartbeat, ecx);
     CMoveData* move = TryGetMoveDataFromGameMovement(ecx);
     const Vector originBefore = move ? move->GetAbsOrigin() : Vector();
     const Vector velocityBefore = move ? move->m_vecVelocity : Vector();
@@ -995,6 +1024,7 @@ void __fastcall CCSGameMovement::ClientWalkMove::Detour(void* ecx, void* edx)
     if (!bridgeApplied)
         bridgeApplied = TryPreservePortalExitVelocity("client", heartbeat, ecx, velocityBefore);
     LogPortalWalkMoveFrame("client", heartbeat, ecx, originBefore, velocityBefore, originAfterOriginal, velocityAfterOriginal, bridgeApplied);
+	LogFocusedHookProbe("client", "WalkMove", "Exit", heartbeat, ecx);
     LogMovementStageSnapshot("client", "WalkMove", "Exit", heartbeat, ecx, log);
 }
 
@@ -1005,7 +1035,9 @@ void __fastcall CCSGameMovement::ClientFullWalkMove::Detour(void* ecx, void* edx
 	static uint32_t heartbeat = 0u;
 	++heartbeat;
 	LogMovementStageSnapshot("client", "FullWalkMove", "Enter", heartbeat, ecx, log);
+	LogFocusedHookProbe("client", "FullWalkMove", "Enter", heartbeat, ecx);
 	ClientTable.Original<FN>(Index)(ecx, edx);
+	LogFocusedHookProbe("client", "FullWalkMove", "Exit", heartbeat, ecx);
 	LogMovementStageSnapshot("client", "FullWalkMove", "Exit", heartbeat, ecx, log);
 }
 

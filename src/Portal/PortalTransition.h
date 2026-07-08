@@ -16,6 +16,13 @@ public:
     void Update(CUserCmd* cmd);
     void OnFinishMove(C_BasePlayer* player, CUserCmd* cmd, CMoveData* move);
     void ApplyVisualTransition(CViewSetup& view);
+    void LogRenderEnvironmentSnapshot(const char* phase, const CViewSetup& view);
+    void LogEnvironmentSnapshot(const char* phase, C_TerrorPlayer* player, const Vector& viewOrigin, const Vector& viewAngles, const Vector* referenceOrigin = nullptr);
+    void LogHookProbe(const char* domain, const char* stage, const char* point, void* gameMovement, CMoveData* move);
+    void LogMoveTypeProbe(const char* phase, C_BasePlayer* player = nullptr, CMoveData* move = nullptr);
+    void ArmEnvironmentRenderTrace(int frameCount);
+    void ArmToneTransition(const char* reason);
+    bool ShouldLogPortalRenderState(const char* phase, int depth) const;
 
     bool ShouldBypassPlayerBBoxTrace(
         const Vector& start,
@@ -83,16 +90,33 @@ private:
         Vector physicalEye;
     };
 
+    struct ToneTransitionState
+    {
+        bool pending = false;
+        bool active = false;
+        bool loggedStart = false;
+        bool loggedPending = false;
+        float startTime = 0.0f;
+        float endTime = 0.0f;
+        float pendingUntil = 0.0f;
+        Vector startScale;
+        Vector targetScale;
+        const char* reason = nullptr;
+    };
+
     PortalRuntimeState m_blueState;
     PortalRuntimeState m_orangeState;
     TraversalSession m_session;
     VisualTransitionState m_visualTransition;
+    ToneTransitionState m_toneTransition;
     PortalSide m_lastExitPortal = PortalSide::None;
     float m_nextTeleportTime = 0.0f;
     float m_nextStatusLogTime = 0.0f;
     float m_nextDistanceLogTime = 0.0f;
     float m_nextCrossingLogTime = 0.0f;
     float m_nextTraceLogTime = 0.0f;
+    int m_environmentTraceSequence = 0;
+    int m_pendingEnvironmentRenderFrames = 0;
 
     C_TerrorPlayer* GetLocalPlayer() const;
     bool ArePortalsReady() const;
@@ -111,6 +135,7 @@ private:
     bool UpdatePortalCrossing(C_TerrorPlayer* player, CUserCmd* cmd, PortalSide side, PortalInfo_t& entry, PortalInfo_t& exit);
     bool TeleportLocalPlayer(C_TerrorPlayer* player, PortalInfo_t& entry, PortalInfo_t& exit, PortalSide exitSide, const PlayerAnchor* anchor = nullptr);
     bool EntityTeleport(void* entity, const Vector* origin, const QAngle* angles, const Vector* velocity, bool verbose = true) const;
+    void* ResolveServerLocalPlayerForDiagnostics(void** toolsBase, void** edictBase, bool* resolverAgree) const;
     void RefreshPortalDistance(C_TerrorPlayer* player, PortalSide side, PortalInfo_t& portal);
     bool ShouldLog(float currentTime, float& nextLogTime, float intervalSeconds);
     const char* SideName(PortalSide side) const;

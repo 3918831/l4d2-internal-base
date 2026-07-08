@@ -34,6 +34,7 @@ class WaterRenderInfo_t
 };
 class VisibleFogVolumeInfo_t
 {
+public:
 	int		m_nVisibleFogVolume;
 	int		m_nVisibleFogVolumeLeaf;
 	bool	m_bEyeInFogVolume;

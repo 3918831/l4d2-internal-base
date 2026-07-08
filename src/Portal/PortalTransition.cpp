@@ -2,7 +2,9 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <cstring>
 #include <cmath>
+#include <Windows.h>
 
 #include "../SDK/L4D2/Entities/C_TerrorPlayer.h"
 #include "../SDK/L4D2/Includes/usercmd.h"
@@ -11,13 +13,16 @@
 #include "../SDK/L4D2/Interfaces/ClientEntityList.h"
 #include "../SDK/L4D2/Interfaces/CServerTools.h"
 #include "../SDK/L4D2/Interfaces/EngineClient.h"
+#include "../SDK/L4D2/Interfaces/EngineTrace.h"
 #include "../SDK/L4D2/Interfaces/GameMovement.h"
 #include "../SDK/L4D2/Interfaces/IPlayerInfoManager.h"
+#include "../SDK/L4D2/Interfaces/MatRenderContext.h"
 #include "../Util/Logger/Logger.h"
 #include "../Util/Offsets/Offsets.h"
 #pragma warning(push)
 #pragma warning(disable: 4819)
 #include "L4D2_Portal.h"
+#include "CustomRender.h"
 #pragma warning(pop)
 
 namespace
@@ -41,6 +46,11 @@ namespace
     constexpr bool kEnableVisualTransition = false;
     constexpr float kVisualExitEyeClearance = 16.0f;
     constexpr float kVisualTransitionDuration = 0.08f;
+    constexpr bool kEnableToneTransition = true;
+    constexpr float kToneTransitionDuration = 0.35f;
+    constexpr float kToneTransitionPendingDuration = 0.12f;
+    constexpr float kToneTransitionTriggerScale = 1.40f;
+    constexpr float kToneTransitionTargetMultiplier = 0.80f;
     constexpr size_t kServerTeleportVTableIndex = 118;
     constexpr bool kDryRunServerSetAbsTeleport = false;
     constexpr bool kUseServerSetAbsTeleport = false;
@@ -103,6 +113,74 @@ namespace
     {
         return value ? "match" : "different";
     }
+
+    const char* SimulatorPhaseName(PortalTransitionPhase phase)
+    {
+        switch (phase)
+        {
+        case PortalTransitionPhase::Idle: return "Idle";
+        case PortalTransitionPhase::ApproachingPortal: return "ApproachingPortal";
+        case PortalTransitionPhase::IntersectingPortal: return "IntersectingPortal";
+        case PortalTransitionPhase::CommittingTeleport: return "CommittingTeleport";
+        case PortalTransitionPhase::ExitingPortal: return "ExitingPortal";
+        case PortalTransitionPhase::Cooldown: return "Cooldown";
+        default: return "Unknown";
+        }
+    }
+
+    const char* SimulatorSideName(PortalTransitionSide side)
+    {
+        switch (side)
+        {
+        case PortalTransitionSide::Blue: return "Blue";
+        case PortalTransitionSide::Orange: return "Orange";
+        case PortalTransitionSide::None:
+        default:
+            return "None";
+        }
+    }
+
+    bool IsReadableAddressRange(const void* address, size_t size)
+    {
+        if (!address || size == 0)
+            return false;
+
+        const uintptr_t start = reinterpret_cast<uintptr_t>(address);
+        const uintptr_t end = start + size - 1u;
+        MEMORY_BASIC_INFORMATION info = {};
+        if (!VirtualQuery(reinterpret_cast<const void*>(start), &info, sizeof(info)))
+            return false;
+
+        const bool firstReadable = info.State == MEM_COMMIT
+            && !(info.Protect & PAGE_NOACCESS)
+            && !(info.Protect & PAGE_GUARD);
+        if (!firstReadable)
+            return false;
+
+        if (end < reinterpret_cast<uintptr_t>(info.BaseAddress) + info.RegionSize)
+            return true;
+
+        MEMORY_BASIC_INFORMATION endInfo = {};
+        if (!VirtualQuery(reinterpret_cast<const void*>(end), &endInfo, sizeof(endInfo)))
+            return false;
+
+        return endInfo.State == MEM_COMMIT
+            && !(endInfo.Protect & PAGE_NOACCESS)
+            && !(endInfo.Protect & PAGE_GUARD);
+    }
+
+    bool TryReadByteOffset(const void* base, uintptr_t offset, unsigned char* value)
+    {
+        if (!value)
+            return false;
+
+        const void* address = reinterpret_cast<const void*>(reinterpret_cast<uintptr_t>(base) + offset);
+        if (!IsReadableAddressRange(address, sizeof(unsigned char)))
+            return false;
+
+        *value = *reinterpret_cast<const unsigned char*>(address);
+        return true;
+    }
 }
 
 void CPortalTransition::Reset()
@@ -111,13 +189,91 @@ void CPortalTransition::Reset()
     m_orangeState = {};
     m_session = {};
     m_visualTransition = {};
+    m_toneTransition = {};
     m_lastExitPortal = PortalSide::None;
     m_nextTeleportTime = 0.0f;
     m_nextCrossingLogTime = 0.0f;
+    m_pendingEnvironmentRenderFrames = 0;
 }
 
 void CPortalTransition::ApplyVisualTransition(CViewSetup& view)
 {
+    if (kEnableToneTransition && m_toneTransition.active && I::EngineClient && I::MaterialSystem)
+    {
+        IMatRenderContext* renderContext = I::MaterialSystem->GetRenderContext();
+        const float currentTime = I::EngineClient->OBSOLETE_Time();
+        if (!renderContext || currentTime >= m_toneTransition.endTime)
+        {
+            if (m_toneTransition.loggedStart)
+                U::LogInfo("[PortalTone] transition expired.\n");
+            m_toneTransition = {};
+        }
+        else
+        {
+            renderContext->SetToneMappingScaleLinear(m_toneTransition.targetScale);
+
+            if (!m_toneTransition.loggedStart)
+            {
+                U::LogInfo("[PortalTone] applying tone clamp start=(%.3f %.3f %.3f) target=(%.3f %.3f %.3f) duration=%.3f.\n",
+                    m_toneTransition.startScale.x,
+                    m_toneTransition.startScale.y,
+                    m_toneTransition.startScale.z,
+                    m_toneTransition.targetScale.x,
+                    m_toneTransition.targetScale.y,
+                    m_toneTransition.targetScale.z,
+                    std::max(0.001f, m_toneTransition.endTime - m_toneTransition.startTime));
+                m_toneTransition.loggedStart = true;
+            }
+        }
+    }
+
+    if (kEnableToneTransition && m_toneTransition.pending && I::EngineClient && I::MaterialSystem)
+    {
+        IMatRenderContext* renderContext = I::MaterialSystem->GetRenderContext();
+        const float currentTime = I::EngineClient->OBSOLETE_Time();
+        if (!renderContext || currentTime >= m_toneTransition.pendingUntil)
+        {
+            if (renderContext)
+            {
+                const Vector currentScale = renderContext->GetToneMappingScaleLinear();
+                U::LogInfo("[PortalTone] skipped reason=%s renderCurrent=(%.3f %.3f %.3f) trigger=%.3f.\n",
+                    m_toneTransition.reason ? m_toneTransition.reason : "unknown",
+                    currentScale.x,
+                    currentScale.y,
+                    currentScale.z,
+                    kToneTransitionTriggerScale);
+            }
+            m_toneTransition = {};
+        }
+        else
+        {
+            const Vector currentScale = renderContext->GetToneMappingScaleLinear();
+            const float maxScale = std::max(currentScale.x, std::max(currentScale.y, currentScale.z));
+            if (maxScale >= kToneTransitionTriggerScale)
+            {
+                m_toneTransition.pending = false;
+                m_toneTransition.active = true;
+                m_toneTransition.loggedStart = false;
+                m_toneTransition.startTime = currentTime;
+                m_toneTransition.endTime = currentTime + std::max(0.001f, kToneTransitionDuration);
+                m_toneTransition.startScale = currentScale;
+                m_toneTransition.targetScale = currentScale * kToneTransitionTargetMultiplier;
+                renderContext->SetToneMappingScaleLinear(m_toneTransition.targetScale);
+
+                U::LogInfo("[PortalTone] armed reason=%s renderCurrent=(%.3f %.3f %.3f) target=(%.3f %.3f %.3f) duration=%.3f trigger=%.3f.\n",
+                    m_toneTransition.reason ? m_toneTransition.reason : "unknown",
+                    m_toneTransition.startScale.x,
+                    m_toneTransition.startScale.y,
+                    m_toneTransition.startScale.z,
+                    m_toneTransition.targetScale.x,
+                    m_toneTransition.targetScale.y,
+                    m_toneTransition.targetScale.z,
+                    kToneTransitionDuration,
+                    kToneTransitionTriggerScale);
+            }
+        }
+    }
+
     if (!kEnableVisualTransition || !m_visualTransition.active || !I::EngineClient)
         return;
 
@@ -154,6 +310,138 @@ void CPortalTransition::ApplyVisualTransition(CViewSetup& view)
             view.origin.x, view.origin.y, view.origin.z);
         m_visualTransition.loggedStart = true;
     }
+}
+
+void CPortalTransition::LogRenderEnvironmentSnapshot(const char* phase, const CViewSetup& view)
+{
+    if (m_pendingEnvironmentRenderFrames <= 0)
+        return;
+
+    C_TerrorPlayer* player = GetLocalPlayer();
+    LogEnvironmentSnapshot(phase ? phase : "main-render", player, view.origin, Vector(view.angles.x, view.angles.y, view.angles.z));
+    --m_pendingEnvironmentRenderFrames;
+}
+
+void CPortalTransition::ArmEnvironmentRenderTrace(int frameCount)
+{
+    if (frameCount <= 0)
+        return;
+
+    m_pendingEnvironmentRenderFrames = std::max(m_pendingEnvironmentRenderFrames, frameCount);
+}
+
+void CPortalTransition::ArmToneTransition(const char* reason)
+{
+    if (!kEnableToneTransition || !I::EngineClient)
+        return;
+
+    m_toneTransition = {};
+    m_toneTransition.pending = true;
+    m_toneTransition.loggedStart = false;
+    m_toneTransition.startTime = 0.0f;
+    m_toneTransition.pendingUntil = I::EngineClient->OBSOLETE_Time() + std::max(0.001f, kToneTransitionPendingDuration);
+    m_toneTransition.reason = reason;
+
+    U::LogInfo("[PortalTone] pending reason=%s pendingDuration=%.3f trigger=%.3f.\n",
+        reason ? reason : "unknown",
+        kToneTransitionPendingDuration,
+        kToneTransitionTriggerScale);
+}
+
+bool CPortalTransition::ShouldLogPortalRenderState(const char* phase, int depth) const
+{
+    if (m_pendingEnvironmentRenderFrames <= 0 || !phase)
+        return false;
+
+    if (depth < 1 || depth > 2)
+        return false;
+
+    return std::strstr(phase, "before-draw") || std::strstr(phase, "after-pop-rt");
+}
+
+void CPortalTransition::LogHookProbe(const char* domain, const char* stage, const char* point, void* gameMovement, CMoveData* move)
+{
+    const PortalTransitionContext& context = G::G_L4D2Portal.m_PortalTransitionSimulator.GetContext();
+    const Vector origin = move ? move->GetAbsOrigin() : Vector();
+    const Vector velocity = move ? move->m_vecVelocity : Vector();
+
+    U::LogInfo("[PortalHookProbe] domain=%s stage=%s point=%s phase=%s entry=%s bridge=%s gm=%p mv=%p origin=(%.2f %.2f %.2f) vel=(%.2f %.2f %.2f) buttons=0x%X fmove=%.2f smove=%.2f step=%.2f gameMoved=%s.\n",
+        domain ? domain : "unknown",
+        stage ? stage : "unknown",
+        point ? point : "unknown",
+        SimulatorPhaseName(context.phase),
+        SimulatorSideName(context.entrySide),
+        BoolText(G::G_L4D2Portal.m_PortalTransitionSimulator.IsInCollisionBridgePhase()),
+        gameMovement,
+        move,
+        origin.x, origin.y, origin.z,
+        velocity.x, velocity.y, velocity.z,
+        move ? move->m_nButtons : 0,
+        move ? move->m_flForwardMove : 0.0f,
+        move ? move->m_flSideMove : 0.0f,
+        move ? move->m_outStepHeight : 0.0f,
+        BoolText(move ? move->m_bGameCodeMovedPlayer : false));
+}
+
+void CPortalTransition::LogMoveTypeProbe(const char* phase, C_BasePlayer* basePlayer, CMoveData* move)
+{
+    C_TerrorPlayer* player = basePlayer && IsLocalPlayer(basePlayer)
+        ? static_cast<C_TerrorPlayer*>(basePlayer)
+        : GetLocalPlayer();
+
+    const int localIndex = I::EngineClient ? I::EngineClient->GetLocalPlayer() : -1;
+    IClientEntity* clientLocal = I::ClientEntityList && localIndex > 0 ? I::ClientEntityList->GetClientEntity(localIndex) : nullptr;
+
+    void* toolsBase = nullptr;
+    void* edictBase = nullptr;
+    bool resolverAgree = false;
+    void* serverBase = ResolveServerLocalPlayerForDiagnostics(&toolsBase, &edictBase, &resolverAgree);
+
+    unsigned char clientMoveType = 0;
+    const bool hasClientMoveType = player != nullptr;
+    if (player)
+        clientMoveType = player->m_MoveType();
+
+    unsigned char serverMoveType = 0;
+    const bool hasServerMoveType = TryReadByteOffset(serverBase, 0x144u, &serverMoveType);
+
+    Vector toolsOrigin;
+    QAngle toolsAngles;
+    bool toolsPositionOk = false;
+    bool toolsNoClip = false;
+    if (I::CServerTools)
+    {
+        toolsPositionOk = I::CServerTools->GetPlayerPosition(toolsOrigin, toolsAngles, clientLocal);
+        toolsNoClip = I::CServerTools->IsInNoClipMode(clientLocal);
+    }
+
+    const PlayerAnchor anchor = player ? BuildPlayerAnchor(player) : PlayerAnchor();
+    const Vector moveOrigin = move ? move->GetAbsOrigin() : Vector();
+    const Vector moveVelocity = move ? move->m_vecVelocity : Vector();
+
+    U::LogInfo("[PortalMoveTypeProbe] phase=%s localIndex=%d clientPlayer=%p clientLocal=%p serverChosen=%p toolsBase=%p edictBase=%p resolver=%s clientMoveType=%s:%u serverMoveType=%s:%u toolsNoClip=%s toolsPos=%s toolsOrigin=(%.2f %.2f %.2f) toolsAngles=(%.2f %.2f %.2f) playerOrigin=(%.2f %.2f %.2f) playerEye=(%.2f %.2f %.2f) playerVel=(%.2f %.2f %.2f) mv=%p mvOrigin=(%.2f %.2f %.2f) mvVel=(%.2f %.2f %.2f).\n",
+        phase ? phase : "unknown",
+        localIndex,
+        player,
+        clientLocal,
+        serverBase,
+        toolsBase,
+        edictBase,
+        MatchText(resolverAgree),
+        hasClientMoveType ? "ok" : "missing",
+        static_cast<unsigned int>(clientMoveType),
+        hasServerMoveType ? "ok" : "missing",
+        static_cast<unsigned int>(serverMoveType),
+        BoolText(toolsNoClip),
+        BoolText(toolsPositionOk),
+        toolsOrigin.x, toolsOrigin.y, toolsOrigin.z,
+        toolsAngles.x, toolsAngles.y, toolsAngles.z,
+        anchor.origin.x, anchor.origin.y, anchor.origin.z,
+        anchor.eye.x, anchor.eye.y, anchor.eye.z,
+        anchor.velocity.x, anchor.velocity.y, anchor.velocity.z,
+        move,
+        moveOrigin.x, moveOrigin.y, moveOrigin.z,
+        moveVelocity.x, moveVelocity.y, moveVelocity.z);
 }
 
 void CPortalTransition::Update(CUserCmd* cmd)
@@ -256,7 +544,7 @@ void CPortalTransition::OnFinishMove(C_BasePlayer* basePlayer, CUserCmd* cmd, CM
             && std::fabs(move->m_vecAbsOrigin.z) < 100000.0f
             && originDeltaSqr < 4096.0f;
 
-        U::LogInfo("[PortalTransition][MoveData] layout sizeof=%u offVelocity=%u offAngles=%u offWishVel=%u offConstraintPastRadius=%u offAbsOrigin=%u samplePlayerOrigin=(%.1f %.1f %.1f) sampleMoveOrigin=(%.1f %.1f %.1f) originDelta=(%.1f %.1f %.1f) sampleMoveVelocity=(%.1f %.1f %.1f) valid=%s.\n",
+        U::LogInfo("[PortalMoveTypeProbe][MoveDataLayout] sizeof=%u offVelocity=%u offAngles=%u offWishVel=%u offConstraintPastRadius=%u offAbsOrigin=%u samplePlayerOrigin=(%.1f %.1f %.1f) sampleMoveOrigin=(%.1f %.1f %.1f) originDelta=(%.1f %.1f %.1f) sampleMoveVelocity=(%.1f %.1f %.1f) valid=%s.\n",
             static_cast<unsigned int>(sizeof(CMoveData)),
             static_cast<unsigned int>(offsetof(CMoveData, m_vecVelocity)),
             static_cast<unsigned int>(offsetof(CMoveData, m_vecAngles)),
@@ -270,6 +558,11 @@ void CPortalTransition::OnFinishMove(C_BasePlayer* basePlayer, CUserCmd* cmd, CM
             BoolText(moveDataLooksValid));
         loggedMoveDataLayout = true;
     }
+
+    static float nextFinishMoveProbeTime = 0.0f;
+    const float finishMoveProbeTime = I::EngineClient ? I::EngineClient->OBSOLETE_Time() : 0.0f;
+    if (ShouldLog(finishMoveProbeTime, nextFinishMoveProbeTime, 0.35f))
+        LogMoveTypeProbe("finishmove", player, move);
 
     if (m_session.mode != TraversalMode::InPortal)
         return;
@@ -541,7 +834,9 @@ bool CPortalTransition::TryBeginTraversal(C_TerrorPlayer* player, CUserCmd* cmd,
     m_session.hasEntryVelocity = VectorLengthSqr(anchor.velocity) > kPortalRestoreVelocityThresholdSqr;
     m_session.savedMoveType = player->m_MoveType();
     m_session.usingNoclip = true;
+    LogMoveTypeProbe("before-enter-noclip", player, nullptr);
     player->m_MoveType() = MOVETYPE_NOCLIP;
+    LogMoveTypeProbe("after-enter-noclip", player, nullptr);
 
     U::LogInfo("[PortalTransition] Entered portal traversal state entry=%s exit=%s eyeD=%.2f cmdDot=%.2f velDot=%.2f moveType=%u->%u preserveVel=%s origin=(%.1f %.1f %.1f) eye=(%.1f %.1f %.1f).\n",
         SideName(m_session.entrySide), SideName(m_session.exitSide), eyeDistance, commandIntoPortal, velocityIntoPortal,
@@ -608,6 +903,7 @@ void CPortalTransition::ClearTraversalSession(C_TerrorPlayer* player, const char
     if (player && m_session.usingNoclip)
     {
         player->m_MoveType() = m_session.savedMoveType;
+        LogMoveTypeProbe("after-restore-walk", player, nullptr);
     }
 
     if (m_session.mode != TraversalMode::Normal)
@@ -842,6 +1138,10 @@ bool CPortalTransition::TeleportLocalPlayer(C_TerrorPlayer* player, PortalInfo_t
 
     const Vector finalEye = newOrigin + currentAnchor.viewOffset;
     const float finalExitEyeDistance = SignedDistanceToPortal(exit, finalEye);
+    const Vector exitReferenceOrigin = exit.origin + exit.normal * 25.0f;
+
+    LogEnvironmentSnapshot("pre-teleport", player, currentEye, Vector(viewAngles.x, viewAngles.y, viewAngles.z), &exitReferenceOrigin);
+    LogEnvironmentSnapshot("exit-reference", player, exitReferenceOrigin, Vector(newAngles.x, newAngles.y, newAngles.z), &exitReferenceOrigin);
 
     U::LogInfo("[PortalTransition] Teleport request entryOrigin=(%.1f %.1f %.1f) exitOrigin=(%.1f %.1f %.1f) oldOrigin=(%.1f %.1f %.1f) oldEye=(%.1f %.1f %.1f) newOrigin=(%.1f %.1f %.1f) newEye=(%.1f %.1f %.1f) oldVel=(%.1f %.1f %.1f) newVel=(%.1f %.1f %.1f) restoredVel=%s oldAng=(%.1f %.1f %.1f) newAng=(%.1f %.1f %.1f) exitEyeD=%.2f clearancePush=%.2f finalExitEyeD=%.2f.\n",
         entry.origin.x, entry.origin.y, entry.origin.z,
@@ -894,6 +1194,9 @@ bool CPortalTransition::TeleportLocalPlayer(C_TerrorPlayer* player, PortalInfo_t
     Vector engineAngles(newAngles.x, newAngles.y, newAngles.z);
     I::EngineClient->SetViewAngles(engineAngles);
     player->m_vecVelocity() = newVelocity;
+    ArmToneTransition("transition-teleport");
+    LogEnvironmentSnapshot("post-teleport", player, finalEye, engineAngles, &exitReferenceOrigin);
+    ArmEnvironmentRenderTrace(8);
 
     m_nextTeleportTime = I::EngineClient->OBSOLETE_Time() + kTeleportCooldown;
     m_lastExitPortal = exitSide;
@@ -901,6 +1204,44 @@ bool CPortalTransition::TeleportLocalPlayer(C_TerrorPlayer* player, PortalInfo_t
     U::LogInfo("[PortalTransition] Teleported local player through portal, exit=%s cooldownUntil=%.3f.\n",
         SideName(exitSide), m_nextTeleportTime);
     return true;
+}
+
+void* CPortalTransition::ResolveServerLocalPlayerForDiagnostics(void** toolsBase, void** edictBase, bool* resolverAgree) const
+{
+    if (toolsBase)
+        *toolsBase = nullptr;
+    if (edictBase)
+        *edictBase = nullptr;
+    if (resolverAgree)
+        *resolverAgree = false;
+
+    if (!I::EngineClient || !I::ClientEntityList)
+        return nullptr;
+
+    const int localIndex = I::EngineClient->GetLocalPlayer();
+    IClientEntity* clientLocal = localIndex > 0 ? I::ClientEntityList->GetClientEntity(localIndex) : nullptr;
+
+    IServerEntity* toolsServerEntity = nullptr;
+    CBaseEntity* toolsBaseEntity = nullptr;
+    if (I::CServerTools && clientLocal)
+    {
+        toolsServerEntity = I::CServerTools->GetIServerEntity(clientLocal);
+        toolsBaseEntity = toolsServerEntity ? toolsServerEntity->GetBaseEntity() : nullptr;
+    }
+
+    CGlobalVars* globals = I::PlayerInfoManager ? I::PlayerInfoManager->GetGlobalVars() : nullptr;
+    edict_t* localEdict = globals && globals->pEdicts && localIndex > 0 ? &globals->pEdicts[localIndex] : nullptr;
+    IServerUnknown* edictUnknown = localEdict ? localEdict->GetUnknown() : nullptr;
+    CBaseEntity* edictBaseEntity = edictUnknown ? edictUnknown->GetBaseEntity() : nullptr;
+
+    if (toolsBase)
+        *toolsBase = toolsBaseEntity;
+    if (edictBase)
+        *edictBase = edictBaseEntity;
+    if (resolverAgree)
+        *resolverAgree = toolsBaseEntity && edictBaseEntity && toolsBaseEntity == edictBaseEntity;
+
+    return toolsBaseEntity ? toolsBaseEntity : edictBaseEntity;
 }
 
 bool CPortalTransition::EntityTeleport(void* entity, const Vector* origin, const QAngle* angles, const Vector* velocity, bool verbose) const
@@ -1111,4 +1452,86 @@ void CPortalTransition::LogDistanceProbe(float currentTime, C_TerrorPlayer* play
         eye.x, eye.y, eye.z,
         blueDistance, blueEyeDistance, BoolText(insideBlue),
         orangeDistance, orangeEyeDistance, BoolText(insideOrange));
+}
+
+void CPortalTransition::LogEnvironmentSnapshot(const char* phase, C_TerrorPlayer* player, const Vector& viewOrigin, const Vector& viewAngles, const Vector* referenceOrigin)
+{
+    if (!phase)
+        phase = "unknown";
+
+    const int sequence = ++m_environmentTraceSequence;
+    const float currentTime = I::EngineClient ? I::EngineClient->OBSOLETE_Time() : 0.0f;
+    const Vector playerOrigin = player ? player->m_vecOrigin() : Vector();
+    const Vector playerEye = player ? player->EyePosition() : viewOrigin;
+    const Vector skyboxOrigin = player ? player->m_skybox3d_origin() : Vector();
+    const Vector skyboxFogDir = player ? player->m_skybox3d_fog_dirPrimary() : Vector();
+    const int viewLeaf = I::EngineTrace ? I::EngineTrace->GetLeafContainingPoint(viewOrigin) : -1;
+    const int eyeLeaf = I::EngineTrace ? I::EngineTrace->GetLeafContainingPoint(playerEye) : -1;
+    const int refLeaf = (I::EngineTrace && referenceOrigin) ? I::EngineTrace->GetLeafContainingPoint(*referenceOrigin) : -1;
+    const int viewContents = I::EngineTrace ? I::EngineTrace->GetPointContents(viewOrigin) : 0;
+    const int eyeContents = I::EngineTrace ? I::EngineTrace->GetPointContents(playerEye) : 0;
+    const int refContents = (I::EngineTrace && referenceOrigin) ? I::EngineTrace->GetPointContents(*referenceOrigin) : 0;
+
+    Vector ambient(0.0f, 0.0f, 0.0f);
+    Vector lightAtView(0.0f, 0.0f, 0.0f);
+    if (I::EngineClient)
+    {
+        I::EngineClient->GetAmbientLightColor(ambient);
+        lightAtView = I::EngineClient->GetLightForPoint(viewOrigin, true);
+    }
+
+    Vector toneScale(0.0f, 0.0f, 0.0f);
+    if (G::G_L4D2Portal.m_pMaterialSystem)
+    {
+        IMatRenderContext* renderContext = G::G_L4D2Portal.m_pMaterialSystem->GetRenderContext();
+        if (renderContext)
+            toneScale = renderContext->GetToneMappingScaleLinear();
+    }
+
+    VisibleFogVolumeInfo_t fog = {};
+    if (I::CustomRender && I::CustomRender->FnGetVisibleFogVolume_func)
+        I::CustomRender->GetVisibleFogVolumeInfo(const_cast<Vector&>(viewOrigin), fog);
+    VisibleFogVolumeInfo_t refFog = {};
+    if (I::CustomRender && I::CustomRender->FnGetVisibleFogVolume_func && referenceOrigin)
+        I::CustomRender->GetVisibleFogVolumeInfo(const_cast<Vector&>(*referenceOrigin), refFog);
+
+    const int tonemapHandle = player ? player->m_hTonemapController().ToInt() : -1;
+    const int playerFogHandle = player ? player->m_PlayerFog_m_hCtrl() : -1;
+    const void* areaBits = player ? player->m_chAreaBits() : nullptr;
+    const void* areaPortalBits = player ? player->m_chAreaPortalBits() : nullptr;
+
+    U::LogWarning(
+        "[PortalEnvironment] seq=%d phase=%s time=%.3f player=%p viewOrigin=(%.1f %.1f %.1f) viewAngles=(%.1f %.1f %.1f) playerOrigin=(%.1f %.1f %.1f) playerEye=(%.1f %.1f %.1f) leaf(view=%d eye=%d ref=%d) contents(view=0x%X eye=0x%X ref=0x%X) fog(viewVol=%d viewLeaf=%d eyeIn=%s waterDist=%.1f waterH=%.1f mat=%p refVol=%d refLeaf=%d refEyeIn=%s) handles(fog=%d tonemap=%d areaBits=%p areaPortalBits=%p) skybox(scale=%d area=%d origin=(%.1f %.1f %.1f) fogEnable=%d fogBlend=%d fogColor=%d/%d fogStart=%.1f fogEnd=%.1f fogDensity=%.3f fogHDR=%.3f fogDir=(%.2f %.2f %.2f)) light(ambient=(%.3f %.3f %.3f) point=(%.3f %.3f %.3f) tone=(%.3f %.3f %.3f)) refOrigin=(%.1f %.1f %.1f).\n",
+        sequence,
+        phase,
+        currentTime,
+        player,
+        viewOrigin.x, viewOrigin.y, viewOrigin.z,
+        viewAngles.x, viewAngles.y, viewAngles.z,
+        playerOrigin.x, playerOrigin.y, playerOrigin.z,
+        playerEye.x, playerEye.y, playerEye.z,
+        viewLeaf, eyeLeaf, refLeaf,
+        viewContents, eyeContents, refContents,
+        fog.m_nVisibleFogVolume, fog.m_nVisibleFogVolumeLeaf, BoolText(fog.m_bEyeInFogVolume),
+        fog.m_flDistanceToWater, fog.m_flWaterHeight, fog.m_pFogVolumeMaterial,
+        refFog.m_nVisibleFogVolume, refFog.m_nVisibleFogVolumeLeaf, BoolText(refFog.m_bEyeInFogVolume),
+        playerFogHandle, tonemapHandle, areaBits, areaPortalBits,
+        player ? player->m_skybox3d_scale() : 0,
+        player ? player->m_skybox3d_area() : 0,
+        skyboxOrigin.x, skyboxOrigin.y, skyboxOrigin.z,
+        player ? player->m_skybox3d_fog_enable() : 0,
+        player ? player->m_skybox3d_fog_blend() : 0,
+        player ? player->m_skybox3d_fog_colorPrimary() : 0,
+        player ? player->m_skybox3d_fog_colorSecondary() : 0,
+        player ? player->m_skybox3d_fog_start() : 0.0f,
+        player ? player->m_skybox3d_fog_end() : 0.0f,
+        player ? player->m_skybox3d_fog_maxdensity() : 0.0f,
+        player ? player->m_skybox3d_fog_HDRColorScale() : 0.0f,
+        skyboxFogDir.x, skyboxFogDir.y, skyboxFogDir.z,
+        ambient.x, ambient.y, ambient.z,
+        lightAtView.x, lightAtView.y, lightAtView.z,
+        toneScale.x, toneScale.y, toneScale.z,
+        referenceOrigin ? referenceOrigin->x : 0.0f,
+        referenceOrigin ? referenceOrigin->y : 0.0f,
+        referenceOrigin ? referenceOrigin->z : 0.0f);
 }

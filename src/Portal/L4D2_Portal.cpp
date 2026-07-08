@@ -27,6 +27,103 @@ IMaterial* g_pPortalMaterial = nullptr;
 IMaterial* g_pPortalMaterial_2 = nullptr;
 IMaterial* g_pPortalMaterial_3 = nullptr;
 
+namespace
+{
+    const char* PortalTextureName(ITexture* texture)
+    {
+        return texture ? texture->GetName() : "<null>";
+    }
+
+    void LogPortalRenderState(
+        const char* phase,
+        int depth,
+        const CViewSetup& view,
+        PortalInfo_t* entryPortal,
+        PortalInfo_t* exitPortal,
+        ITexture* targetTexture,
+        IMatRenderContext* renderContext,
+        const ViewCustomVisibility_t* customVis,
+        const VisibleFogVolumeInfo_t* fogInfo)
+    {
+        if (!G::G_L4D2Portal.m_PortalTransition.ShouldLogPortalRenderState(phase, depth))
+            return;
+
+        if (!renderContext)
+            return;
+
+        Vector toneScale = renderContext->GetToneMappingScaleLinear();
+
+        int viewportX = 0;
+        int viewportY = 0;
+        int viewportW = 0;
+        int viewportH = 0;
+        renderContext->GetViewport(viewportX, viewportY, viewportW, viewportH);
+
+        float fogStart = 0.0f;
+        float fogEnd = 0.0f;
+        float fogZ = 0.0f;
+        renderContext->GetFogDistances(&fogStart, &fogEnd, &fogZ);
+
+        unsigned char fogColor[3] = { 0, 0, 0 };
+        renderContext->GetFogColor(fogColor);
+
+        const int targetW = targetTexture ? targetTexture->GetActualWidth() : 0;
+        const int targetH = targetTexture ? targetTexture->GetActualHeight() : 0;
+        const int visCount = customVis ? customVis->m_nNumVisOrigins : -1;
+        const int forcedLeaf = customVis ? customVis->m_iForceViewLeaf : -1;
+
+        const Vector firstVisOrigin =
+            (customVis && customVis->m_nNumVisOrigins > 0)
+                ? customVis->m_rgVisOrigins[0]
+                : Vector(0.0f, 0.0f, 0.0f);
+
+        const int viewLeaf = I::EngineTrace ? I::EngineTrace->GetLeafContainingPoint(view.origin) : -1;
+        const int exitLeaf = (I::EngineTrace && exitPortal) ? I::EngineTrace->GetLeafContainingPoint(exitPortal->origin) : -1;
+
+        U::LogWarning(
+            "[PortalRenderState] phase=%s depth=%d bloomTone=%d viewLeaf=%d exitLeaf=%d "
+            "viewOrigin=(%.1f %.1f %.1f) viewAngles=(%.1f %.1f %.1f) "
+            "entry=(%.1f %.1f %.1f) exit=(%.1f %.1f %.1f) "
+            "target=%s targetSize=%dx%d currentRT=%p viewport=%d,%d,%d,%d "
+            "tone=(%.3f %.3f %.3f) fogMode=%d fogDist=(%.1f %.1f %.1f) fogColor=(%u %u %u) "
+            "visCount=%d forcedLeaf=%d firstVis=(%.1f %.1f %.1f) "
+            "fogInfo=(vol=%d leaf=%d eye=%d dist=%.1f water=%.1f mat=%p)\n",
+            phase ? phase : "<null>",
+            depth,
+            view.m_bDoBloomAndToneMapping ? 1 : 0,
+            viewLeaf,
+            exitLeaf,
+            view.origin.x, view.origin.y, view.origin.z,
+            view.angles.x, view.angles.y, view.angles.z,
+            entryPortal ? entryPortal->origin.x : 0.0f,
+            entryPortal ? entryPortal->origin.y : 0.0f,
+            entryPortal ? entryPortal->origin.z : 0.0f,
+            exitPortal ? exitPortal->origin.x : 0.0f,
+            exitPortal ? exitPortal->origin.y : 0.0f,
+            exitPortal ? exitPortal->origin.z : 0.0f,
+            PortalTextureName(targetTexture),
+            targetW,
+            targetH,
+            renderContext->GetRenderTarget(),
+            viewportX, viewportY, viewportW, viewportH,
+            toneScale.x, toneScale.y, toneScale.z,
+            renderContext->GetFogMode(),
+            fogStart, fogEnd, fogZ,
+            static_cast<unsigned>(fogColor[0]),
+            static_cast<unsigned>(fogColor[1]),
+            static_cast<unsigned>(fogColor[2]),
+            visCount,
+            forcedLeaf,
+            firstVisOrigin.x, firstVisOrigin.y, firstVisOrigin.z,
+            fogInfo ? fogInfo->m_nVisibleFogVolume : -999,
+            fogInfo ? fogInfo->m_nVisibleFogVolumeLeaf : -999,
+            fogInfo ? (fogInfo->m_bEyeInFogVolume ? 1 : 0) : -1,
+            fogInfo ? fogInfo->m_flDistanceToWater : 0.0f,
+            fogInfo ? fogInfo->m_flWaterHeight : 0.0f,
+            fogInfo ? fogInfo->m_pFogVolumeMaterial : nullptr);
+    }
+}
+
 // g_bIsRenderingPortalTexture 已在 Hooks.h 中声明
 void L4D2_Portal::CreatePortalTexture()
 {
@@ -308,7 +405,8 @@ void L4D2_Portal::PortalInit()
     m_PortalCollisionBridge.Reset();
     m_PortalStage1Probe.Reset();
     U::PortalFileLog::Reset();
-    U::LogWarning("[PortalFileLog] writing portal diagnostics to D:\\portal_l4d2_trace.log.\n");
+    U::LogWarning("[PortalFileLog] writing focused traversal diagnostics to game-root portal_l4d2_traversal.log.\n");
+    U::LogWarning("[PortalGModTraversal] focused log capture is ready for local-player traversal work.\n");
     U::LogWarning("[PortalStage1Probe] installed. Use console command portal_stage1_probe for an immediate stage-1 interface dump.\n");
 }
 
@@ -593,11 +691,13 @@ bool L4D2_Portal::RenderPortalViewRecursive(const CViewSetup& previousView, Port
     *pCameraInThirdPerson = true;
 
     // 7. 设置渲染上下文
+    LogPortalRenderState("recursive-before-push-rt", m_nPortalRenderDepth, newPortalView, entryPortal, exitPortal, pRenderTarget, pRenderContext, &customVis, nullptr);
     pRenderContext->PushRenderTargetAndViewport();
     pRenderContext->SetRenderTarget(pRenderTarget);
     pRenderContext->Viewport(0, 0, pRenderTarget->GetActualWidth(), pRenderTarget->GetActualHeight());
     pRenderContext->ClearColor4ub(0, 0, 0, 255);
     pRenderContext->ClearBuffers(true, true, true);
+    LogPortalRenderState("recursive-after-push-rt", m_nPortalRenderDepth, newPortalView, entryPortal, exitPortal, pRenderTarget, pRenderContext, &customVis, nullptr);
 
     // 8. 设置剪裁平面 (Clip Plane) - 解决物理遮挡
     float clipPlane[4];
@@ -623,16 +723,20 @@ bool L4D2_Portal::RenderPortalViewRecursive(const CViewSetup& previousView, Port
     I::CustomRender->GetVisibleFogVolumeInfo(fogOrigin, fog_1);
     WaterRenderInfo_t water_1;
     I::CustomView->DetermineWaterRenderInfo(&fog_1, &water_1);
+    LogPortalRenderState("recursive-before-draw", m_nPortalRenderDepth, newPortalView, entryPortal, exitPortal, pRenderTarget, pRenderContext, &customVis, &fog_1);
 
     // 【关键调用】传入 &customVis 解决丢模型
     // 这一步会递归触发 DrawModelExecute，从而渲染更深层的传送门
     I::CustomView->DrawWorldAndEntities(true, newPortalView, m_nClearFlags, &fog_1, &water_1, &customVis);
+    LogPortalRenderState("recursive-after-draw", m_nPortalRenderDepth, newPortalView, entryPortal, exitPortal, pRenderTarget, pRenderContext, &customVis, &fog_1);
     
     // 10. 恢复与清理
     I::CustomRender->PopView(I::CustomView->GetFrustum());
     pRenderContext->EnableClipping(false);
     pRenderContext->PopCustomClipPlane();
+    LogPortalRenderState("recursive-before-pop-rt", m_nPortalRenderDepth, newPortalView, entryPortal, exitPortal, pRenderTarget, pRenderContext, &customVis, &fog_1);
     pRenderContext->PopRenderTargetAndViewport();
+    LogPortalRenderState("recursive-after-pop-rt", m_nPortalRenderDepth, newPortalView, entryPortal, exitPortal, pRenderTarget, pRenderContext, &customVis, &fog_1);
     *pCameraInThirdPerson = bOriginalThirdPerson;        
     m_vViewStack.pop_back();
     m_nPortalRenderDepth--;
@@ -688,11 +792,13 @@ void L4D2_Portal::RenderViewToTexture(void* ecx, void* edx, const CViewSetup& ma
     }
 
     // 3. 准备渲染环境
+    LogPortalRenderState("to-texture-before-push-rt", m_nPortalRenderDepth, portalView, entryPortal, exitPortal, pTargetTex, pRenderContext, &customVis, nullptr);
     pRenderContext->PushRenderTargetAndViewport();
     pRenderContext->SetRenderTarget(pTargetTex);
     pRenderContext->Viewport(0, 0, pTargetTex->GetActualWidth(), pTargetTex->GetActualHeight());    
     pRenderContext->ClearColor4ub(0, 0, 0, 255);
     pRenderContext->ClearBuffers(true, true, true);
+    LogPortalRenderState("to-texture-after-push-rt", m_nPortalRenderDepth, portalView, entryPortal, exitPortal, pTargetTex, pRenderContext, &customVis, nullptr);
 
     // 4. 设置剪裁平面 (Clip Plane) - 模仿官方处理遮挡
     // 官方代码：m_vForward.Dot( origin - forward * 0.5f )
@@ -716,6 +822,7 @@ void L4D2_Portal::RenderViewToTexture(void* ecx, void* edx, const CViewSetup& ma
     I::CustomRender->GetVisibleFogVolumeInfo(fogOrigin, fog_1); 
     WaterRenderInfo_t water_1;
     I::CustomView->DetermineWaterRenderInfo(&fog_1, &water_1);
+    LogPortalRenderState("to-texture-before-draw", m_nPortalRenderDepth, portalView, entryPortal, exitPortal, pTargetTex, pRenderContext, &customVis, &fog_1);
 
     // if (pTargetTex == m_pPortalTexture_Blue) {
     //     I::ModelRender->ForcedMaterialOverride(m_pPortalMaterial_Blue);
@@ -725,6 +832,7 @@ void L4D2_Portal::RenderViewToTexture(void* ecx, void* edx, const CViewSetup& ma
     
     // 【核心】传入 customVis
     I::CustomView->DrawWorldAndEntities(true, portalView, m_nClearFlags, &fog_1, &water_1, &customVis);
+    LogPortalRenderState("to-texture-after-draw", m_nPortalRenderDepth, portalView, entryPortal, exitPortal, pTargetTex, pRenderContext, &customVis, &fog_1);
     
     // I::ModelRender->ForcedMaterialOverride(nullptr);
 
@@ -732,7 +840,9 @@ void L4D2_Portal::RenderViewToTexture(void* ecx, void* edx, const CViewSetup& ma
     I::CustomRender->PopView(I::CustomView->GetFrustum());
     pRenderContext->EnableClipping(false);
     pRenderContext->PopCustomClipPlane();
+    LogPortalRenderState("to-texture-before-pop-rt", m_nPortalRenderDepth, portalView, entryPortal, exitPortal, pTargetTex, pRenderContext, &customVis, &fog_1);
     pRenderContext->PopRenderTargetAndViewport();
+    LogPortalRenderState("to-texture-after-pop-rt", m_nPortalRenderDepth, portalView, entryPortal, exitPortal, pTargetTex, pRenderContext, &customVis, &fog_1);
 }
 #endif
 
@@ -831,11 +941,13 @@ void L4D2_Portal::RenderTextureInternal(const CViewSetup& mainView, PortalInfo_t
     }
 
     // 3. 准备渲染环境
+    LogPortalRenderState("mode3-before-push-rt", m_nProcessingDepth, portalView, entryPortal, exitPortal, pTargetTex, pRenderContext, &customVis, nullptr);
     pRenderContext->PushRenderTargetAndViewport();
     pRenderContext->SetRenderTarget(pTargetTex);
     pRenderContext->Viewport(0, 0, pTargetTex->GetActualWidth(), pTargetTex->GetActualHeight());    
     pRenderContext->ClearColor4ub(255, 0, 0, 255);
     pRenderContext->ClearBuffers(true, true, true);
+    LogPortalRenderState("mode3-after-push-rt", m_nProcessingDepth, portalView, entryPortal, exitPortal, pTargetTex, pRenderContext, &customVis, nullptr);
 
     // 4. 设置剪裁平面 (Clip Plane) - 模仿官方处理遮挡
     // 官方代码：m_vForward.Dot( origin - forward * 0.5f )
@@ -859,15 +971,19 @@ void L4D2_Portal::RenderTextureInternal(const CViewSetup& mainView, PortalInfo_t
     I::CustomRender->GetVisibleFogVolumeInfo(fogOrigin, fog_1); 
     WaterRenderInfo_t water_1;
     I::CustomView->DetermineWaterRenderInfo(&fog_1, &water_1);
+    LogPortalRenderState("mode3-before-draw", m_nProcessingDepth, portalView, entryPortal, exitPortal, pTargetTex, pRenderContext, &customVis, &fog_1);
     
     // 【核心】传入 customVis
     I::CustomView->DrawWorldAndEntities(true, portalView, m_nClearFlags, &fog_1, &water_1, &customVis);
+    LogPortalRenderState("mode3-after-draw", m_nProcessingDepth, portalView, entryPortal, exitPortal, pTargetTex, pRenderContext, &customVis, &fog_1);
 
     // 6. 恢复
     I::CustomRender->PopView(nullptr);
     pRenderContext->EnableClipping(false);
     pRenderContext->PopCustomClipPlane();
+    LogPortalRenderState("mode3-before-pop-rt", m_nProcessingDepth, portalView, entryPortal, exitPortal, pTargetTex, pRenderContext, &customVis, &fog_1);
     pRenderContext->PopRenderTargetAndViewport();
+    LogPortalRenderState("mode3-after-pop-rt", m_nProcessingDepth, portalView, entryPortal, exitPortal, pTargetTex, pRenderContext, &customVis, &fog_1);
 }
 #endif
 

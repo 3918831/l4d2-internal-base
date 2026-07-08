@@ -31,7 +31,8 @@ namespace U {
 
         sprintf_s(finalBuffer, "%s%s", LOG_PREFIX, buffer);
         PortalFileLog::Write(finalBuffer);
-        I::Cvar->ConsolePrintf("%s", finalBuffer);
+        if (!PortalFileLog::ShouldSuppressConsole(finalBuffer))
+            I::Cvar->ConsolePrintf("%s", finalBuffer);
     }
 
     // 调试信息 - 白色，带 [DEBUG] 前缀
@@ -48,7 +49,8 @@ namespace U {
 
         sprintf_s(finalBuffer, "%s%s", LOG_DEBUG_PREFIX, buffer);
         PortalFileLog::Write(finalBuffer);
-        I::Cvar->ConsoleColorPrintf(COLOR_INFO, "%s", finalBuffer);
+        if (!PortalFileLog::ShouldSuppressConsole(finalBuffer))
+            I::Cvar->ConsoleColorPrintf(COLOR_INFO, "%s", finalBuffer);
     }
 
     // 警告信息 - 黄橙色
@@ -65,7 +67,8 @@ namespace U {
 
         sprintf_s(finalBuffer, "%s%s", LOG_PREFIX, buffer);
         PortalFileLog::Write(finalBuffer);
-        I::Cvar->ConsoleColorPrintf(COLOR_WARNING, "%s", finalBuffer);
+        if (!PortalFileLog::ShouldSuppressConsole(finalBuffer))
+            I::Cvar->ConsoleColorPrintf(COLOR_WARNING, "%s", finalBuffer);
     }
 
     // 错误信息 - 红色

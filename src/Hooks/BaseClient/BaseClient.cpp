@@ -102,6 +102,7 @@ void __fastcall BaseClient::FrameStageNotify::Detour(void* ecx, void* edx, Clien
 void __fastcall BaseClient::RenderView::Detour(void* ecx, void* edx, CViewSetup& setup, CViewSetup& hudViewSetup, int nClearFlags, int whatToDraw)
 {
 	G::G_L4D2Portal.m_PortalTransition.ApplyVisualTransition(setup);
+	G::G_L4D2Portal.m_PortalTransition.LogRenderEnvironmentSnapshot("main-render", setup);
 
 	// 每帧开始时，重置状态
 	G::G_L4D2Portal.m_nPortalRenderDepth = 0;
@@ -125,6 +126,7 @@ void __fastcall BaseClient::RenderView::Detour(void* ecx, void* edx, CViewSetup&
 void __fastcall Hooks::BaseClient::RenderView::Detour(void* ecx, void* edx, CViewSetup& setup, CViewSetup& hudViewSetup, int nClearFlags, int whatToDraw)
 {
     G::G_L4D2Portal.m_PortalTransition.ApplyVisualTransition(setup);
+    G::G_L4D2Portal.m_PortalTransition.LogRenderEnvironmentSnapshot("main-render", setup);
 
     // 1. 如果已经在渲染传送门纹理，或者是递归保护，直接调用原始函数
     // if (g_bIsRenderingPortalTexture || !I::EngineClient->IsInGame()) {
@@ -188,6 +190,7 @@ void __fastcall Hooks::BaseClient::RenderView::Detour(void* ecx, void* edx, CVie
 void __fastcall Hooks::BaseClient::RenderView::Detour(void* ecx, void* edx, CViewSetup& setup, CViewSetup& hudViewSetup, int nClearFlags, int whatToDraw)
 {
     G::G_L4D2Portal.m_PortalTransition.ApplyVisualTransition(setup);
+    G::G_L4D2Portal.m_PortalTransition.LogRenderEnvironmentSnapshot("main-render", setup);
 
     // 0. 初始化
     G::G_L4D2Portal.m_renderQueue.clear();
