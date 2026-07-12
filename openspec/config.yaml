@@ -1,5 +1,9 @@
 schema: spec-driven
 
+context: |
+  项目文档默认优先使用简体中文；代码标识符、类名、函数名、命令和文件路径保留英文。
+  如果需要英文兼容版本，应同时提供独立的 .zh-CN.md 中文文档，并以中文版作为团队阅读入口。
+
 # Project context (optional)
 # This is shown to AI when creating artifacts.
 # Add your tech stack, conventions, style guides, domain knowledge, etc.
