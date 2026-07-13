@@ -1,5 +1,7 @@
 #include "CCSGameMovement.h"
 #include "../../Portal/L4D2_Portal.h"
+#include "../../Portal/PortalControlledNoclipMovement.h"
+#include "../../Portal/PortalTransitionDecision.h"
 #include "../../Util/Logger/Logger.h"
 #include "../../Util/Logger/PortalFileLog.h"
 #include <intrin.h>
@@ -216,7 +218,8 @@ namespace
 	{
 		return heartbeat <= 3u
 			|| (heartbeat % 180u) == 0u
-			|| G::G_L4D2Portal.m_PortalTransitionSimulator.IsInCollisionBridgePhase();
+			|| G::G_L4D2Portal.m_PortalTransitionSimulator.IsInCollisionBridgePhase()
+			|| G::G_L4D2Portal.m_PortalTransition.IsControlledNoclipActive();
 	}
 
 	void LogFocusedHookProbe(const char* domain, const char* stage, const char* point, uint32_t heartbeat, void* gameMovement)
@@ -543,6 +546,10 @@ namespace
 
 	bool TrySyncPortalCommittedMovement(const char* domain, uint32_t heartbeat, void* gameMovement)
 	{
+		const PortalTransitionContext& context = G::G_L4D2Portal.m_PortalTransitionSimulator.GetContext();
+		if (!PortalTransitionDecision::ShouldApplyLegacyBridgeMovement(context.phase))
+			return false;
+
 		CMoveData* move = TryGetMoveDataFromGameMovement(gameMovement);
 		if (!move)
 			return false;
@@ -588,6 +595,9 @@ namespace
 	bool TryPreservePortalExitVelocity(const char* domain, uint32_t heartbeat, void* gameMovement, const Vector& velocityBeforeOriginal)
 	{
 		const PortalTransitionContext& context = G::G_L4D2Portal.m_PortalTransitionSimulator.GetContext();
+		if (!PortalTransitionDecision::ShouldApplyLegacyBridgeMovement(context.phase))
+			return false;
+
 		if (context.phase != PortalTransitionPhase::ExitingPortal || context.exitSide == PortalTransitionSide::None)
 			return false;
 
@@ -884,11 +894,18 @@ void __fastcall CCSGameMovement::PlayerMove::Detour(void* ecx, void* edx)
 	++heartbeat;
 	LogMovementStageSnapshot("server", "PlayerMove", "Enter", heartbeat, ecx, log);
 	LogFocusedHookProbe("server", "PlayerMove", "Enter", heartbeat, ecx);
-	ServerTable.Original<FN>(Index)(ecx, edx);
+	const PortalTransitionContext& context = G::G_L4D2Portal.m_PortalTransitionSimulator.GetContext();
+	if (PortalTransitionDecision::ShouldRunOriginalPlayerMove(context.phase))
+	{
+		ServerTable.Original<FN>(Index)(ecx, edx);
+	}
+	else
+	{
+		PortalControlledNoclipMovement::TryApply("server", heartbeat, TryGetMoveDataFromGameMovement(ecx), context);
+	}
 	LogFocusedHookProbe("server", "PlayerMove", "Exit", heartbeat, ecx);
 	LogMovementStageSnapshot("server", "PlayerMove", "Exit", heartbeat, ecx, log);
 }
-
 void __fastcall CCSGameMovement::WalkMove::Detour(void* ecx, void* edx)
 {
 	MovementStageScope stageScope("server", MovementStage::WalkMove);
@@ -998,11 +1015,18 @@ void __fastcall CCSGameMovement::ClientPlayerMove::Detour(void* ecx, void* edx)
 	++heartbeat;
 	LogMovementStageSnapshot("client", "PlayerMove", "Enter", heartbeat, ecx, log);
 	LogFocusedHookProbe("client", "PlayerMove", "Enter", heartbeat, ecx);
-	ClientTable.Original<FN>(Index)(ecx, edx);
+	const PortalTransitionContext& context = G::G_L4D2Portal.m_PortalTransitionSimulator.GetContext();
+	if (PortalTransitionDecision::ShouldRunOriginalPlayerMove(context.phase))
+	{
+		ClientTable.Original<FN>(Index)(ecx, edx);
+	}
+	else
+	{
+		PortalControlledNoclipMovement::TryApply("client", heartbeat, TryGetMoveDataFromGameMovement(ecx), context);
+	}
 	LogFocusedHookProbe("client", "PlayerMove", "Exit", heartbeat, ecx);
 	LogMovementStageSnapshot("client", "PlayerMove", "Exit", heartbeat, ecx, log);
 }
-
 void __fastcall CCSGameMovement::ClientWalkMove::Detour(void* ecx, void* edx)
 {
 	MovementStageScope stageScope("client", MovementStage::WalkMove);

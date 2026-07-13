@@ -17,6 +17,7 @@
 #include "../SDK/L4D2/Interfaces/GameMovement.h"
 #include "../SDK/L4D2/Interfaces/IPlayerInfoManager.h"
 #include "../SDK/L4D2/Interfaces/MatRenderContext.h"
+#include "../SDK/L4D2/Server/ServerDataMap.h"
 #include "../Util/Logger/Logger.h"
 #include "../Util/Offsets/Offsets.h"
 #pragma warning(push)
@@ -185,6 +186,7 @@ namespace
 
 void CPortalTransition::Reset()
 {
+    RestoreControlledMoveType(GetLocalPlayer(), "portal-transition-reset");
     m_blueState = {};
     m_orangeState = {};
     m_session = {};
@@ -403,7 +405,9 @@ void CPortalTransition::LogMoveTypeProbe(const char* phase, C_BasePlayer* basePl
         clientMoveType = player->m_MoveType();
 
     unsigned char serverMoveType = 0;
-    const bool hasServerMoveType = TryReadByteOffset(serverBase, 0x144u, &serverMoveType);
+    const bool hasRawServerMoveType = TryReadByteOffset(serverBase, 0x144u, &serverMoveType);
+    const auto datamapMoveType = L4D2::ServerDataMap::ProbeMoveType(static_cast<CBaseEntity*>(serverBase));
+    MaybeRunServerMoveTypeWriteDryRun(serverBase, phase);
 
     Vector toolsOrigin;
     QAngle toolsAngles;
@@ -419,7 +423,7 @@ void CPortalTransition::LogMoveTypeProbe(const char* phase, C_BasePlayer* basePl
     const Vector moveOrigin = move ? move->GetAbsOrigin() : Vector();
     const Vector moveVelocity = move ? move->m_vecVelocity : Vector();
 
-    U::LogInfo("[PortalMoveTypeProbe] phase=%s localIndex=%d clientPlayer=%p clientLocal=%p serverChosen=%p toolsBase=%p edictBase=%p resolver=%s clientMoveType=%s:%u serverMoveType=%s:%u toolsNoClip=%s toolsPos=%s toolsOrigin=(%.2f %.2f %.2f) toolsAngles=(%.2f %.2f %.2f) playerOrigin=(%.2f %.2f %.2f) playerEye=(%.2f %.2f %.2f) playerVel=(%.2f %.2f %.2f) mv=%p mvOrigin=(%.2f %.2f %.2f) mvVel=(%.2f %.2f %.2f).\n",
+    U::LogInfo("[PortalMoveTypeProbe] phase=%s localIndex=%d clientPlayer=%p clientLocal=%p serverChosen=%p toolsBase=%p edictBase=%p resolver=%s clientMoveType=%s:%u serverMoveTypeRaw144=%s:%u serverDataMapMoveType=%s:%d byte=%u reason=%s rootClass=%s fieldClass=%s offset=%d type=%d fieldSize=%u fieldBytes=%d dataMap=%p field=%p toolsNoClip=%s toolsPos=%s toolsOrigin=(%.2f %.2f %.2f) toolsAngles=(%.2f %.2f %.2f) playerOrigin=(%.2f %.2f %.2f) playerEye=(%.2f %.2f %.2f) playerVel=(%.2f %.2f %.2f) mv=%p mvOrigin=(%.2f %.2f %.2f) mvVel=(%.2f %.2f %.2f).\n",
         phase ? phase : "unknown",
         localIndex,
         player,
@@ -430,8 +434,20 @@ void CPortalTransition::LogMoveTypeProbe(const char* phase, C_BasePlayer* basePl
         MatchText(resolverAgree),
         hasClientMoveType ? "ok" : "missing",
         static_cast<unsigned int>(clientMoveType),
-        hasServerMoveType ? "ok" : "missing",
+        hasRawServerMoveType ? "ok" : "missing",
         static_cast<unsigned int>(serverMoveType),
+        datamapMoveType.ok ? "ok" : "missing",
+        datamapMoveType.valueInt,
+        static_cast<unsigned int>(datamapMoveType.valueByte),
+        datamapMoveType.reason ? datamapMoveType.reason : "unknown",
+        datamapMoveType.rootClassName ? datamapMoveType.rootClassName : "unknown",
+        datamapMoveType.field.ownerClassName ? datamapMoveType.field.ownerClassName : "unknown",
+        datamapMoveType.field.actualOffset,
+        static_cast<int>(datamapMoveType.field.fieldType),
+        static_cast<unsigned int>(datamapMoveType.field.fieldSize),
+        datamapMoveType.field.fieldSizeInBytes,
+        datamapMoveType.dataMap,
+        datamapMoveType.field.typedesc,
         BoolText(toolsNoClip),
         BoolText(toolsPositionOk),
         toolsOrigin.x, toolsOrigin.y, toolsOrigin.z,
@@ -442,6 +458,170 @@ void CPortalTransition::LogMoveTypeProbe(const char* phase, C_BasePlayer* basePl
         move,
         moveOrigin.x, moveOrigin.y, moveOrigin.z,
         moveVelocity.x, moveVelocity.y, moveVelocity.z);
+}
+
+void CPortalTransition::MaybeRunServerMoveTypeWriteDryRun(void* serverBase, const char* phase)
+{
+    if (m_serverMoveTypeWriteDryRunDone || !serverBase)
+        return;
+
+    auto before = L4D2::ServerDataMap::ProbeMoveType(static_cast<CBaseEntity*>(serverBase));
+    if (!before.ok)
+    {
+        U::LogInfo("[PortalServerMoveType][DryRun] phase=%s skipped reason=%s entity=%p.\n",
+            phase ? phase : "unknown",
+            before.reason ? before.reason : "unknown",
+            serverBase);
+        return;
+    }
+
+    m_serverMoveTypeWriteDryRunDone = true;
+
+    const int savedValue = before.valueInt;
+    const int targetValue = MOVETYPE_NOCLIP;
+    const bool writeTargetOk = L4D2::ServerDataMap::TryWriteFieldInt(static_cast<CBaseEntity*>(serverBase), before.field, targetValue);
+    const auto afterTarget = L4D2::ServerDataMap::ProbeMoveType(static_cast<CBaseEntity*>(serverBase));
+    const bool restoreOk = L4D2::ServerDataMap::TryWriteFieldInt(static_cast<CBaseEntity*>(serverBase), before.field, savedValue);
+    const auto afterRestore = L4D2::ServerDataMap::ProbeMoveType(static_cast<CBaseEntity*>(serverBase));
+
+    bool toolsNoClipAfterRestore = false;
+    if (I::CServerTools && I::EngineClient && I::ClientEntityList)
+    {
+        const int localIndex = I::EngineClient->GetLocalPlayer();
+        IClientEntity* clientLocal = localIndex > 0 ? I::ClientEntityList->GetClientEntity(localIndex) : nullptr;
+        toolsNoClipAfterRestore = I::CServerTools->IsInNoClipMode(clientLocal);
+    }
+
+    U::LogInfo("[PortalServerMoveType][DryRun] phase=%s entity=%p offset=%d type=%d saved=%d target=%d writeTarget=%s afterTarget=%s:%d restore=%s afterRestore=%s:%d toolsNoClipAfterRestore=%s fieldClass=%s dataMap=%p field=%p.\n",
+        phase ? phase : "unknown",
+        serverBase,
+        before.field.actualOffset,
+        static_cast<int>(before.field.fieldType),
+        savedValue,
+        targetValue,
+        BoolText(writeTargetOk),
+        afterTarget.ok ? "ok" : (afterTarget.reason ? afterTarget.reason : "missing"),
+        afterTarget.valueInt,
+        BoolText(restoreOk),
+        afterRestore.ok ? "ok" : (afterRestore.reason ? afterRestore.reason : "missing"),
+        afterRestore.valueInt,
+        BoolText(toolsNoClipAfterRestore),
+        before.field.ownerClassName ? before.field.ownerClassName : "unknown",
+        before.dataMap,
+        before.field.typedesc);
+}
+
+bool CPortalTransition::EnterControlledNoclip(C_TerrorPlayer* player, const char* reason)
+{
+    if (m_controlledMoveType.active)
+        return true;
+
+    if (!player)
+        player = GetLocalPlayer();
+    if (!player)
+    {
+        U::LogInfo("[PortalEnterState] controlled-noclip rejected reason=%s detail=client-player-unavailable.\n",
+            reason ? reason : "unknown");
+        return false;
+    }
+
+    void* toolsBase = nullptr;
+    void* edictBase = nullptr;
+    bool resolverAgree = false;
+    void* serverBase = ResolveServerLocalPlayerForDiagnostics(&toolsBase, &edictBase, &resolverAgree);
+    const auto serverBefore = L4D2::ServerDataMap::ProbeMoveType(static_cast<CBaseEntity*>(serverBase));
+    if (!serverBefore.ok)
+    {
+        U::LogInfo("[PortalEnterState] controlled-noclip rejected reason=%s detail=%s server=%p toolsBase=%p edictBase=%p resolver=%s.\n",
+            reason ? reason : "unknown",
+            serverBefore.reason ? serverBefore.reason : "server-movetype-unavailable",
+            serverBase,
+            toolsBase,
+            edictBase,
+            MatchText(resolverAgree));
+        return false;
+    }
+
+    const unsigned char savedClientMoveType = player->m_MoveType();
+    const int savedServerMoveType = serverBefore.valueInt;
+    const bool serverWriteOk = L4D2::ServerDataMap::TryWriteFieldInt(
+        static_cast<CBaseEntity*>(serverBase), serverBefore.field, MOVETYPE_NOCLIP);
+    const auto serverAfter = L4D2::ServerDataMap::ProbeMoveType(static_cast<CBaseEntity*>(serverBase));
+    if (!serverWriteOk || !serverAfter.ok || serverAfter.valueInt != MOVETYPE_NOCLIP)
+    {
+        const bool restoreOk = L4D2::ServerDataMap::TryWriteFieldInt(
+            static_cast<CBaseEntity*>(serverBase), serverBefore.field, savedServerMoveType);
+        U::LogInfo("[PortalEnterState] controlled-noclip failed reason=%s client=%u server=%d target=%d write=%s after=%s:%d rollback=%s serverEntity=%p.\n",
+            reason ? reason : "unknown",
+            static_cast<unsigned int>(savedClientMoveType),
+            savedServerMoveType,
+            MOVETYPE_NOCLIP,
+            BoolText(serverWriteOk),
+            serverAfter.ok ? "ok" : (serverAfter.reason ? serverAfter.reason : "missing"),
+            serverAfter.valueInt,
+            BoolText(restoreOk),
+            serverBase);
+        return false;
+    }
+
+    player->m_MoveType() = MOVETYPE_NOCLIP;
+    m_controlledMoveType.active = true;
+    m_controlledMoveType.savedClientMoveType = savedClientMoveType;
+    m_controlledMoveType.savedServerMoveType = savedServerMoveType;
+
+    U::LogInfo("[PortalEnterState] controlled-noclip entered reason=%s client=%u->%u server=%d->%d serverEntity=%p offset=%d type=%d resolver=%s.\n",
+        reason ? reason : "unknown",
+        static_cast<unsigned int>(savedClientMoveType),
+        static_cast<unsigned int>(player->m_MoveType()),
+        savedServerMoveType,
+        serverAfter.valueInt,
+        serverBase,
+        serverBefore.field.actualOffset,
+        static_cast<int>(serverBefore.field.fieldType),
+        MatchText(resolverAgree));
+    return true;
+}
+
+void CPortalTransition::RestoreControlledMoveType(C_TerrorPlayer* player, const char* reason)
+{
+    if (!m_controlledMoveType.active)
+        return;
+
+    const unsigned char savedClientMoveType = m_controlledMoveType.savedClientMoveType;
+    const int savedServerMoveType = m_controlledMoveType.savedServerMoveType;
+    if (!player)
+        player = GetLocalPlayer();
+
+    void* toolsBase = nullptr;
+    void* edictBase = nullptr;
+    bool resolverAgree = false;
+    void* serverBase = ResolveServerLocalPlayerForDiagnostics(&toolsBase, &edictBase, &resolverAgree);
+    const auto serverBefore = L4D2::ServerDataMap::ProbeMoveType(static_cast<CBaseEntity*>(serverBase));
+    const bool serverRestoreOk = serverBefore.ok
+        && L4D2::ServerDataMap::TryWriteFieldInt(
+            static_cast<CBaseEntity*>(serverBase), serverBefore.field, savedServerMoveType);
+    const auto serverAfter = L4D2::ServerDataMap::ProbeMoveType(static_cast<CBaseEntity*>(serverBase));
+
+    const unsigned int clientBefore = player ? static_cast<unsigned int>(player->m_MoveType()) : 0u;
+    if (player)
+        player->m_MoveType() = savedClientMoveType;
+    const unsigned int clientAfter = player ? static_cast<unsigned int>(player->m_MoveType()) : 0u;
+
+    U::LogInfo("[PortalRestoreWalk] controlled-noclip restored reason=%s client=%s:%u->%u serverSaved=%d serverBefore=%s:%d restore=%s serverAfter=%s:%d serverEntity=%p resolver=%s.\n",
+        reason ? reason : "unknown",
+        player ? "ok" : "missing",
+        clientBefore,
+        clientAfter,
+        savedServerMoveType,
+        serverBefore.ok ? "ok" : (serverBefore.reason ? serverBefore.reason : "missing"),
+        serverBefore.valueInt,
+        BoolText(serverRestoreOk),
+        serverAfter.ok ? "ok" : (serverAfter.reason ? serverAfter.reason : "missing"),
+        serverAfter.valueInt,
+        serverBase,
+        MatchText(resolverAgree));
+
+    m_controlledMoveType = {};
 }
 
 void CPortalTransition::Update(CUserCmd* cmd)
@@ -833,14 +1013,66 @@ bool CPortalTransition::TryBeginTraversal(C_TerrorPlayer* player, CUserCmd* cmd,
     m_session.entryVelocity = anchor.velocity;
     m_session.hasEntryVelocity = VectorLengthSqr(anchor.velocity) > kPortalRestoreVelocityThresholdSqr;
     m_session.savedMoveType = player->m_MoveType();
-    m_session.usingNoclip = true;
+    void* toolsBase = nullptr;
+    void* edictBase = nullptr;
+    bool resolverAgree = false;
+    void* serverBase = ResolveServerLocalPlayerForDiagnostics(&toolsBase, &edictBase, &resolverAgree);
+    auto serverBefore = L4D2::ServerDataMap::ProbeMoveType(static_cast<CBaseEntity*>(serverBase));
+    if (!serverBefore.ok)
+    {
+        U::LogInfo("[PortalServerMoveType] phase=enter rejected reason=%s server=%p toolsBase=%p edictBase=%p resolver=%s.\n",
+            serverBefore.reason ? serverBefore.reason : "unknown",
+            serverBase,
+            toolsBase,
+            edictBase,
+            MatchText(resolverAgree));
+        m_session = {};
+        return false;
+    }
+
+    m_session.savedServerMoveType = serverBefore.valueInt;
     LogMoveTypeProbe("before-enter-noclip", player, nullptr);
+    const bool serverWriteOk = L4D2::ServerDataMap::TryWriteFieldInt(static_cast<CBaseEntity*>(serverBase), serverBefore.field, MOVETYPE_NOCLIP);
+    const auto serverAfter = L4D2::ServerDataMap::ProbeMoveType(static_cast<CBaseEntity*>(serverBase));
+    m_session.usingServerNoclip = serverWriteOk && serverAfter.ok && serverAfter.valueInt == MOVETYPE_NOCLIP;
+    if (!m_session.usingServerNoclip)
+    {
+        const bool restoreOk = L4D2::ServerDataMap::TryWriteFieldInt(static_cast<CBaseEntity*>(serverBase), serverBefore.field, m_session.savedServerMoveType);
+        U::LogInfo("[PortalServerMoveType] phase=enter failed saved=%d target=%d write=%s after=%s:%d restore=%s server=%p offset=%d type=%d.\n",
+            m_session.savedServerMoveType,
+            MOVETYPE_NOCLIP,
+            BoolText(serverWriteOk),
+            serverAfter.ok ? "ok" : (serverAfter.reason ? serverAfter.reason : "missing"),
+            serverAfter.valueInt,
+            BoolText(restoreOk),
+            serverBase,
+            serverBefore.field.actualOffset,
+            static_cast<int>(serverBefore.field.fieldType));
+        m_session = {};
+        return false;
+    }
+
+    m_session.usingNoclip = true;
     player->m_MoveType() = MOVETYPE_NOCLIP;
     LogMoveTypeProbe("after-enter-noclip", player, nullptr);
 
-    U::LogInfo("[PortalTransition] Entered portal traversal state entry=%s exit=%s eyeD=%.2f cmdDot=%.2f velDot=%.2f moveType=%u->%u preserveVel=%s origin=(%.1f %.1f %.1f) eye=(%.1f %.1f %.1f).\n",
+    U::LogInfo("[PortalServerMoveType] phase=enter saved=%d target=%d write=%s after=%s:%d server=%p offset=%d type=%d toolsBase=%p edictBase=%p resolver=%s.\n",
+        m_session.savedServerMoveType,
+        MOVETYPE_NOCLIP,
+        BoolText(serverWriteOk),
+        serverAfter.ok ? "ok" : (serverAfter.reason ? serverAfter.reason : "missing"),
+        serverAfter.valueInt,
+        serverBase,
+        serverBefore.field.actualOffset,
+        static_cast<int>(serverBefore.field.fieldType),
+        toolsBase,
+        edictBase,
+        MatchText(resolverAgree));
+
+    U::LogInfo("[PortalTransition] Entered portal traversal state entry=%s exit=%s eyeD=%.2f cmdDot=%.2f velDot=%.2f clientMoveType=%u->%u serverMoveType=%d->%d preserveVel=%s origin=(%.1f %.1f %.1f) eye=(%.1f %.1f %.1f).\n",
         SideName(m_session.entrySide), SideName(m_session.exitSide), eyeDistance, commandIntoPortal, velocityIntoPortal,
         static_cast<unsigned int>(m_session.savedMoveType), static_cast<unsigned int>(player->m_MoveType()),
+        m_session.savedServerMoveType, serverAfter.valueInt,
         BoolText(m_session.hasEntryVelocity),
         anchor.origin.x, anchor.origin.y, anchor.origin.z, anchor.eye.x, anchor.eye.y, anchor.eye.z);
     return true;
@@ -900,6 +1132,31 @@ void CPortalTransition::UpdateTraversalExitState(C_TerrorPlayer* player)
 
 void CPortalTransition::ClearTraversalSession(C_TerrorPlayer* player, const char* reason)
 {
+    if (m_session.usingServerNoclip)
+    {
+        void* toolsBase = nullptr;
+        void* edictBase = nullptr;
+        bool resolverAgree = false;
+        void* serverBase = ResolveServerLocalPlayerForDiagnostics(&toolsBase, &edictBase, &resolverAgree);
+        auto beforeRestore = L4D2::ServerDataMap::ProbeMoveType(static_cast<CBaseEntity*>(serverBase));
+        const bool restoreOk = beforeRestore.ok
+            && L4D2::ServerDataMap::TryWriteFieldInt(static_cast<CBaseEntity*>(serverBase), beforeRestore.field, m_session.savedServerMoveType);
+        const auto afterRestore = L4D2::ServerDataMap::ProbeMoveType(static_cast<CBaseEntity*>(serverBase));
+
+        U::LogInfo("[PortalServerMoveType] phase=restore reason=%s saved=%d before=%s:%d restore=%s after=%s:%d server=%p toolsBase=%p edictBase=%p resolver=%s.\n",
+            reason ? reason : "unknown",
+            m_session.savedServerMoveType,
+            beforeRestore.ok ? "ok" : (beforeRestore.reason ? beforeRestore.reason : "missing"),
+            beforeRestore.valueInt,
+            BoolText(restoreOk),
+            afterRestore.ok ? "ok" : (afterRestore.reason ? afterRestore.reason : "missing"),
+            afterRestore.valueInt,
+            serverBase,
+            toolsBase,
+            edictBase,
+            MatchText(resolverAgree));
+    }
+
     if (player && m_session.usingNoclip)
     {
         player->m_MoveType() = m_session.savedMoveType;

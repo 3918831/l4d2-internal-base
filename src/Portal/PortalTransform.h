@@ -26,6 +26,8 @@ namespace PortalTransform
     Vector TransformPoint(const matrix3x4_t& matrix, const Vector& point);
     Vector TransformVector(const matrix3x4_t& matrix, const Vector& vector);
     QAngle TransformAngles(const matrix3x4_t& matrix, const QAngle& angles);
+    Vector ComputeGModPortalHeadPosition(const PortalInfo_t& entry, const PortalInfo_t& exit, const Vector& headPosition);
+    Vector ComputeOriginForGModHeadPosition(const Vector& gmodHeadPosition, const Vector& eyeFromOrigin);
 
     PortalLocalPoint WorldToPortalLocal(const PortalInfo_t& portal, const Vector& point);
     bool IsPointInsideAperture(const PortalInfo_t& portal, const Vector& point, const PortalAperture& aperture = {});

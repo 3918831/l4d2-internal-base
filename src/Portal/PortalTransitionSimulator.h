@@ -1,21 +1,12 @@
 #pragma once
 
 #include "../SDK/SDK.h"
+#include "PortalTransitionDecision.h"
 #include "PortalTransform.h"
 
 class C_TerrorPlayer;
 class CUserCmd;
 struct PortalInfo_t;
-
-enum class PortalTransitionPhase
-{
-    Idle,
-    ApproachingPortal,
-    IntersectingPortal,
-    CommittingTeleport,
-    ExitingPortal,
-    Cooldown,
-};
 
 enum class PortalTransitionSide
 {
@@ -81,6 +72,10 @@ private:
         bool centerInside = false;
         bool feetInside = false;
         bool insideAperture = false;
+        bool gmodWallBounds = false;
+        float gmodFrontDistance = 0.0f;
+        float feetLocalRight = 0.0f;
+        float feetLocalUp = 0.0f;
         bool movingIntoPortal = false;
     };
 
@@ -93,6 +88,7 @@ private:
 
     void UpdatePhase(C_TerrorPlayer* player, CUserCmd* cmd, const PortalProbe* probe, float currentTime);
     void LogTraversalFrame(CUserCmd* cmd, C_TerrorPlayer* player, const PortalPlayerAnchor& anchor, const PortalProbe& blue, const PortalProbe& orange) const;
+    void LogNearMiss(const PortalProbe& probe, float currentTime);
     void UpdateExitPhase(const PortalProbe& exitProbe, float currentTime);
     bool ShouldPredictPlaneCrossing(const PortalProbe& probe) const;
     bool TryCommitPredictedPlaneCrossing(C_TerrorPlayer* player, CUserCmd* cmd, const PortalProbe& probe, float currentTime);
@@ -114,6 +110,7 @@ private:
     float m_nextReadinessLogTime = 0.0f;
     float m_nextProbeLogTime = 0.0f;
     float m_nextPhaseLogTime = 0.0f;
+    float m_nextNearMissLogTime = 0.0f;
     int m_lastCommittedMovementCommandNumber = 0;
     Vector m_lastCommittedMovementOrigin;
     Vector m_lastCommittedMovementVelocity;

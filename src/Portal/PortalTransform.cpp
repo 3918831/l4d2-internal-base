@@ -18,6 +18,19 @@ namespace
     {
         return std::isfinite(value.x) && std::isfinite(value.y) && std::isfinite(value.z);
     }
+
+    Vector PortalLocalToWorld(const PortalInfo_t& portal, const PortalTransform::PortalLocalPoint& local)
+    {
+        Vector forward;
+        Vector right;
+        Vector up;
+        U::Math.AngleVectors(portal.angles, &forward, &right, &up);
+
+        return portal.origin
+            + forward * local.forward
+            + right * local.right
+            + up * local.up;
+    }
 }
 
 bool PortalTransform::BuildPortalMatrix(const PortalInfo_t& portal, matrix3x4_t& out)
@@ -85,6 +98,19 @@ QAngle PortalTransform::TransformAngles(const matrix3x4_t& matrix, const QAngle&
     }
 
     return transformed;
+}
+
+Vector PortalTransform::ComputeGModPortalHeadPosition(const PortalInfo_t& entry, const PortalInfo_t& exit, const Vector& headPosition)
+{
+    PortalLocalPoint local = WorldToPortalLocal(entry, headPosition);
+    local.forward = -local.forward;
+    local.right = -local.right;
+    return PortalLocalToWorld(exit, local);
+}
+
+Vector PortalTransform::ComputeOriginForGModHeadPosition(const Vector& gmodHeadPosition, const Vector& eyeFromOrigin)
+{
+    return gmodHeadPosition - eyeFromOrigin;
 }
 
 PortalTransform::PortalLocalPoint PortalTransform::WorldToPortalLocal(const PortalInfo_t& portal, const Vector& point)

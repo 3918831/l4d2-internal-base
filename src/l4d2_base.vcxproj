@@ -185,6 +185,7 @@
     <ClCompile Include="Portal\PortalCollisionBridge.cpp" />
     <ClCompile Include="Portal\PortalStage1Probe.cpp" />
     <ClCompile Include="Portal\PortalPlayerTeleport.cpp" />
+    <ClCompile Include="Portal\PortalControlledNoclipMovement.cpp" />
     <ClCompile Include="Portal\PortalTransition.cpp" />
     <ClCompile Include="Portal\PortalTransitionDecision.cpp" />
     <ClCompile Include="Portal\PortalTransitionSimulator.cpp" />
@@ -196,6 +197,7 @@
     <ClCompile Include="SDK\L4D2\Includes\basehandle.cpp" />
     <ClCompile Include="SDK\L4D2\Includes\checksum_md5.cpp" />
     <ClCompile Include="SDK\L4D2\Includes\convar.cpp" />
+    <ClCompile Include="SDK\L4D2\Server\ServerDataMap.cpp" />
     <ClCompile Include="SDK\SDK.cpp" />
     <ClCompile Include="Util\Hook\MinHook\buffer.c" />
     <ClCompile Include="Util\Hook\MinHook\hde\hde32.c" />
@@ -243,6 +245,7 @@
     <ClInclude Include="Portal\PortalCollisionBridge.h" />
     <ClInclude Include="Portal\PortalStage1Probe.h" />
     <ClInclude Include="Portal\PortalPlayerTeleport.h" />
+    <ClInclude Include="Portal\PortalControlledNoclipMovement.h" />
     <ClInclude Include="Portal\PortalTransition.h" />
     <ClInclude Include="Portal\PortalTransitionDecision.h" />
     <ClInclude Include="Portal\PortalTransitionSimulator.h" />
@@ -305,6 +308,7 @@
     <ClInclude Include="SDK\L4D2\Interfaces\VGuiPanel.h" />
     <ClInclude Include="SDK\L4D2\Interfaces\VGuiSurface.h" />
     <ClInclude Include="SDK\L4D2\Interfaces\Vphysics.h" />
+    <ClInclude Include="SDK\L4D2\Server\ServerDataMap.h" />
     <ClInclude Include="SDK\SDK.h" />
     <ClInclude Include="Util\Hook\Hook.h" />
     <ClInclude Include="Util\Hook\MinHook\buffer.h" />

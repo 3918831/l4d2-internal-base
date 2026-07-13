@@ -16,6 +16,7 @@
     <ClCompile Include="Util\Interface\Interface.cpp" />
     <ClCompile Include="SDK\L4D2\Includes\checksum_md5.cpp" />
     <ClCompile Include="SDK\L4D2\Includes\basehandle.cpp" />
+    <ClCompile Include="SDK\L4D2\Server\ServerDataMap.cpp" />
     <ClCompile Include="SDK\KeyValues\KeyValues.cpp" />
     <ClCompile Include="SDK\GameUtil\GameUtil.cpp" />
     <ClCompile Include="SDK\DrawManager\DrawManager.cpp" />
@@ -42,6 +43,7 @@
     <ClCompile Include="Portal\PortalCollisionBridge.cpp" />
     <ClCompile Include="Portal\PortalStage1Probe.cpp" />
     <ClCompile Include="Portal\PortalPlayerTeleport.cpp" />
+    <ClCompile Include="Portal\PortalControlledNoclipMovement.cpp" />
     <ClCompile Include="Portal\PortalTransition.cpp" />
     <ClCompile Include="Portal\PortalTransitionDecision.cpp" />
     <ClCompile Include="Portal\PortalTransitionSimulator.cpp" />
@@ -142,6 +144,7 @@
     <ClInclude Include="Portal\PortalCollisionBridge.h" />
     <ClInclude Include="Portal\PortalStage1Probe.h" />
     <ClInclude Include="Portal\PortalPlayerTeleport.h" />
+    <ClInclude Include="Portal\PortalControlledNoclipMovement.h" />
     <ClInclude Include="Portal\PortalTransition.h" />
     <ClInclude Include="Portal\PortalTransitionDecision.h" />
     <ClInclude Include="Portal\PortalTransitionSimulator.h" />
@@ -156,6 +159,7 @@
     <ClInclude Include="SDK\L4D2\Includes\edict.h" />
     <ClInclude Include="SDK\L4D2\Includes\ihandleentity.h" />
     <ClInclude Include="SDK\L4D2\Includes\iserverunknown.h" />
+    <ClInclude Include="SDK\L4D2\Server\ServerDataMap.h" />
     <ClInclude Include="Portal\server\prop_portal.h" />
     <ClInclude Include="Portal\server\portal_shareddefs.h" />
     <ClInclude Include="Portal\public\worldsize.h" />
