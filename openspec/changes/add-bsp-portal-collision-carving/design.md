@@ -50,7 +50,7 @@ struct PortalBspLayout {
 };
 ```
 
-The known SourcePawn sizes (`CNode=12`, `CLeaf=16`, `CBrush=8`, `CBrushSide=8`, `CBoxBrush=48`) are hypotheses until confirmed against the Windows build.
+IDA and two-map runtime evidence for the target Windows build confirms `CNode=12`, `CPlane=20`, `CLeaf=16`, `CBrush=8`, `CBrushSide=8`, and `CBoxBrush=48`. The first count in each array triplet is logical and the final count is allocated. Ordinary arrays use equal counts, while the node allocation is always logical count plus six because the engine appends its box-hull nodes. Full node-span validation therefore uses `(logical + 6) * 12`, while BSP traversal still bounds map-node indices by the logical count. This is an explicit validated relation, not a reason to weaken generic count validation.
 
 #### `CPortalBspData`
 
@@ -221,12 +221,12 @@ The first in-game runs use a diagnostic mode matrix:
 
 | Mode | BSP carving | Legacy bridge/noclip | Purpose |
 |---|---:|---:|---|
-| Baseline | Off | On | Confirm current behavior |
+| Visual-only baseline (default) | Off | Off | Confirm portal rendering while the original wall fully blocks the player |
 | Write validation | On | On | Prove safe mutation/restoration |
 | Causal test | On | Off | Prove BSP carving alone clears the wall |
-| Fallback test | Forced failure | On | Prove graceful fallback |
+| Explicit legacy comparison | Off or forced failure | On | User-selected regression comparison only |
 
-No legacy path is deleted in this change until the causal test is repeatable.
+No legacy code is deleted until the causal test is repeatable, but failure returns to the visual-only baseline and never enables legacy traversal automatically.
 
 ### Decision 7: Later proximity gating is portal-local and hysteretic
 
@@ -246,6 +246,8 @@ No legacy path is deleted in this change until the causal test is repeatable.
 - Diagnostic logging is rate-limited during per-frame updates but never suppresses mutation and restoration events.
 
 ## Validation Strategy
+
+The Stage A Windows x86 locator, complete layout, two-map round-four acceptance, and binary-change revalidation procedure are closed out in `stage-a-ccollisionbspdata-retrospective.zh-CN.md`. Passing Stage A authorizes the next read-only BSP-query work only; production BSP writes remain prohibited until the read-only portal-to-brush binding gate and recoverable transaction tests pass.
 
 ### Deterministic tests
 

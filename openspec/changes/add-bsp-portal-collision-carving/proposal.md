@@ -39,5 +39,5 @@ None. Existing portal traversal behavior remains authoritative for crossing dete
 - Not supported: remote authoritative servers, multiplayer ownership, NPC traversal, AI navigation, bullets, special infected, common infected, throwables, or physics props
 
 **Compatibility:**
-- Existing collision bypass and controlled-noclip infrastructure remains available during initial validation and is disabled selectively only after BSP carving is proven.
+- Existing collision-bypass and controlled-noclip code remains available for explicit comparison, but development defaults to a visual-only baseline and never enables the legacy path automatically when BSP is unavailable.
 - All memory writes are reversible and guarded by validated addresses, counts, indices, original values, and map generation.

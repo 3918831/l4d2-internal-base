@@ -4,7 +4,7 @@
 
 **验收标准：** Windows BSP 数据得到验证；放置传送门时能解析承载 brush；写入可恢复且具备事务性；阶段一不使用附近检测或 blocker；可以关闭旧绕过以证明因果关系；所有传送门、地图和 DLL 生命周期都能恢复碰撞；后续阶段在不替换核心的前提下增加附近检测与可选 blocker。
 
-**架构：** 在 `src/Portal` 下增加经过验证的 BSP 数据读取器和由传送门所有权驱动的碰撞挖空管理器。复用现有放置证据、`PortalTransform`、`PortalTransitionSimulator`、`PortalPlayerTeleport`、日志、特征扫描与本地服务器生命周期。BSP 因果测试通过前，保留现有碰撞绕过作为兜底。
+**架构：** 在 `src/Portal` 下增加经过验证的 BSP 数据读取器和由传送门所有权驱动的碰撞挖空管理器。复用现有放置证据、`PortalTransform`、`PortalTransitionSimulator`、`PortalPlayerTeleport`、日志、特征扫描与本地服务器生命周期。开发默认使用纯视觉基线；旧碰撞绕过只保留为显式对照模式。
 
 **技术栈：** C++17、Windows x86 L4D2 内部结构、engine 特征扫描、BSP 碰撞结构、现有 MSBuild x86 解决方案和独立 C++ 测试。
 
@@ -12,16 +12,20 @@
 
 ## 0. Windows 布局证据与诊断实验
 
-- [ ] 0.1 记录目标 L4D2 版本和模块版本，并在 `src/Util/Logger/PortalFileLog.h` 增加聚焦的 `PortalBsp` 日志类别。
-- [ ] 0.2 在 `engine.dll` 中定位 Windows x86 `g_BSPData` 引用；记录候选指令、解码地址、所在函数和签名稳定性依据。
-- [ ] 0.3 在 `src/Util/Offsets/Offsets.h` 增加候选地址字段，在 `Offsets.cpp` 增加只读定位与日志；此时不得启用写入。
-- [ ] 0.4 新建 `src/Portal/PortalBspTypes.h`，定义最小定宽 BSP 布局；Linux SourcePawn 的结构尺寸和偏移在实测前标记为未验证。
-- [ ] 0.5 新建 `src/Portal/PortalBspData.h/.cpp` 只读骨架，并加入 `src/l4d2_base.vcxproj` 与 `.filters`。
-- [ ] 0.6 实现所有必需数组指针和数量的受检读取；拒绝空指针、非正数量、不合理上限、地址运算溢出和越界索引。
-- [ ] 0.7 增加开发期状态/探针入口，只输出 base、布局偏移、数组地址、数量、地图名和地图代际，不写内存。
-- [ ] 0.8 使用 `MSBuild.exe src/l4d2_base.sln /p:Configuration=Debug /p:Platform=x86 /m` 构建；预期零编译和链接错误。
-- [ ] 0.9 至少在两张地图运行探针，保存数量和指针在换图时一致变化的证据。
-- [ ] 0.10 门禁：Windows base 和所有使用字段的布局未得到证明前，不得进入写入阶段；验证失败时修正签名/布局，不能放宽校验。
+- [x] 0.0 增加 `VisualOnlyBaseline` 物理模式及单元测试：保留传送门视觉，屏蔽旧状态机、受控 noclip、碰撞 trace 清除、移动推进、传送提交和临时 MoveType 诊断写入，并输出明确模式日志。
+- [x] 0.1 记录目标 L4D2 版本和模块版本，并在 `src/Util/Logger/PortalFileLog.h` 增加聚焦的 `PortalBsp` 日志类别。
+- [x] 0.2 在 `engine.dll` 中定位 Windows x86 `g_BSPData` 引用；记录候选指令、解码地址、所在函数和签名稳定性依据。
+- [x] 0.2a 增加只读运行时真值探针：记录地图、`numleafs`、由 `GetBrushInfo` 边界推导的精确 `numbrushes`、brush contents 样本和传送门表面点的 leaf/contents；加入边界查找单元测试。
+- [x] 0.2b 在至少两张地图采集运行时真值，并与 IDA 中三个 EngineTrace 锚点的字段访问逐项比对。
+- [x] 0.2c 修正 Windows `GetBrushInfo` 的一字节布尔返回 ABI；增加只读指令解码、候选 BSP 基址、规范/镜像计数及数组指针交叉验证日志。
+- [x] 0.3 在独立的 `src/Util/Offsets/PortalBspOffset.h/.cpp` 中保存由 `GetBrushInfo` 语义操作数解出的只读候选地址并记录来源；不启用写入，也不改动既有非 UTF-8 offset 文件。
+- [x] 0.4 新建 `src/Portal/PortalBspTypes.h`，定义最小定宽 BSP 布局，并逐项标记证据等级；第三轮 IDA 与双地图运行时证据已确认 plane/node 步长和 node 固定 `+6` box-hull 分配关系。
+- [x] 0.5 新建 `src/Portal/PortalBspData.h/.cpp` 只读骨架，并加入 `src/l4d2_base.vcxproj` 与 `.filters`。
+- [x] 0.6 实现所有必需数组指针、逻辑/分配数量关系与完整分配跨度的受检读取；普通表要求二者相等，nodes 要求分配数量等于逻辑数量加 6；拒绝空指针、非正数量、不合理上限、关系不符、地址运算溢出和不可读范围。
+- [x] 0.7 增加开发期状态探针：输出 base、布局偏移、数组地址、数量、完整跨度、地图名、地图代际、根节点/leaf/cmodel 不变量和 `destructiveWrites=false`；地图关闭时清空缓存。
+- [x] 0.8 使用 `MSBuild.exe src/l4d2_base.sln /p:Configuration=Debug /p:Platform=x86 /m` 构建；结果为零警告、零编译和链接错误。
+- [x] 0.9 至少在两张地图运行探针，保存数量和指针在换图时一致变化的证据；已在同一游戏进程内验证 `ssv1` 与 `c1m2_streets`，换图失效、地图代际、数组地址和计数均一致变化。
+- [x] 0.10 门禁：Windows base 和所有使用字段的布局未得到证明前，不得进入写入阶段；第四轮在同一进程内验证 `ssv1` 和 `c1m2_streets` 共 19 次 snapshot 全部 `ready=true`，Stage A 布局门禁通过。过程、布局、边界与复验规范见 `stage-a-ccollisionbspdata-retrospective.zh-CN.md`。
 
 ## 1. 纯 BSP 查询实现
 

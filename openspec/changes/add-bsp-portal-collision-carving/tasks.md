@@ -4,7 +4,7 @@
 
 **Acceptance Criteria:** Windows BSP data is validated; placement resolves carrying brushes; writes are reversible and transactional; Phase 1 operates without proximity or blockers; legacy bypass can be disabled to prove causality; every portal/map/DLL lifecycle restores collision; later phases add proximity gating and optional blockers without replacing the core.
 
-**Architecture:** Add a validated BSP data reader and a portal-owned collision carver under `src/Portal`. Reuse existing portal placement evidence, `PortalTransform`, `PortalTransitionSimulator`, `PortalPlayerTeleport`, logging, pattern scanning, and local-server lifecycle. Keep existing collision bypass as a fallback until causal in-game tests pass.
+**Architecture:** Add a validated BSP data reader and a portal-owned collision carver under `src/Portal`. Reuse existing portal placement evidence, `PortalTransform`, `PortalTransitionSimulator`, `PortalPlayerTeleport`, logging, pattern scanning, and local-server lifecycle. Default development to the visual-only baseline; retain legacy collision bypass only as an explicit comparison mode.
 
 **Tech Stack:** C++17, Windows x86 L4D2 internals, engine pattern scanning, BSP collision structures, existing MSBuild x86 solution, existing standalone C++ tests.
 
@@ -12,16 +12,20 @@
 
 ## 0. Evidence and Windows layout spike
 
-- [ ] 0.1 Record the target L4D2 build/module versions and add a focused `PortalBsp` log category to `src/Util/Logger/PortalFileLog.h`.
-- [ ] 0.2 Locate Windows x86 references to `g_BSPData` in `engine.dll`; document the candidate instruction, decoded address, surrounding function, and why it is stable enough for a signature.
-- [ ] 0.3 Add the candidate signature field to `src/Util/Offsets/Offsets.h` and resolution/logging to `src/Util/Offsets/Offsets.cpp` without enabling writes.
-- [ ] 0.4 Define minimal fixed-width BSP layout types in new `src/Portal/PortalBspTypes.h`; keep all Linux SourcePawn sizes and offsets explicitly marked unverified until measured.
-- [ ] 0.5 Add read-only `CPortalBspData` scaffolding in `src/Portal/PortalBspData.h/.cpp` and wire the new files into `src/l4d2_base.vcxproj` and `.filters`.
-- [ ] 0.6 Implement checked reads for all required array pointers and counts; reject null pointers, non-positive counts, unreasonable upper bounds, overflowed address arithmetic, and out-of-range indices.
-- [ ] 0.7 Add a development status/probe entry point that prints the resolved base, layout offsets, array addresses, counts, map name, and map generation without writing memory.
-- [ ] 0.8 Build Debug x86 with `MSBuild.exe src/l4d2_base.sln /p:Configuration=Debug /p:Platform=x86 /m`; expected result: zero compilation/link errors.
-- [ ] 0.9 Run the game probe on at least two maps and save evidence that counts/pointers change coherently across map transitions.
-- [ ] 0.10 Gate: do not continue to mutation work until the Windows base address and every consumed field layout are proven. If validation fails, update the signature/layout rather than weakening checks.
+- [x] 0.0 Add and unit-test `VisualOnlyBaseline`: preserve portal visuals while blocking the legacy state machine, controlled noclip, collision-trace clearing, movement nudges, teleport commits, and temporary MoveType diagnostic writes, with an explicit mode log.
+- [x] 0.1 Record the target L4D2 build/module versions and add a focused `PortalBsp` log category to `src/Util/Logger/PortalFileLog.h`.
+- [x] 0.2 Locate Windows x86 references to `g_BSPData` in `engine.dll`; document the candidate instruction, decoded address, surrounding function, and why it is stable enough for a signature.
+- [x] 0.2a Add a read-only runtime oracle for map name, `numleafs`, exact `numbrushes` inferred from the `GetBrushInfo` validity boundary, brush contents samples, and portal-surface leaf/contents samples; unit-test the boundary search.
+- [x] 0.2b Capture runtime oracle evidence on at least two maps and compare it field-by-field with the three EngineTrace anchors in IDA.
+- [x] 0.2c Correct the one-byte Windows `GetBrushInfo` boolean return ABI; add read-only instruction decoding plus candidate BSP base, canonical/mirrored count, and array-pointer cross-check logs.
+- [x] 0.3 Store the read-only candidate decoded from `GetBrushInfo` semantic operands in dedicated `src/Util/Offsets/PortalBspOffset.h/.cpp`, including source logging; do not enable writes or rewrite the existing non-UTF-8 offset files.
+- [x] 0.4 Define minimal fixed-width BSP layout types in new `src/Portal/PortalBspTypes.h` and classify their evidence; round-three IDA plus two-map runtime evidence confirms the plane/node strides and the node array's fixed `+6` box-hull allocation relation.
+- [x] 0.5 Add read-only `CPortalBspData` scaffolding in `src/Portal/PortalBspData.h/.cpp` and wire the new files into `src/l4d2_base.vcxproj` and `.filters`.
+- [x] 0.6 Implement checked reads for every required array pointer, logical/allocation count relation, and complete allocated span; ordinary tables require equality while nodes require allocation count = logical count + 6; reject null pointers, non-positive counts, unreasonable bounds, invalid relations, overflowed address arithmetic, and unreadable ranges.
+- [x] 0.7 Add a development status probe that prints the base, offsets, array addresses, counts, full spans, map name/generation, root/leaf/cmodel invariants, and `destructiveWrites=false`; invalidate the cache on map shutdown.
+- [x] 0.8 Build Debug x86 with `MSBuild.exe src/l4d2_base.sln /p:Configuration=Debug /p:Platform=x86 /m`; result: zero warnings and zero compilation/link errors.
+- [x] 0.9 Run the game probe on at least two maps and save evidence that counts/pointers change coherently across map transitions; verified `ssv1` and `c1m2_streets` in one game process, including cache invalidation, generation changes, and coherent address/count changes.
+- [x] 0.10 Gate: do not continue to mutation work until the Windows base address and every consumed field layout are proven. Round four produced 19/19 ready snapshots across `ssv1` and `c1m2_streets` in one process, so the Stage A layout gate is passed; the normative retrospective is `stage-a-ccollisionbspdata-retrospective.zh-CN.md`.
 
 ## 1. Pure BSP query implementation
 

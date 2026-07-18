@@ -7,13 +7,13 @@ The system SHALL resolve the current map's loaded BSP collision data in the Wind
 #### Scenario: Valid BSP collision data is available
 - **WHEN** a local-server map finishes loading
 - **THEN** the system SHALL resolve `g_BSPData`
-- **AND** validate the required node, leaf, leafbrush, brush, brush-side, and box-brush arrays
+- **AND** validate the required plane, node, leaf, leafbrush, brush, brush-side, and box-brush arrays
 - **AND** mark BSP collision queries ready for the current map generation
 
 #### Scenario: BSP collision data cannot be proven valid
 - **WHEN** address resolution or structural validation fails
 - **THEN** the system SHALL perform no BSP memory write
-- **AND** preserve the existing portal traversal behavior
+- **AND** remain in the visual-only baseline with the original wall collision blocking the player
 - **AND** log the failed validation with enough data to diagnose it
 
 ### Requirement: Portal placement resolves a carrying world brush
@@ -29,7 +29,7 @@ The system SHALL reuse successful portal-placement surface data to resolve the B
 - **WHEN** all behind-surface sample offsets fail to identify a valid `MASK_PLAYERSOLID` brush
 - **THEN** the system SHALL leave BSP collision unchanged
 - **AND** mark that portal binding unresolved
-- **AND** use the existing traversal fallback
+- **AND** remain in the visual-only baseline without automatically enabling legacy traversal
 
 ### Requirement: Brush collision mutation is reversible and transactional
 
@@ -105,7 +105,19 @@ The BSP collision system SHALL only control carrying-brush collision and SHALL N
 
 #### Scenario: BSP carving is unavailable
 - **WHEN** BSP initialization or portal-brush binding fails
-- **THEN** the existing collision bridge and controlled traversal path SHALL remain available as fallback
+- **THEN** the system SHALL remain visual-only and non-traversable
+- **AND** the existing collision bridge and controlled traversal path SHALL only run in an explicitly selected legacy-comparison mode
+
+### Requirement: Development defaults to a visual-only baseline
+
+The system SHALL render and place portals by default, but SHALL NOT advance the legacy traversal state machine, change player move type (including temporary diagnostic writes), clear player collision traces, nudge player position, or commit teleport.
+
+#### Scenario: BSP traversal is not enabled
+
+- **WHEN** the player walks into either active portal aperture
+- **THEN** the original map wall collision SHALL block the player
+- **AND** the view through the portal SHALL continue rendering
+- **AND** diagnostics SHALL identify the active mode as `VisualOnlyBaseline`
 
 ### Requirement: Diagnostic modes prove causality and restoration
 
