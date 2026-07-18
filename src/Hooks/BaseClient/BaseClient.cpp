@@ -4,6 +4,7 @@
 // #include "../ModelRender/ModelRender.h"
 #include "../Hooks.h"
 #include "../../Portal/L4D2_Portal.h"
+#include "../../Portal/PortalBspData.h"
 #include "../../SDK/L4D2/Interfaces/RenderView.h"
 #include "../../SDK/L4D2/Interfaces/EngineClient.h"
 #include "../../SDK/L4D2/Interfaces/ModelInfo.h"
@@ -12,6 +13,7 @@
 #include "../../SDK/L4D2/Includes/const.h"
 #include "../../Util/Math/Math.h"
 #include "../../Util/Logger/Logger.h"
+#include "../../Util/Offsets/PortalBspOffset.h"
 //#include "../../Portal/public/mathlib.h"
 
 //CViewSetup g_ViewSetup;
@@ -76,6 +78,13 @@ void __fastcall BaseClient::LevelShutdown::Detour(void* ecx, void* edx)
 	// 地图退出前清理传送门资源
 	// 这样可以释放旧地图的资源，避免泄漏
 	G::G_L4D2Portal.PortalShutdown();
+
+	// BSP hunk allocations are owned by the current map. Invalidate every cached
+	// address before the engine releases the map so no later stage can reuse it.
+	G::PortalBspData.InvalidateForMapChange();
+	U::PortalBspOffset::ClearCandidate();
+	U::LogInfo("[PortalBsp][Lifecycle] event=LevelShutdown generation=%u cacheInvalidated=true destructiveWrites=false.\n",
+		G::PortalBspData.GetSnapshot().mapGeneration);
 
 	// 调用原始函数
 	Table.Original<FN>(Index)(ecx, edx);

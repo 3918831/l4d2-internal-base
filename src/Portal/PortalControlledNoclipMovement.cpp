@@ -7,6 +7,7 @@
 #include "../Util/Logger/PortalFileLog.h"
 #include "L4D2_Portal.h"
 #include "PortalTransitionDecision.h"
+#include "PortalPhysicsMode.h"
 
 namespace
 {
@@ -171,6 +172,9 @@ bool PortalControlledNoclipMovement::TryApply(
     CMoveData* move,
     const PortalTransitionContext& context)
 {
+    if (!PortalPhysicsMode::ShouldMutatePlayerMovement())
+        return false;
+
     if (!move || !PortalTransitionDecision::RequiresControlledNoclip(context.phase))
         return false;
 

@@ -1,4 +1,5 @@
 #include "PortalTransition.h"
+#include "PortalPhysicsMode.h"
 
 #include <algorithm>
 #include <cstddef>
@@ -462,6 +463,9 @@ void CPortalTransition::LogMoveTypeProbe(const char* phase, C_BasePlayer* basePl
 
 void CPortalTransition::MaybeRunServerMoveTypeWriteDryRun(void* serverBase, const char* phase)
 {
+    if (!PortalPhysicsMode::ShouldRunDestructiveDiagnostics())
+        return;
+
     if (m_serverMoveTypeWriteDryRunDone || !serverBase)
         return;
 

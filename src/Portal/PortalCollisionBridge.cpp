@@ -1,4 +1,5 @@
 #include "PortalCollisionBridge.h"
+#include "PortalPhysicsMode.h"
 
 #include <algorithm>
 #include <cmath>
@@ -85,6 +86,9 @@ void CPortalCollisionBridge::BeginFrame(int commandNumber)
 
 bool CPortalCollisionBridge::TryBypassPlayerBBoxTrace(const PortalTraceRequest& request, const CPortalTransitionSimulator& simulator)
 {
+    if (!PortalPhysicsMode::ShouldUseLegacyCollisionBypass())
+        return false;
+
     const PortalTraceClass traceClass = ClassifyTrace(request);
     CountFrameTrace(traceClass);
     ++m_diagnostics.totalRequests;

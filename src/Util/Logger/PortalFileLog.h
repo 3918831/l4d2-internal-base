@@ -21,6 +21,8 @@ namespace U::PortalFileLog
 
     inline constexpr const char* kAlwaysNeedles[] = {
         "PortalFileLog",
+        "PortalBsp",
+        "PortalPhysicsMode",
     };
 
     inline constexpr const char* kGModTraversalNeedles[] = {

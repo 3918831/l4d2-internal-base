@@ -1,4 +1,5 @@
 #include "PortalTransitionSimulator.h"
+#include "PortalPhysicsMode.h"
 
 #include <algorithm>
 #include <cmath>
@@ -89,6 +90,13 @@ void CPortalTransitionSimulator::Reset()
 
 void CPortalTransitionSimulator::Update(CUserCmd* cmd)
 {
+    if (!PortalPhysicsMode::ShouldRunTraversalSimulation())
+    {
+        if (m_context.phase != PortalTransitionPhase::Idle || m_hasLastCommittedMovement)
+            Reset();
+        return;
+    }
+
     if (!cmd || !I::EngineClient || !I::EngineClient->IsInGame())
     {
         Reset();
@@ -326,6 +334,9 @@ bool CPortalTransitionSimulator::TryCommitMovementCrossing(
     Vector* committedOrigin,
     Vector* committedVelocity)
 {
+    if (!PortalPhysicsMode::ShouldCommitTeleport())
+        return false;
+
     if (m_context.phase != PortalTransitionPhase::IntersectingPortal
         || m_context.entrySide == PortalTransitionSide::None
         || m_context.exitSide == PortalTransitionSide::None)
@@ -392,6 +403,9 @@ bool CPortalTransitionSimulator::TryGetCommittedMovementForCommand(
     Vector* committedVelocity,
     QAngle* committedAngles) const
 {
+    if (!PortalPhysicsMode::ShouldMutatePlayerMovement())
+        return false;
+
     if (!m_hasLastCommittedMovement || commandNumber <= 0)
         return false;
 
@@ -684,6 +698,9 @@ bool CPortalTransitionSimulator::TryCommitTeleport(
     Vector* committedVelocity,
     int commandNumberOverride)
 {
+    if (!PortalPhysicsMode::ShouldCommitTeleport())
+        return false;
+
     if (!player || !probe.entry || !probe.exit)
         return false;
 
@@ -875,7 +892,8 @@ void CPortalTransitionSimulator::SetPhase(PortalTransitionPhase phase, const Por
     }
 
     C_TerrorPlayer* player = GetLocalPlayer();
-    if (PortalTransitionDecision::RequiresControlledNoclip(phase))
+    if (PortalPhysicsMode::ShouldMutatePlayerMovement()
+        && PortalTransitionDecision::RequiresControlledNoclip(phase))
         G::G_L4D2Portal.m_PortalTransition.EnterControlledNoclip(player, reason);
     else
         G::G_L4D2Portal.m_PortalTransition.RestoreControlledMoveType(player, reason);

@@ -1,4 +1,5 @@
 #include "PortalPlayerTeleport.h"
+#include "PortalPhysicsMode.h"
 
 #include "../SDK/L4D2/Entities/C_TerrorPlayer.h"
 #include "../SDK/L4D2/Includes/edict.h"
@@ -50,6 +51,13 @@ bool PortalPlayerTeleport::Commit(
     const QAngle& angles,
     const Vector& velocity)
 {
+    if (!PortalPhysicsMode::ShouldCommitTeleport())
+    {
+        U::LogWarning("[PortalTeleport] rejected: physics mode=%s disables teleport.\n",
+            PortalPhysicsMode::CurrentName());
+        return false;
+    }
+
     CBaseEntity* serverPlayer = ResolveServerLocalPlayer(clientPlayer);
     if (!serverPlayer)
     {

@@ -182,6 +182,7 @@
     <ClCompile Include="Hooks\WndProc\WndProc.cpp" />
     <ClCompile Include="Portal\client\weapon_portalgun.cpp" />
     <ClCompile Include="Portal\L4D2_Portal.cpp" />
+    <ClCompile Include="Portal\PortalBspData.cpp" />
     <ClCompile Include="Portal\PortalCollisionBridge.cpp" />
     <ClCompile Include="Portal\PortalStage1Probe.cpp" />
     <ClCompile Include="Portal\PortalPlayerTeleport.cpp" />
@@ -208,6 +209,7 @@
     <ClCompile Include="Util\Math\Math.cpp" />
     <ClCompile Include="Util\NetVarManager\NetVarManager.cpp" />
     <ClCompile Include="Util\Offsets\Offsets.cpp" />
+    <ClCompile Include="Util\Offsets\PortalBspOffset.cpp" />
     <ClCompile Include="Util\Pattern\Pattern.cpp" />
     <ClCompile Include="Util\Util.cpp" />
     <ClCompile Include="Util\VFunc\VFunc.cpp" />
@@ -229,6 +231,8 @@
     <ClInclude Include="Hooks\C_Weapon\Weapon_Pistol.h" />
     <ClInclude Include="Hooks\EngineServer\EngineServer.h" />
     <ClInclude Include="Hooks\EngineTrace\EngineTrace.h" />
+    <ClInclude Include="Hooks\EngineTrace\EngineTraceBspProbe.h" />
+    <ClInclude Include="Hooks\EngineTrace\EngineTraceDiagnostics.h" />
     <ClInclude Include="Hooks\RenderView\RenderView.h" />
     <ClInclude Include="Hooks\EngineVGui\EngineVGui.h" />
     <ClInclude Include="Hooks\GameMovement\CCSGameMovement.h" />
@@ -242,6 +246,9 @@
     <ClInclude Include="Portal\client\weapon_portalgun.h" />
     <ClInclude Include="Portal\CustomRender.h" />
     <ClInclude Include="Portal\L4D2_Portal.h" />
+    <ClInclude Include="Portal\PortalBspData.h" />
+    <ClInclude Include="Portal\PortalBspTypes.h" />
+    <ClInclude Include="Portal\PortalPhysicsMode.h" />
     <ClInclude Include="Portal\PortalCollisionBridge.h" />
     <ClInclude Include="Portal\PortalStage1Probe.h" />
     <ClInclude Include="Portal\PortalPlayerTeleport.h" />
@@ -325,6 +332,7 @@
     <ClInclude Include="Util\Math\Vector\Vector2D.h" />
     <ClInclude Include="Util\NetVarManager\NetVarManager.h" />
     <ClInclude Include="Util\Offsets\Offsets.h" />
+    <ClInclude Include="Util\Offsets\PortalBspOffset.h" />
     <ClInclude Include="Util\Pattern\Pattern.h" />
     <ClInclude Include="Util\Util.h" />
     <ClInclude Include="Util\VFunc\VFunc.h" />
