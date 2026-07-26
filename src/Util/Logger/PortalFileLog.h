@@ -14,7 +14,7 @@ namespace U::PortalFileLog
     inline constexpr bool kCaptureLegacyBridge = false;
     inline constexpr bool kCaptureLegacyStageProbe = false;
     inline constexpr bool kCaptureLegacySimulator = false;
-    inline constexpr bool kCaptureRenderDiagnostics = false;
+    inline constexpr bool kCaptureRenderDiagnostics = true;
     inline constexpr bool kSuppressLegacyConsoleNoise = true;
 
     inline bool g_Initialized = false;
@@ -41,6 +41,8 @@ namespace U::PortalFileLog
         "PortalLocalClamp",
         "PortalCrossing",
         "PortalTeleportCommit",
+        "PortalContinuity",
+        "PortalExitRearm",
         "PortalExitState",
         "PortalRestoreWalk",
     };
@@ -67,6 +69,12 @@ namespace U::PortalFileLog
         "PortalEnvironment",
         "PortalRenderState",
         "PortalTone",
+        "PortalVisualPlaneProbe",
+        "PortalNearClipFix",
+        "PortalEntryViewHandoff",
+        "PortalOfficialRemoteView",
+        "PortalRenderFix",
+        "PortalExitVisibility",
     };
 
     inline bool ContainsAny(const char* text, const char* const* needles, size_t count)
@@ -114,6 +122,21 @@ namespace U::PortalFileLog
         if (!kSuppressLegacyConsoleNoise || !text)
             return false;
 
+        static constexpr const char* kConsoleSummaryNeedles[] = {
+            "[PortalFileLog]",
+            "[PortalPhysicsMode]",
+            "[PortalBsp][Command]",
+            "[PortalBsp][Phase1Status]",
+        };
+
+        if (ContainsAny(text, kConsoleSummaryNeedles, sizeof(kConsoleSummaryNeedles) / sizeof(kConsoleSummaryNeedles[0])))
+            return false;
+
+        // Focused traversal/BSP/render diagnostics have already been routed to
+        // the dedicated file. LogError bypasses this console policy entirely.
+        if (ShouldCapture(text))
+            return true;
+
         static constexpr const char* kLegacyConsoleNoiseNeedles[] = {
             "PortalBridge",
             "PortalStage1Probe",
@@ -129,9 +152,7 @@ namespace U::PortalFileLog
             "CommittedMoveSync",
         };
 
-        return ContainsAny(text, kLegacyConsoleNoiseNeedles, sizeof(kLegacyConsoleNoiseNeedles) / sizeof(kLegacyConsoleNoiseNeedles[0]))
-            && !ContainsAny(text, kGModTraversalNeedles, sizeof(kGModTraversalNeedles) / sizeof(kGModTraversalNeedles[0]))
-            && !ContainsAny(text, kAlwaysNeedles, sizeof(kAlwaysNeedles) / sizeof(kAlwaysNeedles[0]));
+        return ContainsAny(text, kLegacyConsoleNoiseNeedles, sizeof(kLegacyConsoleNoiseNeedles) / sizeof(kLegacyConsoleNoiseNeedles[0]));
     }
 
     inline void EnsureInitialized()

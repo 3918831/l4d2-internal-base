@@ -70,6 +70,43 @@ Phase 1 SHALL remove collision from the complete carrying brushes without player
 - **THEN** original client and local-server movement traces SHALL permit progress through the carrying wall
 - **AND** the existing transition simulator SHALL commit teleport to the linked exit
 
+#### Scenario: Crossing commits in valid portal half-spaces
+- **WHEN** a predicted or observed local-player anchor crosses an active entry aperture from front to back
+- **THEN** the committed entry center depth SHALL be negative and its raw transformed exit center depth SHALL be non-negative
+- **AND** a first valid observation already behind the entry plane SHALL commit during the same update
+- **AND** consecutive-command anchor segments SHALL be tested against the portal plane and aperture as the high-speed fallback
+- **AND** this correction SHALL retain the existing player `Teleport` API
+
+#### Scenario: Exact transform is tested without repeated teleport
+- **WHEN** the diagnostic exit-clearance mode is `ExactTransform`
+- **THEN** the system SHALL apply no exit-normal position push after the portal transform
+- **AND** SHALL block traversal re-entry while the spatial exit lock is active
+- **AND** SHALL begin the temporal cooldown only after spatial exit clearance releases
+- **AND** during the bounded post-Teleport main-view handoff SHALL preserve the exact physical point while adding a validated exit visibility origin and reducing the world near clip
+- **AND** SHALL NOT apply that visual guard to recursive portal views or non-exact clearance modes
+- **AND** SHALL record the exact mapped eye and physical handoff delta in the focused file log
+
+#### Scenario: The remote portal view uses official camera and clip-plane semantics
+
+- **WHEN** the linked portal scene is rendered to the remote RTT
+- **THEN** the remote camera origin SHALL equal the exact entry-to-exit transformed main-view origin without an exit-normal push
+- **AND** the exit clip plane distance SHALL equal `dot(normal, exitOrigin - normal * 0.5)`
+- **AND** safe PVS origins SHALL remain separate from the camera origin so visibility recovery never changes perspective
+- **AND** the portal entity and border placement, main-world near clip, Teleport, player state, and BSP contents SHALL remain unchanged
+- **AND** the disproven ordinary-model `PortalMaskRepair` projection/depth override SHALL NOT remain in the active render path
+- **AND** focused file diagnostics SHALL record the source eye depth, transformed exit-eye depth, clip distance, and zero camera push
+
+#### Scenario: The main-view portal mask survives near-plane intersection
+
+- **WHEN** the primary camera approaches a portal closely enough that the ordinary portal model intersects the main-view near plane
+- **THEN** the renderer SHALL generate a camera-near-plane proxy clipped to the expanded portal aperture and portal front plane
+- **AND** project that proxy to a stable near NDC depth before extending the current portal stencil reference
+- **AND** SHALL draw the proxy only in the primary view through the existing model-render hook and material-system dynamic mesh path
+- **AND** dynamic-mesh indices SHALL use Source element-increment semantics and include the descriptor's first-vertex offset
+- **AND** inactive, unexpected, undersized, negative, or 16-bit-overflowing index descriptors SHALL fail closed before any index write or draw
+- **AND** SHALL NOT add a new hook, engine offset, BSP change, Teleport change, portal-placement offset, depth clear, or fog repair in this isolated round
+- **AND** focused file diagnostics SHALL record portal identity, proxy vertex count, eye depth, and active near clip
+
 #### Scenario: Unrestricted side effects are tested
 - **WHEN** Phase 1 carving is active
 - **THEN** the system SHALL allow testers to observe the complete consequences of whole-brush removal
@@ -102,6 +139,12 @@ The BSP collision system SHALL only control carrying-brush collision and SHALL N
 - **THEN** `PortalTransform` SHALL determine transformed position, velocity, and angles
 - **AND** `PortalPlayerTeleport` SHALL perform the local-server teleport
 - **AND** the existing transition and rendering systems SHALL continue their normal lifecycle
+
+#### Scenario: The camera crosses the entry plane before physical Teleport commits
+- **WHEN** the local main-view eye is behind the tracked entry plane, remains inside its aperture, and the transition phase is `IntersectingPortal`
+- **THEN** the rendered eye origin and angles SHALL be transformed through the existing entry-to-exit matrix before the physical Teleport commit
+- **AND** the player entity origin, movement, velocity, Teleport timing, exit placement, near clip, visibility guard, and rearm state SHALL remain unchanged
+- **AND** the handoff SHALL stop outside `IntersectingPortal` so an already teleported exit view is not transformed twice
 
 #### Scenario: BSP carving is unavailable
 - **WHEN** BSP initialization or portal-brush binding fails

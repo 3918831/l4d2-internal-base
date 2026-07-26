@@ -1,8 +1,10 @@
 #include "ModelRender.h"
 #include "../../Portal/L4D2_Portal.h"
+#include "../../Portal/PortalRenderFixRenderer.h"
 #include "../../Hooks/BaseClient/BaseClient.h"
 #include "../Hooks.h"
 #include "../../Util/Logger/Logger.h"
+
 using namespace Hooks;
 
 // 状态管理
@@ -205,6 +207,24 @@ void __fastcall ModelRender::DrawModelExecute::Detour(void* ecx, void* edx, cons
 
                 Table.Original<FN>(Index)(ecx, edx, state, pInfo, pCustomBoneToWorld);
                 I::ModelRender->ForcedMaterialOverride(nullptr);
+
+                // The ordinary portal model disappears when it crosses zNear.
+                // Extend only the primary-view stencil aperture with the
+                // official-style generated near-plane proxy.
+                if (G::G_L4D2Portal.m_nPortalRenderDepth == 0
+                    && !G::G_L4D2Portal.m_vViewStack.empty())
+                {
+                    const CViewSetup& renderFixView =
+                        G::G_L4D2Portal.m_vViewStack.back();
+                    PortalRenderFixRenderer::DrawMainViewStencilProxy(
+                        pRenderContext,
+                        G::G_L4D2Portal.m_pWriteStencilMaterial,
+                        renderFixView,
+                        pInfo.origin,
+                        pInfo.angles,
+                        entryPortal->currentScale,
+                        isBluePortal ? "Blue" : "Orange");
+                }
 
                 // --- 阶段 2: 将RTT纹理绘制在模板区域内 ---
                 if (G::G_L4D2Portal.m_pDynamicPortalMaterial)

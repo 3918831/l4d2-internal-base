@@ -9,9 +9,10 @@ namespace PortalPhysicsMode
         BspTraversal
     };
 
-    // Development default: keep portal rendering, but disable all player
-    // traversal until BSP collision carving can be tested independently.
-    inline constexpr Mode kCurrentMode = Mode::VisualOnlyBaseline;
+    // Controlled Phase 1 artifact: BSP carving supplies wall clearance while
+    // the existing simulator/transform/teleport path remains authoritative.
+    // Legacy trace clearing and move-type mutation stay disabled in this mode.
+    inline constexpr Mode kCurrentMode = Mode::BspTraversal;
 
     constexpr Mode Current()
     {
@@ -40,9 +41,39 @@ namespace PortalPhysicsMode
             || kCurrentMode == Mode::BspTraversal;
     }
 
+    constexpr bool ShouldRunTraversalForCollisionState(Mode mode, bool bspCarvingActive)
+    {
+        switch (mode)
+        {
+        case Mode::LegacyTraversal:
+            return true;
+        case Mode::BspTraversal:
+            return bspCarvingActive;
+        case Mode::VisualOnlyBaseline:
+        default:
+            return false;
+        }
+    }
+
+    constexpr bool ShouldRunTraversalForCollisionState(bool bspCarvingActive)
+    {
+        return ShouldRunTraversalForCollisionState(kCurrentMode, bspCarvingActive);
+    }
+
     constexpr bool ShouldMutatePlayerMovement()
     {
         return kCurrentMode == Mode::LegacyTraversal;
+    }
+
+    constexpr bool ShouldSynchronizeCommittedTeleportPrediction(Mode mode)
+    {
+        return mode == Mode::LegacyTraversal
+            || mode == Mode::BspTraversal;
+    }
+
+    constexpr bool ShouldSynchronizeCommittedTeleportPrediction()
+    {
+        return ShouldSynchronizeCommittedTeleportPrediction(kCurrentMode);
     }
 
     constexpr bool ShouldUseLegacyCollisionBypass()

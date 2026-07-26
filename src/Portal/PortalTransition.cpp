@@ -1,5 +1,7 @@
 #include "PortalTransition.h"
 #include "PortalPhysicsMode.h"
+#include "PortalBspCollisionCarver.h"
+#include "PortalTransitionDecision.h"
 
 #include <algorithm>
 #include <cstddef>
@@ -196,7 +198,99 @@ void CPortalTransition::Reset()
     m_lastExitPortal = PortalSide::None;
     m_nextTeleportTime = 0.0f;
     m_nextCrossingLogTime = 0.0f;
+    m_nextVisualPlaneLogTime = 0.0f;
+    m_nextNearClipLogTime = 0.0f;
+    m_nextEntryCameraLogTime = 0.0f;
+    m_nextExitVisibilityLogTime = 0.0f;
     m_pendingEnvironmentRenderFrames = 0;
+}
+
+bool CPortalTransition::ApplyEntryCameraHandoff(
+    C_BasePlayer* player,
+    Vector& eyeOrigin,
+    Vector& eyeAngles)
+{
+    const PortalTransitionContext& context =
+        G::G_L4D2Portal.m_PortalTransitionSimulator.GetContext();
+
+    PortalSide entrySide = PortalSide::None;
+    if (context.entrySide == PortalTransitionSide::Blue)
+        entrySide = PortalSide::Blue;
+    else if (context.entrySide == PortalTransitionSide::Orange)
+        entrySide = PortalSide::Orange;
+
+    PortalInfo_t* entry = nullptr;
+    PortalInfo_t* exit = nullptr;
+    const bool portalsReady = ArePortalsReady()
+        && TryGetPortalPair(entrySide, entry, exit)
+        && entry
+        && exit;
+    const bool insideAperture = portalsReady
+        && PortalTransform::IsPointInsideAperture(*entry, eyeOrigin, DefaultAperture());
+    const float entrySignedDepth = portalsReady
+        ? SignedDistanceToPortal(*entry, eyeOrigin)
+        : 0.0f;
+
+    if (!PortalTransitionDecision::ShouldApplyEntryCameraHandoff(
+            PortalTransitionDecision::GetEntryCameraHandoffEnabled(),
+            context.phase,
+            IsLocalPlayer(player),
+            G::PortalBspCollisionCarver.IsCarvingActive(),
+            portalsReady,
+            insideAperture,
+            entrySignedDepth))
+    {
+        return false;
+    }
+
+    matrix3x4_t entryToExit;
+    if (!PortalTransform::BuildEntryToExitMatrix(*entry, *exit, entryToExit))
+        return false;
+
+    const Vector transformedOrigin = PortalTransform::TransformPoint(entryToExit, eyeOrigin);
+    QAngle sourceAngles;
+    sourceAngles.x = eyeAngles.x;
+    sourceAngles.y = eyeAngles.y;
+    sourceAngles.z = eyeAngles.z;
+    const QAngle transformedAngles = PortalTransform::TransformAngles(entryToExit, sourceAngles);
+    const float exitSignedDepth = SignedDistanceToPortal(*exit, transformedOrigin);
+    if (!IsFiniteVector(transformedOrigin)
+        || !PortalTransitionDecision::IsPortalCommitHalfSpaceValid(
+            entrySignedDepth,
+            exitSignedDepth))
+    {
+        U::LogWarning("[PortalEntryViewHandoff] rejected=true phase=%s entry=%s exit=%s entryDepth=%.3f exitDepth=%.3f.\n",
+            SimulatorPhaseName(context.phase),
+            SideName(entrySide),
+            SideName(entrySide == PortalSide::Blue ? PortalSide::Orange : PortalSide::Blue),
+            entrySignedDepth,
+            exitSignedDepth);
+        return false;
+    }
+
+    const Vector originalOrigin = eyeOrigin;
+    const Vector originalAngles = eyeAngles;
+    eyeOrigin = transformedOrigin;
+    eyeAngles.x = transformedAngles.x;
+    eyeAngles.y = transformedAngles.y;
+    eyeAngles.z = transformedAngles.z;
+
+    const float currentTime = I::EngineClient ? I::EngineClient->OBSOLETE_Time() : 0.0f;
+    if (!I::EngineClient || ShouldLog(currentTime, m_nextEntryCameraLogTime, 0.02f))
+    {
+        U::LogDebug("[PortalEntryViewHandoff] applied=true phase=%s entry=%s exit=%s time=%.3f entryDepth=%.3f exitDepth=%.3f insideAperture=true origin=(%.2f %.2f %.2f)->(%.2f %.2f %.2f) angles=(%.2f %.2f %.2f)->(%.2f %.2f %.2f).\n",
+            SimulatorPhaseName(context.phase),
+            SideName(entrySide),
+            SideName(entrySide == PortalSide::Blue ? PortalSide::Orange : PortalSide::Blue),
+            currentTime,
+            entrySignedDepth,
+            exitSignedDepth,
+            originalOrigin.x, originalOrigin.y, originalOrigin.z,
+            eyeOrigin.x, eyeOrigin.y, eyeOrigin.z,
+            originalAngles.x, originalAngles.y, originalAngles.z,
+            eyeAngles.x, eyeAngles.y, eyeAngles.z);
+    }
+    return true;
 }
 
 void CPortalTransition::ApplyVisualTransition(CViewSetup& view)
@@ -315,6 +409,175 @@ void CPortalTransition::ApplyVisualTransition(CViewSetup& view)
     }
 }
 
+void CPortalTransition::ApplyPortalNearClipFix(CViewSetup& view)
+{
+    if (!PortalTransitionDecision::GetPortalNearClipFixEnabled()
+        || !G::PortalBspCollisionCarver.IsCarvingActive()
+        || !I::EngineClient
+        || !ArePortalsReady())
+    {
+        return;
+    }
+
+    const PortalTransitionContext& context =
+        G::G_L4D2Portal.m_PortalTransitionSimulator.GetContext();
+    const bool entryHandoff = context.phase == PortalTransitionPhase::ApproachingPortal
+        || context.phase == PortalTransitionPhase::IntersectingPortal;
+    const bool exitHandoff = context.phase == PortalTransitionPhase::ExitingPortal
+        || context.phase == PortalTransitionPhase::Cooldown;
+    if (!entryHandoff && !exitHandoff)
+        return;
+
+    if (exitHandoff
+        && (!PortalTransitionDecision::GetExactExitVisualGuardEnabled()
+            || PortalTransitionDecision::GetExitClearanceMode() != PortalExitClearanceMode::ExactTransform))
+    {
+        return;
+    }
+
+    const PortalTransitionSide selectedSide = exitHandoff ? context.exitSide : context.entrySide;
+    const PortalInfo_t* portal = nullptr;
+    if (selectedSide == PortalTransitionSide::Blue)
+        portal = &G::G_L4D2Portal.g_BluePortal;
+    else if (selectedSide == PortalTransitionSide::Orange)
+        portal = &G::G_L4D2Portal.g_OrangePortal;
+    if (!portal || !IsPortalOpenForTransition(*portal))
+        return;
+
+    const PortalTransform::PortalLocalPoint local =
+        PortalTransform::WorldToPortalLocal(*portal, view.origin);
+    const float signedDepth = SignedDistanceToPortal(*portal, view.origin);
+    const bool insideAperture =
+        PortalTransform::IsPointInsideAperture(*portal, view.origin, DefaultAperture());
+    constexpr float kTargetNearClip = 1.0f;
+    const float activationDepth = exitHandoff
+        ? std::max(18.0f, view.zNear + 11.0f)
+        : std::max(9.0f, view.zNear + 2.0f);
+    const float originalNearClip = view.zNear;
+    const float appliedNearClip = exitHandoff
+        ? PortalTransitionDecision::ComputePortalAwareNearClipForPhase(
+            context.phase,
+            true,
+            insideAperture,
+            signedDepth,
+            originalNearClip,
+            activationDepth,
+            kTargetNearClip)
+        : PortalTransitionDecision::ComputePortalAwareNearClip(
+            true,
+            insideAperture,
+            signedDepth,
+            originalNearClip,
+            activationDepth,
+            kTargetNearClip);
+    if (appliedNearClip >= originalNearClip)
+        return;
+
+    // Only the main world view near plane is changed. zNearViewmodel remains
+    // untouched so this experiment cannot alter first-person model projection.
+    view.zNear = appliedNearClip;
+
+    const float currentTime = I::EngineClient->OBSOLETE_Time();
+    if (ShouldLog(currentTime, m_nextNearClipLogTime, 0.05f))
+    {
+        U::LogDebug("[PortalNearClipFix] phase=%s handoff=%s portal=%s time=%.3f signedDepth=%.3f local=(f=%.3f r=%.3f u=%.3f) insideAperture=%s originalZNear=%.3f appliedZNear=%.3f activationDepth=%.3f clearanceMode=%s.\n",
+            SimulatorPhaseName(context.phase),
+            exitHandoff ? "exit" : "entry",
+            SimulatorSideName(selectedSide),
+            currentTime,
+            signedDepth,
+            local.forward, local.right, local.up,
+            BoolText(insideAperture),
+            originalNearClip,
+            appliedNearClip,
+            activationDepth,
+            PortalTransitionDecision::ExitClearanceModeName(
+                PortalTransitionDecision::GetExitClearanceMode()));
+    }
+}
+
+bool CPortalTransition::TryGetExactExitVisibilityOrigin(
+    const Vector& viewOrigin,
+    bool isMainView,
+    Vector* safeOrigin,
+    float* signedDepthOut,
+    int* safeLeafOut)
+{
+    if (!safeOrigin
+        || !G::PortalBspCollisionCarver.IsCarvingActive()
+        || !I::EngineClient
+        || !I::EngineTrace
+        || !ArePortalsReady())
+    {
+        return false;
+    }
+
+    const PortalTransitionContext& context =
+        G::G_L4D2Portal.m_PortalTransitionSimulator.GetContext();
+    const PortalInfo_t* exit = nullptr;
+    if (context.exitSide == PortalTransitionSide::Blue)
+        exit = &G::G_L4D2Portal.g_BluePortal;
+    else if (context.exitSide == PortalTransitionSide::Orange)
+        exit = &G::G_L4D2Portal.g_OrangePortal;
+    if (!exit || !IsPortalOpenForTransition(*exit))
+        return false;
+
+    constexpr float kVisibilityGuardDepth = 24.0f;
+    const float signedDepth = SignedDistanceToPortal(*exit, viewOrigin);
+    const bool insideAperture =
+        PortalTransform::IsPointInsideAperture(*exit, viewOrigin, DefaultAperture());
+    if (!PortalTransitionDecision::ShouldUseExactExitVisualGuard(
+            PortalTransitionDecision::GetExactExitVisualGuardEnabled(),
+            context.phase,
+            PortalTransitionDecision::GetExitClearanceMode(),
+            isMainView,
+            insideAperture,
+            signedDepth,
+            kVisibilityGuardDepth))
+    {
+        return false;
+    }
+
+    constexpr float kSafeOffsets[] = { 25.0f, 50.0f, 1.0f };
+    int safeLeaf = -1;
+    for (float offset : kSafeOffsets)
+    {
+        const Vector candidate = exit->origin + exit->normal * offset;
+        const int leaf = I::EngineTrace->GetLeafContainingPoint(candidate);
+        if (leaf <= 0)
+            continue;
+
+        *safeOrigin = candidate;
+        safeLeaf = leaf;
+        break;
+    }
+    if (safeLeaf <= 0)
+        return false;
+
+    if (signedDepthOut)
+        *signedDepthOut = signedDepth;
+    if (safeLeafOut)
+        *safeLeafOut = safeLeaf;
+
+    const float currentTime = I::EngineClient->OBSOLETE_Time();
+    if (ShouldLog(currentTime, m_nextExitVisibilityLogTime, 0.05f))
+    {
+        const int viewLeaf = I::EngineTrace->GetLeafContainingPoint(viewOrigin);
+        U::LogDebug("[PortalExitVisibility] phase=%s exit=%s time=%.3f view=(%.2f %.2f %.2f) viewLeaf=%d signedDepth=%.3f safe=(%.2f %.2f %.2f) safeLeaf=%d appended=true clearanceMode=%s.\n",
+            SimulatorPhaseName(context.phase),
+            SimulatorSideName(context.exitSide),
+            currentTime,
+            viewOrigin.x, viewOrigin.y, viewOrigin.z,
+            viewLeaf,
+            signedDepth,
+            safeOrigin->x, safeOrigin->y, safeOrigin->z,
+            safeLeaf,
+            PortalTransitionDecision::ExitClearanceModeName(
+                PortalTransitionDecision::GetExitClearanceMode()));
+    }
+    return true;
+}
+
 void CPortalTransition::LogRenderEnvironmentSnapshot(const char* phase, const CViewSetup& view)
 {
     if (m_pendingEnvironmentRenderFrames <= 0)
@@ -323,6 +586,61 @@ void CPortalTransition::LogRenderEnvironmentSnapshot(const char* phase, const CV
     C_TerrorPlayer* player = GetLocalPlayer();
     LogEnvironmentSnapshot(phase ? phase : "main-render", player, view.origin, Vector(view.angles.x, view.angles.y, view.angles.z));
     --m_pendingEnvironmentRenderFrames;
+}
+
+void CPortalTransition::LogVisualPlaneProbe(const CViewSetup& view)
+{
+    if (!G::PortalBspCollisionCarver.IsCarvingActive()
+        || !I::EngineClient
+        || !ArePortalsReady())
+    {
+        return;
+    }
+
+    constexpr float kProbeDepth = 48.0f;
+    constexpr float kProbeHalfWidth = 38.0f;
+    constexpr float kProbeHalfHeight = 62.0f;
+    const PortalInfo_t& blue = G::G_L4D2Portal.g_BluePortal;
+    const PortalInfo_t& orange = G::G_L4D2Portal.g_OrangePortal;
+    const PortalTransform::PortalLocalPoint blueLocal =
+        PortalTransform::WorldToPortalLocal(blue, view.origin);
+    const PortalTransform::PortalLocalPoint orangeLocal =
+        PortalTransform::WorldToPortalLocal(orange, view.origin);
+    const float blueDepth = SignedDistanceToPortal(blue, view.origin);
+    const float orangeDepth = SignedDistanceToPortal(orange, view.origin);
+    const bool blueNear = PortalTransitionDecision::IsViewNearPortalPlane(
+        blueDepth, blueLocal.right, blueLocal.up,
+        kProbeDepth, kProbeHalfWidth, kProbeHalfHeight);
+    const bool orangeNear = PortalTransitionDecision::IsViewNearPortalPlane(
+        orangeDepth, orangeLocal.right, orangeLocal.up,
+        kProbeDepth, kProbeHalfWidth, kProbeHalfHeight);
+    if (!blueNear && !orangeNear)
+        return;
+
+    const float currentTime = I::EngineClient->OBSOLETE_Time();
+    if (!ShouldLog(currentTime, m_nextVisualPlaneLogTime, 0.05f))
+        return;
+
+    const bool chooseBlue = blueNear
+        && (!orangeNear || std::fabs(blueDepth) <= std::fabs(orangeDepth));
+    const PortalTransform::PortalLocalPoint& local = chooseBlue ? blueLocal : orangeLocal;
+    const float signedDepth = chooseBlue ? blueDepth : orangeDepth;
+    const PortalTransitionContext& context =
+        G::G_L4D2Portal.m_PortalTransitionSimulator.GetContext();
+
+    U::LogDebug("[PortalVisualPlaneProbe] phase=%s trackedEntry=%s nearest=%s clearanceMode=%s carvingActive=true time=%.3f viewOrigin=(%.2f %.2f %.2f) signedDepth=%.3f local=(f=%.3f r=%.3f u=%.3f) zNear=%.3f fov=%.2f bloomTone=%s.\n",
+        SimulatorPhaseName(context.phase),
+        SimulatorSideName(context.entrySide),
+        chooseBlue ? "Blue" : "Orange",
+        PortalTransitionDecision::ExitClearanceModeName(
+            PortalTransitionDecision::GetExitClearanceMode()),
+        currentTime,
+        view.origin.x, view.origin.y, view.origin.z,
+        signedDepth,
+        local.forward, local.right, local.up,
+        view.zNear,
+        view.fov,
+        BoolText(view.m_bDoBloomAndToneMapping));
 }
 
 void CPortalTransition::ArmEnvironmentRenderTrace(int frameCount)
@@ -517,6 +835,11 @@ void CPortalTransition::MaybeRunServerMoveTypeWriteDryRun(void* serverBase, cons
 
 bool CPortalTransition::EnterControlledNoclip(C_TerrorPlayer* player, const char* reason)
 {
+    // Keep the destructive movement mutation disabled in BSP traversal mode even
+    // if a future caller reaches this legacy entry point directly.
+    if (!PortalPhysicsMode::ShouldMutatePlayerMovement())
+        return false;
+
     if (m_controlledMoveType.active)
         return true;
 
@@ -788,6 +1111,11 @@ bool CPortalTransition::ShouldBypassPlayerBBoxTrace(
     (void)mask;
     (void)collisionGroup;
 
+    // BSP traversal must prove clearance through the live BSP mutation.  Never
+    // manufacture a clear trace in this mode.
+    if (!PortalPhysicsMode::ShouldUseLegacyCollisionBypass())
+        return false;
+
     if (!trace)
         return false;
 
@@ -980,6 +1308,11 @@ bool CPortalTransition::IsPointCrossingPortalAperture(const PortalInfo_t& portal
 bool CPortalTransition::TryBeginTraversal(C_TerrorPlayer* player, CUserCmd* cmd, PortalSide side, PortalInfo_t& entry, PortalInfo_t& exit)
 {
     (void)exit;
+
+    // This is the retired transition path that writes MOVETYPE_NOCLIP directly.
+    // The active BSP path uses PortalTransitionSimulator + Teleport instead.
+    if (!PortalPhysicsMode::ShouldMutatePlayerMovement())
+        return false;
 
     if (!player)
         return false;

@@ -29,6 +29,9 @@ namespace
             std::vector<std::uint8_t> bytes(sizeof(T));
             std::memcpy(bytes.data(), &value, sizeof(T));
             cells[address] = std::move(bytes);
+            const auto* source = reinterpret_cast<const std::uint8_t*>(&value);
+            for (std::size_t i = 0; i < sizeof(T); ++i)
+                byteCells[address + i] = source[i];
         }
 
         void AddReadableRange(std::uintptr_t address, std::size_t size)
@@ -39,10 +42,21 @@ namespace
         bool Read(std::uintptr_t address, void* destination, std::size_t size) const override
         {
             const auto found = cells.find(address);
-            if (found == cells.end() || found->second.size() != size)
+            if (found != cells.end() && found->second.size() == size)
+            {
+                std::memcpy(destination, found->second.data(), size);
+                return true;
+            }
+
+            if (!IsReadableRange(address, size))
                 return false;
 
-            std::memcpy(destination, found->second.data(), size);
+            auto* output = static_cast<std::uint8_t*>(destination);
+            for (std::size_t i = 0; i < size; ++i)
+            {
+                const auto byte = byteCells.find(address + i);
+                output[i] = byte == byteCells.end() ? 0u : byte->second;
+            }
             return true;
         }
 
@@ -58,6 +72,7 @@ namespace
 
     private:
         std::unordered_map<std::uintptr_t, std::vector<std::uint8_t>> cells;
+        std::unordered_map<std::uintptr_t, std::uint8_t> byteCells;
         std::vector<std::pair<std::uintptr_t, std::size_t>> ranges;
     };
 
@@ -84,6 +99,75 @@ namespace
         memory.Set(base + PortalBsp::kMapCollisionModelsOffset, std::uint32_t{ 0x38000000u });
         memory.Set(base + PortalBsp::kValidatedCollisionModelCountOffset, std::uint32_t{ 1u });
         memory.AddReadableRange(0x38000000u, PortalBsp::kCollisionModelRequiredBytes);
+    }
+
+    PortalBsp::Snapshot MakeMinimalQuerySnapshot()
+    {
+        PortalBsp::Snapshot snapshot{};
+        snapshot.ready = true;
+
+        constexpr std::uintptr_t addresses[] = {
+            0x40000000u,
+            0x40100000u,
+            0x40200000u,
+            0x40300000u,
+            0x40400000u,
+            0x40500000u,
+            0x40600000u
+        };
+        for (std::size_t i = 0; i < snapshot.tables.size(); ++i)
+        {
+            snapshot.tables[i].layout = PortalBsp::kRequiredArrays[i];
+            snapshot.tables[i].canonicalCount = 1;
+            snapshot.tables[i].validatedCount = 1 + snapshot.tables[i].layout.validatedCountDelta;
+            snapshot.tables[i].arrayAddress = addresses[i];
+        }
+        return snapshot;
+    }
+
+    void PopulateMinimalQueryMemory(FakeMemoryReader& memory)
+    {
+        constexpr std::uint32_t brushSides = 0x40000000u;
+        constexpr std::uint32_t boxBrushes = 0x40100000u;
+        constexpr std::uint32_t planes = 0x40200000u;
+        constexpr std::uint32_t nodes = 0x40300000u;
+        constexpr std::uint32_t leafs = 0x40400000u;
+        constexpr std::uint32_t leafBrushes = 0x40500000u;
+        constexpr std::uint32_t brushes = 0x40600000u;
+
+        memory.Set(planes + 0u, 1.0f);
+        memory.Set(planes + 4u, 0.0f);
+        memory.Set(planes + 8u, 0.0f);
+        memory.Set(planes + 12u, 0.0f);
+
+        memory.Set(nodes + 0u, planes);
+        memory.Set(nodes + 4u, std::int32_t{ -1 });
+        memory.Set(nodes + 8u, std::int32_t{ -1 });
+
+        memory.Set(leafs + 8u, std::uint16_t{ 0 });
+        memory.Set(leafs + 10u, std::uint16_t{ 1 });
+        memory.Set(leafBrushes, std::uint16_t{ 0 });
+
+        memory.Set(brushes + 0u, std::int32_t{ 0x1 });
+        memory.Set(brushes + 4u, PortalBspQuery::kBoxBrushSideCount);
+        memory.Set(brushes + 6u, std::uint16_t{ 0 });
+
+        memory.Set(brushSides + 0u, planes);
+
+        memory.Set(boxBrushes + 0u, -20.0f);
+        memory.Set(boxBrushes + 4u, -1.0f);
+        memory.Set(boxBrushes + 8u, -1.0f);
+        memory.Set(boxBrushes + 16u, 0.0f);
+        memory.Set(boxBrushes + 20u, 1.0f);
+        memory.Set(boxBrushes + 24u, 1.0f);
+
+        memory.AddReadableRange(brushSides, PortalBsp::kBrushSides.elementSize);
+        memory.AddReadableRange(boxBrushes, PortalBsp::kBoxBrushes.elementSize);
+        memory.AddReadableRange(planes, PortalBsp::kPlanes.elementSize);
+        memory.AddReadableRange(nodes, PortalBsp::kNodes.elementSize);
+        memory.AddReadableRange(leafs, PortalBsp::kLeafs.elementSize);
+        memory.AddReadableRange(leafBrushes, PortalBsp::kLeafBrushes.elementSize);
+        memory.AddReadableRange(brushes, PortalBsp::kBrushes.elementSize);
     }
 }
 
@@ -130,6 +214,42 @@ int main()
     const auto wrongLeafs = PortalBsp::CaptureSnapshot(oldLeafAssumption, base, 560);
     Expect(!wrongLeafs.ready, "collision leaf count equality with render leaves is rejected");
     Expect(!wrongLeafs.leafInvariant.collisionCountMatches, "leaf mismatch is diagnosed");
+
+    FakeMemoryReader queryMemory;
+    PopulateMinimalQueryMemory(queryMemory);
+    const PortalBsp::Snapshot querySnapshot = MakeMinimalQuerySnapshot();
+    const PortalBsp::QueryStorage queryStorage = PortalBsp::CaptureQueryStorage(queryMemory, querySnapshot);
+    Expect(queryStorage.ready, "checked live-memory fields normalize into a pure query view");
+    Expect(queryStorage.invalidNodePlanePointers == 0, "valid node plane pointers decode to indices");
+    Expect(queryStorage.invalidBrushSidePlanePointers == 0, "valid brush-side plane pointers decode to indices");
+
+    const auto queryResult = PortalBspQuery::FindBrushForSurfacePoint(
+        { 0.0f, 0.0f, 0.0f },
+        { 1.0f, 0.0f, 0.0f },
+        0x1,
+        queryStorage.View());
+    Expect(queryResult.status == PortalBspQuery::SurfaceBrushStatus::Success,
+        "normalized live-memory view supports the pure surface query");
+    Expect(queryResult.brushIndex == 0, "normalized query returns the live brush index");
+
+    PortalBsp::Snapshot addressSnapshot = querySnapshot;
+    addressSnapshot.mapGeneration = 7;
+    PortalBsp::TableSnapshot& liveBrushes = addressSnapshot.tables[6];
+    liveBrushes.fieldsReadable = true;
+    liveBrushes.spanReadable = true;
+    liveBrushes.metadata.valid = true;
+    std::uintptr_t brushContentsAddress = 0;
+    Expect(PortalBsp::ResolveBrushContentsAddress(
+        addressSnapshot, 0, 7, brushContentsAddress) == PortalBrushAccessStatus::Success,
+        "live brush zero resolves for the current map generation");
+    Expect(brushContentsAddress == liveBrushes.arrayAddress,
+        "brush contents address points at the first field of the live brush");
+    Expect(PortalBsp::ResolveBrushContentsAddress(
+        addressSnapshot, 1, 7, brushContentsAddress) == PortalBrushAccessStatus::InvalidBrushIndex,
+        "brush index equal to canonical count is rejected");
+    Expect(PortalBsp::ResolveBrushContentsAddress(
+        addressSnapshot, 0, 6, brushContentsAddress) == PortalBrushAccessStatus::GenerationMismatch,
+        "stale map generation is rejected before address use");
 
     std::cout << "Portal BSP data tests passed\n";
     return 0;

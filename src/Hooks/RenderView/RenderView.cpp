@@ -2,6 +2,7 @@
 
 #include <Windows.h>
 #include <map>
+#include <vector>
 #include "../../SDK/L4D2/Interfaces/RenderView.h"
 #include "../../Portal/L4D2_Portal.h"
 #include "../Hooks.h"
@@ -30,6 +31,42 @@
 
 namespace Detail
 {
+	static bool TryAppendExactExitVisibilityOrigin(
+		int numorigins,
+		const Vector origin[],
+		std::vector<Vector>& augmentedOrigins)
+	{
+		constexpr int kMaxAcceptedVisOrigins = 64;
+		if (g_bIsRenderingPortalTexture
+			|| G::G_L4D2Portal.m_nPortalRenderDepth != 0
+			|| numorigins <= 0
+			|| numorigins > kMaxAcceptedVisOrigins
+			|| !origin)
+		{
+			return false;
+		}
+
+		Vector safeOrigin;
+		if (!G::G_L4D2Portal.m_PortalTransition.TryGetExactExitVisibilityOrigin(
+				origin[0],
+				true,
+				&safeOrigin))
+		{
+			return false;
+		}
+
+		augmentedOrigins.assign(origin, origin + numorigins);
+		for (const Vector& existing : augmentedOrigins)
+		{
+			const Vector delta = existing - safeOrigin;
+			if (delta.LenghtSqr() <= 0.01f)
+				return false;
+		}
+
+		augmentedOrigins.push_back(safeOrigin);
+		return true;
+	}
+
 #ifdef DETECT_VMT_INDEX
 	static std::map<uint32_t, int> s_ValidCallCount;    // 有效调用次数（origin 非空）
 	static std::map<uint32_t, int> s_InvalidCallCount;  // 无效调用次数（origin 为空）
@@ -118,6 +155,18 @@ void __fastcall Hooks::RenderView::ViewSetupVis::Detour(void* ecx, void* edx, bo
     //     Table.Original<FN>(Index)(ecx, edx, novis, 1, cheatOrigins);
     // }
 
+	std::vector<Vector> augmentedOrigins;
+	if (Detail::TryAppendExactExitVisibilityOrigin(numorigins, origin, augmentedOrigins))
+	{
+		Table.Original<FN>(Index)(
+			ecx,
+			edx,
+			novis,
+			static_cast<int>(augmentedOrigins.size()),
+			augmentedOrigins.data());
+		return;
+	}
+
 	// Call original function
 	Table.Original<FN>(Index)(ecx, edx, novis, numorigins, origin);
 }
@@ -175,6 +224,19 @@ void __fastcall Hooks::RenderView::ViewSetupVisEx::Detour(void* ecx, void* edx, 
     //     Table.Original<FN>(Index)(ecx, edx, true, 1, origin, returnFlags);
 	// 	return;
 	// }
+
+	std::vector<Vector> augmentedOrigins;
+	if (Detail::TryAppendExactExitVisibilityOrigin(numorigins, origin, augmentedOrigins))
+	{
+		Table.Original<FN>(Index)(
+			ecx,
+			edx,
+			novis,
+			static_cast<int>(augmentedOrigins.size()),
+			augmentedOrigins.data(),
+			returnFlags);
+		return;
+	}
 
 	// Call original function
 	Table.Original<FN>(Index)(ecx, edx, novis, numorigins, origin, returnFlags);

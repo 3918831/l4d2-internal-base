@@ -1,4 +1,6 @@
 #include "Entry/Entry.h"
+#include "Portal/PortalBspCollisionCarver.h"
+#include "Portal/PortalBspData.h"
 #include <thread>
 
 BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
@@ -16,6 +18,13 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
 		std::thread([]() {
 			G::ModuleEntry.Load();
 		}).detach();
+	}
+	else if (fdwReason == DLL_PROCESS_DETACH && lpvReserved == nullptr)
+	{
+		// FreeLibrary unload: perform only the minimal idempotent memory restore
+		// while the current map allocation is still addressable. Avoid logging or
+		// other loader-lock-sensitive cleanup from DllMain.
+		G::PortalBspCollisionCarver.RestoreAll(G::PortalBspData, "DLL_PROCESS_DETACH");
 	}
 
 	return TRUE;

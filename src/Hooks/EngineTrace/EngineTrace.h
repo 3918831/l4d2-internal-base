@@ -18,6 +18,8 @@ namespace Hooks
 			int __fastcall Detour(void* ecx, void* edx, const Vector& ptTest);
 		}
 
+		bool EnsurePortalBspDataReady(const char* reason);
+		bool TryGetBrushContentsForDiagnostics(int brushIndex, int& contents);
 		void Init();
 	}
 }

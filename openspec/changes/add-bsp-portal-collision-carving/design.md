@@ -232,6 +232,58 @@ No legacy code is deleted until the causal test is repeatable, but failure retur
 
 **Rationale:** A sphere does not match a portal aperture and will activate through nearby unrelated geometry. A portal-local expanded prism reuses existing transforms and provides separately tunable lateral, vertical, enter-depth, and leave-depth limits.
 
+### Decision 8: Isolate physical exit push with an exact-transform diagnostic
+
+`ExactTransform` applies no exit-normal clearance push after the entry-to-exit transform. It is an explicit Phase 1 causal diagnostic, not yet the final clearance policy. During this mode the existing `ExitingPortal` phase remains a spatial rearm lock until the player reaches 16 units in front of the exit plane or leaves the aperture. The 0.20-second temporal cooldown begins only after that spatial lock releases, so slow exits cannot consume the cooldown while still overlapping the exit portal. Commit/exit phases also reject traversal entry at the policy layer. Focused logs compare the exact mapped eye, the portal render eye approximation, and the physical post-Teleport eye.
+
+### Decision 9: Keep exact physics and repair the post-Teleport main-view handoff separately
+
+Round-nine evidence shows zero error between the exact mapped eye and the physical post-Teleport eye, while the first main-render frames can still use a behind-wall visibility leaf. Moving the player would reintroduce the discontinuity that `ExactTransform` removed. Therefore the bounded exit handoff keeps the physical position unchanged, appends a validated visibility origin in front of the exit to the main view's existing PVS origins, and keeps the reduced world near clip active through `ExitingPortal` and the immediate `Cooldown` handoff. The guard is restricted to `ExactTransform`, the portal aperture, a bounded plane distance, and the non-recursive main view. It has a runtime A/B switch and file-only diagnostics.
+
+### Decision 10: Match official crossing half-spaces before adopting the official camera handoff
+
+Portal SDK evidence confirms that the server also uses player `Teleport`; the API itself is therefore not the primary suspect. The authoritative crossing is committed only after the player center enters the back half-space of the entry portal, whose 180-degree transform places it in the front half-space of the exit. The immediate path commits during `Touch`, while a swept/high-speed path is retained as fallback. Phase 1 therefore corrects the predicted target to a small negative entry depth, rejects any transaction whose raw transformed exit depth is negative, commits the first valid behind-plane observation in the same update, and tests the consecutive-command anchor segment against the zero plane and aperture.
+
+The official client additionally transforms the main camera before the physical player center crosses and repairs interpolation histories, eye interpolation, viewmodel facing, and visibility history when the entity portals. Those mechanisms remain the preferred follow-up if black-sky/backside flashes are gone but residual visual stutter remains. They are intentionally not mixed into this half-space fix so the current in-game test can identify whether crossing timing and location were the primary defects.
+
+### Decision 11: Hand off the entry camera before Teleport without moving the player
+
+Round-eleven evidence separates the remaining backside flash from the already corrected Teleport half-spaces. During slow crossings the rendered eye can remain behind the entry plane for roughly 27–53 ms before the movement command commits Teleport; high-speed crossings show the same interval and can expose geometry behind the removed carrying brush. Portal SDK's `C_Portal_Player::CalcPortalView` establishes the relevant client behavior: once the eye is behind the portal plane and the player is in the portal hole, the client transforms the eye origin and angles through the linked portal before the authoritative player transfer completes.
+
+Phase 1 therefore applies the existing entry-to-exit matrix after local `CalcPlayerView`, only during `IntersectingPortal`, only after the raw eye depth becomes negative, only inside the tracked entry aperture, and only while BSP carving and a valid portal pair are active. This changes the rendered camera only. Physical and predicted Teleport, movement, velocity, exact exit position, near clip, exit visibility guard, rearm, and all BSP behavior remain unchanged. A runtime `portal_visual_entryhandoff` switch and file-only `[PortalEntryViewHandoff]` evidence preserve a controlled A/B path. Official interpolation-history repair and residual-stutter work remain explicitly deferred.
+
+### Decision 12: The ordinary portal-model mask workaround was a falsified experiment
+
+Round-twelve testing can still freeze a wall-texture strip before Teleport, with part of the viewmodel clipped at the same time. The logs confirm the camera-handoff controls were active and black sky did not return. The remaining fault is therefore narrowed to the portal model used to write the main-view stencil being clipped by the near plane, rather than Teleport commit timing, BSP collision, or exit placement. Portal SDK 2013 likewise retains the ordinary main-view near clip and uses dedicated render-fix geometry plus controlled stencil/depth state for the close portal surface.
+
+Round thirteen falsified the proposed ordinary-model workaround. `[PortalMaskRepair]` remained active while the positive entry-eye depth fell from roughly 1.99 to 0.24 units, yet the tester could freeze a complete carrying-wall view inside the visible blue portal border. Reducing the same model's near projection and bypassing depth therefore did not reproduce Portal SDK's generated render-fix mesh. Its render-state override, runtime command, status field, tests, and diagnostics are removed rather than retained as a dormant workaround.
+
+### Decision 13: Align the remote RTT camera and clip plane before porting the official render-fix mesh
+
+The side-view screenshot preserves the blue border while the portal interior is filled by the wall, and the failure is stable before Teleport. The active remote-view code differs from Portal SDK in two coupled coordinates: it pushes the transformed RTT camera one unit along the exit normal, and places the custom clip plane at `dot(normal, exitOrigin) + 1`. Portal SDK keeps the exact transformed camera and uses `dot(normal, exitOrigin - normal * 0.5)`. At observed eye depths of 0.2–2.0 units, the current 1.0-unit camera error and 1.5-unit clip-plane displacement are first-order, not epsilon-sized.
+
+The next single-factor implementation therefore removes the remote camera push and applies the official half-unit-behind clip plane in every render mode. Existing valid PVS origins at the exit remain unchanged and separate from the camera, preserving the earlier black-sky fix without changing perspective. Portal entity placement and border offsets remain unchanged in this round; the user's note that their offsets are negotiable is recorded, but they are not required to test this root-cause hypothesis. A rate-limited file-only `[PortalOfficialRemoteView]` record captures source depth, transformed exit depth, clip distance, and zero camera push. If the full-wall view persists, the next architectural step is the official stencil-hole/depth-clear/generated-render-fix/depth-restore chain, not another near-plane threshold.
+
+### Decision 14: Port the official near-plane proxy before depth and fog repair
+
+Round fourteen reduced but did not eliminate the stable wall view. The decisive sample held `entryEyeDepth=0.6339` while the active main-view `zNear=1.0`: the ordinary portal model plane is clipped, but its carrying wall is approximately 0.5 units farther away and remains renderable. This explains both the stable slow case and the high-speed strip without requiring a Teleport or remote-camera error.
+
+The isolated fix therefore ports Portal SDK's generated primary-view proxy: a quad at camera `zNear + 0.05`, clipped by twelve 1.1-expanded aperture planes and the portal front plane, CPU-projected to NDC `z=0.00001`, and drawn while the existing stencil state is `ALWAYS/REPLACE`. The current `DrawModelExecute` hook remains the only entry point. `IMatRenderContext::GetDynamicMesh` is already present, so a local minimal Windows x86 mesh ABI adapter is sufficient; no new engine hook, interface locator, signature, or offset is introduced. Depth clearing inside the stencil and fog/post-stencil repair are deliberately deferred until the wall-mask result is measured in game.
+
+### Decision 15: Correct the dynamic-mesh index ABI before changing render architecture
+
+Round fifteen changed the failure from a regular wall strip into large irregular triangles and trapezoids that changed with view angle and could flicker while the camera was stationary. The focused log showed the proxy was being generated continuously with plausible three-to-five-vertex polygons and no engine error. That evidence is inconsistent with ordinary Z-fighting and instead points to malformed proxy triangles.
+
+The local ABI adapter wrote a 16-bit index at `reinterpret_cast<byte*>(indices) + stripIndex * indexSize` and stored only `stripIndex`. Portal SDK defines `IndexDesc_t::m_nIndexSize` as the active 0/1 element increment, while `CIndexBuilder` advances an `unsigned short*` by that increment and writes `m_nFirstVertex + localIndex`. With the observed active value `1`, the old byte arithmetic overlapped adjacent 16-bit writes and could turn intended indices `0,1,2` into values such as `256`, causing the GPU to consume stale dynamic-buffer vertices and form screen-scale polygons.
+
+This round therefore changes only index emission: accept the official active increment `1`, write complete 16-bit elements at `indices[i]`, add `firstVertex`, validate capacity and 16-bit range before the first write, and fail closed for every other descriptor. Pure tests use nonzero base vertices and sentinel storage to prove values, boundaries, and no partial writes. Rate-limited `[PortalRenderFix]` evidence records `firstVertex`, `firstIndex`, `indexSize`, and the first/last emitted values. Proxy geometry, stencil/depth state, fog, RTT, Teleport, BSP, and portal placement are unchanged; no new hook, interface, signature, offset, or IDA work is required.
+
+### Decision 16: Accept the wall-mask result and defer residual continuity
+
+Round-sixteen testing completed 23 successful bidirectional Teleports, including slow and high-speed passes, without black sky, wall strips, carrying-wall views, or the malformed screen-scale polygons from round fifteen. All 20 rate-limited render-fix records used `indexSize=1`, `firstIndexValue=firstVertex`, and the expected contiguous last index. Shutdown restored both modified brushes from `CONTENTS_EMPTY` to their original `0x00000001`; corresponding client hull traces changed from open `fraction=1.0` before restoration to blocking `fraction=0.375` afterward.
+
+The primary-view wall-mask defect is therefore accepted as resolved for the current single-player/local-server Phase 1 baseline. A smaller subjective visual discontinuity remains, but this change does not mix another camera or interpolation experiment into the accepted collision/render result. Follow-up work starts from Portal SDK's client `PlayerPortalled`, eye interpolation, eye-angle latch, viewmodel-facing, and visibility-history behavior, with transaction-level diagnostics before any mutation. Depth/fog repair remains deferred because round sixteen provides no black-sky or mask evidence that requires it.
+
 ## Safety Invariants
 
 - No write occurs unless `g_BSPData`, all required counts, and all required pointers pass sanity checks.
@@ -243,6 +295,7 @@ No legacy code is deleted until the causal test is repeatable, but failure retur
 - DLL shutdown calls one idempotent `RestoreAll()` path.
 - A failed second write rolls back the first write.
 - Repeated activation and repeated restoration are no-ops.
+- A teleport cannot rearm while `CommittingTeleport` or `ExitingPortal` is active; temporal cooldown starts when spatial exit clearance releases.
 - Diagnostic logging is rate-limited during per-frame updates but never suppresses mutation and restoration events.
 
 ## Validation Strategy

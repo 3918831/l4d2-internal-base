@@ -1,6 +1,10 @@
 #include "BasePlayer.h"
 
 #include "../../Features/Vars.h"
+#pragma warning(push)
+#pragma warning(disable: 4819)
+#include "../../Portal/L4D2_Portal.h"
+#pragma warning(pop)
 
 using namespace Hooks;
 
@@ -18,6 +22,11 @@ void __fastcall BasePlayer::CalcPlayerView::Detour(C_BasePlayer* pThis, void* ed
 	{
 		Func.Original<FN>()(pThis, edx, eyeOrigin, eyeAngles, fov);
 	}
+
+	// Match Portal's client-side CalcPortalView handoff: once the local eye has
+	// crossed the entry plane, render from its linked-space transform while the
+	// physical movement command is still waiting to commit Teleport.
+	G::G_L4D2Portal.m_PortalTransition.ApplyEntryCameraHandoff(pThis, eyeOrigin, eyeAngles);
 }
 
 void BasePlayer::Init()

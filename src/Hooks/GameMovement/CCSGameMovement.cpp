@@ -1,6 +1,7 @@
 #include "CCSGameMovement.h"
 #include "../../Portal/L4D2_Portal.h"
 #include "../../Portal/PortalControlledNoclipMovement.h"
+#include "../../Portal/PortalPhysicsMode.h"
 #include "../../Portal/PortalTransitionDecision.h"
 #include "../../Util/Logger/Logger.h"
 #include "../../Util/Logger/PortalFileLog.h"
@@ -469,6 +470,9 @@ namespace
 
 	bool TryApplyPortalWalkMoveNudge(const char* domain, uint32_t heartbeat, void* gameMovement, const Vector& velocityBeforeOriginal, bool detailed)
 	{
+		if (!PortalPhysicsMode::ShouldMutatePlayerMovement())
+			return false;
+
 		const PortalTransitionContext& context = G::G_L4D2Portal.m_PortalTransitionSimulator.GetContext();
 		if (!G::G_L4D2Portal.m_PortalTransitionSimulator.IsInCollisionBridgePhase()
 			|| context.phase != PortalTransitionPhase::IntersectingPortal
@@ -782,11 +786,11 @@ static void HandleTracePlayerBBox(const char* domain, const void* caller, CCSGam
 	(void)G::G_L4D2Portal.m_PortalCollisionBridge.TryBypassPlayerBBoxTrace(
 		request,
 		G::G_L4D2Portal.m_PortalTransitionSimulator);
-	//pm->fraction = 1.0f;  // 设置�?.0表示射线到达终点，没有发生碰�?	//pm->allsolid = true;     // 不是完全固体
+	//pm->fraction = 1.0f;  // 设置�?.0表示射线到达终点，没有发生碰�?	//pm->allsolid = true;     // 不是完全固体
 	//pm->startsolid = true;   // 起始点不在固体中
-	//pm->contents = 0;         // 无特殊内容标�?	//pm->endpos = end;         // 结束位置设为目标位置
+	//pm->contents = 0;         // 无特殊内容标�?	//pm->endpos = end;         // 结束位置设为目标位置
 
-	//// 如果想更真实，可以保留原始起�?	//pm->startpos = start;
+	//// 如果想更真实，可以保留原始起�?	//pm->startpos = start;
 
 	//// 清除命中实体信息
 	//pm->m_pEnt = NULL;
@@ -895,14 +899,17 @@ void __fastcall CCSGameMovement::PlayerMove::Detour(void* ecx, void* edx)
 	LogMovementStageSnapshot("server", "PlayerMove", "Enter", heartbeat, ecx, log);
 	LogFocusedHookProbe("server", "PlayerMove", "Enter", heartbeat, ecx);
 	const PortalTransitionContext& context = G::G_L4D2Portal.m_PortalTransitionSimulator.GetContext();
-	if (PortalTransitionDecision::ShouldRunOriginalPlayerMove(context.phase))
-	{
+	const bool shouldReplaceOriginal = PortalTransitionDecision::ShouldReplaceOriginalPlayerMove(
+		context.phase,
+		PortalPhysicsMode::ShouldMutatePlayerMovement());
+	const bool controlledMoveApplied = shouldReplaceOriginal
+		&& PortalControlledNoclipMovement::TryApply(
+			"server",
+			heartbeat,
+			TryGetMoveDataFromGameMovement(ecx),
+			context);
+	if (!controlledMoveApplied)
 		ServerTable.Original<FN>(Index)(ecx, edx);
-	}
-	else
-	{
-		PortalControlledNoclipMovement::TryApply("server", heartbeat, TryGetMoveDataFromGameMovement(ecx), context);
-	}
 	LogFocusedHookProbe("server", "PlayerMove", "Exit", heartbeat, ecx);
 	LogMovementStageSnapshot("server", "PlayerMove", "Exit", heartbeat, ecx, log);
 }
@@ -968,7 +975,8 @@ void __fastcall CCSGameMovement::StayOnGround::Detour(void* ecx, void* edx)
 	LogMovementStageSnapshot("server-signature", "StayOnGround", "Enter", heartbeat, ecx, log);
 
 	const PortalTransitionContext& context = G::G_L4D2Portal.m_PortalTransitionSimulator.GetContext();
-	const bool skipForPortalBridge = G::G_L4D2Portal.m_PortalTransitionSimulator.IsInCollisionBridgePhase()
+	const bool skipForPortalBridge = PortalPhysicsMode::ShouldMutatePlayerMovement()
+		&& G::G_L4D2Portal.m_PortalTransitionSimulator.IsInCollisionBridgePhase()
 		&& context.insideAperture
 		&& context.entrySide != PortalTransitionSide::None;
 
@@ -1016,14 +1024,17 @@ void __fastcall CCSGameMovement::ClientPlayerMove::Detour(void* ecx, void* edx)
 	LogMovementStageSnapshot("client", "PlayerMove", "Enter", heartbeat, ecx, log);
 	LogFocusedHookProbe("client", "PlayerMove", "Enter", heartbeat, ecx);
 	const PortalTransitionContext& context = G::G_L4D2Portal.m_PortalTransitionSimulator.GetContext();
-	if (PortalTransitionDecision::ShouldRunOriginalPlayerMove(context.phase))
-	{
+	const bool shouldReplaceOriginal = PortalTransitionDecision::ShouldReplaceOriginalPlayerMove(
+		context.phase,
+		PortalPhysicsMode::ShouldMutatePlayerMovement());
+	const bool controlledMoveApplied = shouldReplaceOriginal
+		&& PortalControlledNoclipMovement::TryApply(
+			"client",
+			heartbeat,
+			TryGetMoveDataFromGameMovement(ecx),
+			context);
+	if (!controlledMoveApplied)
 		ClientTable.Original<FN>(Index)(ecx, edx);
-	}
-	else
-	{
-		PortalControlledNoclipMovement::TryApply("client", heartbeat, TryGetMoveDataFromGameMovement(ecx), context);
-	}
 	LogFocusedHookProbe("client", "PlayerMove", "Exit", heartbeat, ecx);
 	LogMovementStageSnapshot("client", "PlayerMove", "Exit", heartbeat, ecx, log);
 }

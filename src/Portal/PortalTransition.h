@@ -15,8 +15,17 @@ public:
     void Reset();
     void Update(CUserCmd* cmd);
     void OnFinishMove(C_BasePlayer* player, CUserCmd* cmd, CMoveData* move);
+    bool ApplyEntryCameraHandoff(C_BasePlayer* player, Vector& eyeOrigin, Vector& eyeAngles);
     void ApplyVisualTransition(CViewSetup& view);
+    void ApplyPortalNearClipFix(CViewSetup& view);
+    bool TryGetExactExitVisibilityOrigin(
+        const Vector& viewOrigin,
+        bool isMainView,
+        Vector* safeOrigin,
+        float* signedDepth = nullptr,
+        int* safeLeaf = nullptr);
     void LogRenderEnvironmentSnapshot(const char* phase, const CViewSetup& view);
+    void LogVisualPlaneProbe(const CViewSetup& view);
     void LogEnvironmentSnapshot(const char* phase, C_TerrorPlayer* player, const Vector& viewOrigin, const Vector& viewAngles, const Vector* referenceOrigin = nullptr);
     void LogHookProbe(const char* domain, const char* stage, const char* point, void* gameMovement, CMoveData* move);
     void LogMoveTypeProbe(const char* phase, C_BasePlayer* player = nullptr, CMoveData* move = nullptr);
@@ -129,6 +138,10 @@ private:
     float m_nextDistanceLogTime = 0.0f;
     float m_nextCrossingLogTime = 0.0f;
     float m_nextTraceLogTime = 0.0f;
+    float m_nextVisualPlaneLogTime = 0.0f;
+    float m_nextNearClipLogTime = 0.0f;
+    float m_nextEntryCameraLogTime = 0.0f;
+    float m_nextExitVisibilityLogTime = 0.0f;
     int m_environmentTraceSequence = 0;
     int m_pendingEnvironmentRenderFrames = 0;
     bool m_serverMoveTypeWriteDryRunDone = false;

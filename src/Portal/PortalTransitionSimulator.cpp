@@ -11,6 +11,7 @@
 #include "../Util/Logger/Logger.h"
 #include "../Util/Logger/PortalFileLog.h"
 #include "PortalPlayerTeleport.h"
+#include "PortalBspCollisionCarver.h"
 #include "PortalTransitionDecision.h"
 #pragma warning(push)
 #pragma warning(disable: 4819)
@@ -26,7 +27,10 @@ namespace
     constexpr float kExitPlacementEpsilon = 2.0f;
     constexpr float kTeleportCooldown = 0.20f;
     constexpr float kMoveIntoPortalDot = -20.0f;
-    constexpr float kPredictedCrossingDepth = 1.5f;
+    // Official Portal commits only after the player center is behind the
+    // entry plane, which the 180-degree transform maps to the exit front.
+    constexpr float kPredictedCrossingDepth = -0.25f;
+    constexpr float kPortalGeometryIdentityEpsilonSqr = 0.01f * 0.01f;
 
     PortalTransform::PortalAperture DefaultAperture()
     {
@@ -86,11 +90,19 @@ void CPortalTransitionSimulator::Reset()
     m_lastCommittedMovementVelocity = Vector();
     m_lastCommittedMovementAngles = QAngle();
     m_hasLastCommittedMovement = false;
+    m_previousAnchor = {};
+    m_previousBlueOrigin = Vector();
+    m_previousBlueNormal = Vector();
+    m_previousOrangeOrigin = Vector();
+    m_previousOrangeNormal = Vector();
+    m_previousAnchorCommandNumber = 0;
+    m_hasPreviousAnchor = false;
 }
 
 void CPortalTransitionSimulator::Update(CUserCmd* cmd)
 {
-    if (!PortalPhysicsMode::ShouldRunTraversalSimulation())
+    if (!PortalPhysicsMode::ShouldRunTraversalForCollisionState(
+        G::PortalBspCollisionCarver.IsCarvingActive()))
     {
         if (m_context.phase != PortalTransitionPhase::Idle || m_hasLastCommittedMovement)
             Reset();
@@ -137,6 +149,8 @@ void CPortalTransitionSimulator::Update(CUserCmd* cmd)
                 G::G_L4D2Portal.g_OrangePortal.normal.y,
                 G::G_L4D2Portal.g_OrangePortal.normal.z);
         }
+        m_hasPreviousAnchor = false;
+        m_previousAnchorCommandNumber = 0;
         ClearPhase(currentTime, "portals-not-ready");
         return;
     }
@@ -149,6 +163,8 @@ void CPortalTransitionSimulator::Update(CUserCmd* cmd)
         || !TryGetPortalPair(PortalTransitionSide::Orange, orangeEntry, orangeExit)
         || !blueEntry || !blueExit || !orangeEntry || !orangeExit)
     {
+        m_hasPreviousAnchor = false;
+        m_previousAnchorCommandNumber = 0;
         ClearPhase(currentTime, "portal-pair-unavailable");
         return;
     }
@@ -157,6 +173,14 @@ void CPortalTransitionSimulator::Update(CUserCmd* cmd)
     const PortalProbe blueProbe = BuildProbe(cmd, anchor, PortalTransitionSide::Blue, *blueEntry, *blueExit);
     const PortalProbe orangeProbe = BuildProbe(cmd, anchor, PortalTransitionSide::Orange, *orangeEntry, *orangeExit);
     LogTraversalFrame(cmd, player, anchor, blueProbe, orangeProbe);
+
+    m_previousAnchor = anchor;
+    m_previousBlueOrigin = blueEntry->origin;
+    m_previousBlueNormal = blueEntry->normal;
+    m_previousOrangeOrigin = orangeEntry->origin;
+    m_previousOrangeNormal = orangeEntry->normal;
+    m_previousAnchorCommandNumber = cmd->command_number;
+    m_hasPreviousAnchor = true;
 
     if (m_context.phase == PortalTransitionPhase::ExitingPortal)
     {
@@ -370,6 +394,7 @@ bool CPortalTransitionSimulator::TryCommitMovementCrossing(
     probe.eyeDistance = SignedDistanceToPortal(*entry, anchor.eye);
     probe.centerDistance = SignedDistanceToPortal(*entry, anchor.center);
     probe.feetDistance = SignedDistanceToPortal(*entry, anchor.feet);
+    probe.observedCenterDistance = probe.centerDistance;
     probe.originInside = PortalTransform::IsPointInsideAperture(*entry, anchor.origin, DefaultAperture());
     probe.eyeInside = PortalTransform::IsPointInsideAperture(*entry, anchor.eye, DefaultAperture());
     probe.centerInside = PortalTransform::IsPointInsideAperture(*entry, anchor.center, DefaultAperture());
@@ -382,7 +407,7 @@ bool CPortalTransitionSimulator::TryCommitMovementCrossing(
         || !probe.insideAperture
         || !probe.movingIntoPortal
         || m_context.signedDepth < -0.5f
-        || probe.centerDistance > 1.5f)
+        || probe.centerDistance >= 0.0f)
     {
         return false;
     }
@@ -403,7 +428,7 @@ bool CPortalTransitionSimulator::TryGetCommittedMovementForCommand(
     Vector* committedVelocity,
     QAngle* committedAngles) const
 {
-    if (!PortalPhysicsMode::ShouldMutatePlayerMovement())
+    if (!PortalPhysicsMode::ShouldSynchronizeCommittedTeleportPrediction())
         return false;
 
     if (!m_hasLastCommittedMovement || commandNumber <= 0)
@@ -488,6 +513,7 @@ CPortalTransitionSimulator::PortalProbe CPortalTransitionSimulator::BuildProbe(C
     probe.eyeDistance = SignedDistanceToPortal(entry, anchor.eye);
     probe.centerDistance = SignedDistanceToPortal(entry, anchor.center);
     probe.feetDistance = SignedDistanceToPortal(entry, anchor.feet);
+    probe.observedCenterDistance = probe.centerDistance;
 
     const PortalTransform::PortalAperture aperture = DefaultAperture();
     probe.originInside = PortalTransform::IsPointInsideAperture(entry, anchor.origin, aperture);
@@ -507,6 +533,47 @@ CPortalTransitionSimulator::PortalProbe CPortalTransitionSimulator::BuildProbe(C
     probe.insideAperture = apertureProjected
         && std::fabs(AbsMin(probe.eyeDistance, probe.centerDistance)) <= kExitDistance;
 
+    const Vector& previousPortalOrigin = side == PortalTransitionSide::Blue
+        ? m_previousBlueOrigin
+        : m_previousOrangeOrigin;
+    const Vector& previousPortalNormal = side == PortalTransitionSide::Blue
+        ? m_previousBlueNormal
+        : m_previousOrangeNormal;
+    const bool consecutiveCommand = m_hasPreviousAnchor
+        && cmd
+        && m_previousAnchorCommandNumber > 0
+        && cmd->command_number == m_previousAnchorCommandNumber + 1;
+    const bool samePortalGeometry = consecutiveCommand
+        && (entry.origin - previousPortalOrigin).LenghtSqr() <= kPortalGeometryIdentityEpsilonSqr
+        && (entry.normal - previousPortalNormal).LenghtSqr() <= kPortalGeometryIdentityEpsilonSqr;
+    if (samePortalGeometry)
+    {
+        probe.hasPreviousSample = true;
+        probe.previousCenterDistance = SignedDistanceToPortal(entry, m_previousAnchor.center);
+
+        float crossingFraction = 0.0f;
+        if (PortalTransitionDecision::TryComputePortalPlaneCrossingFraction(
+            probe.previousCenterDistance,
+            probe.centerDistance,
+            &crossingFraction))
+        {
+            const Vector crossingOrigin = m_previousAnchor.origin
+                + (anchor.origin - m_previousAnchor.origin) * crossingFraction;
+            const Vector crossingEye = m_previousAnchor.eye
+                + (anchor.eye - m_previousAnchor.eye) * crossingFraction;
+            const Vector crossingCenter = m_previousAnchor.center
+                + (anchor.center - m_previousAnchor.center) * crossingFraction;
+            const Vector crossingFeet = m_previousAnchor.feet
+                + (anchor.feet - m_previousAnchor.feet) * crossingFraction;
+            probe.sweptPlaneFraction = crossingFraction;
+            probe.sweptThroughAperture =
+                PortalTransform::IsPointInsideAperture(entry, crossingOrigin, aperture)
+                || PortalTransform::IsPointInsideAperture(entry, crossingEye, aperture)
+                || PortalTransform::IsPointInsideAperture(entry, crossingCenter, aperture)
+                || PortalTransform::IsPointInsideAperture(entry, crossingFeet, aperture);
+        }
+    }
+
     const Vector commandMove = cmd ? BuildCommandMoveDirection(*cmd) : Vector(0.0f, 0.0f, 0.0f);
     probe.cmdDot = commandMove.Dot(entry.normal);
     probe.velDot = anchor.velocity.Dot(entry.normal);
@@ -525,8 +592,12 @@ const CPortalTransitionSimulator::PortalProbe* CPortalTransitionSimulator::Selec
             return &orange;
     }
 
-    const bool blueCanApproach = ShouldEnterApproach(blue) || ShouldEnterIntersecting(blue);
-    const bool orangeCanApproach = ShouldEnterApproach(orange) || ShouldEnterIntersecting(orange);
+    const bool blueCanApproach = ShouldEnterApproach(blue)
+        || ShouldEnterIntersecting(blue)
+        || (blue.sweptThroughAperture && blue.movingIntoPortal);
+    const bool orangeCanApproach = ShouldEnterApproach(orange)
+        || ShouldEnterIntersecting(orange)
+        || (orange.sweptThroughAperture && orange.movingIntoPortal);
     if (blueCanApproach && !orangeCanApproach)
         return &blue;
     if (orangeCanApproach && !blueCanApproach)
@@ -572,12 +643,34 @@ void CPortalTransitionSimulator::UpdatePhase(C_TerrorPlayer* player, CUserCmd* c
         if (!PortalTransitionDecision::ShouldAllowTraversalEntry(m_context.phase, currentTime, m_context.cooldownUntil))
             break;
 
+        if (PortalTransitionDecision::ShouldCommitPlaneCrossing(
+            probe->previousCenterDistance,
+            probe->centerDistance,
+            probe->hasPreviousSample,
+            HasCrossingApertureEvidence(*probe),
+            probe->movingIntoPortal))
+        {
+            TryCommitTeleport(player, cmd, *probe, currentTime);
+            break;
+        }
+
         if (ShouldEnterIntersecting(*probe))
             SetPhase(PortalTransitionPhase::IntersectingPortal, probe, currentTime, "initial-intersection");
         else if (ShouldEnterApproach(*probe))
             SetPhase(PortalTransitionPhase::ApproachingPortal, probe, currentTime, "approach");
         break;
     case PortalTransitionPhase::ApproachingPortal:
+        if (PortalTransitionDecision::ShouldCommitPlaneCrossing(
+            m_context.signedDepth,
+            probe->centerDistance,
+            m_context.hasSignedDepth,
+            HasCrossingApertureEvidence(*probe),
+            probe->movingIntoPortal))
+        {
+            TryCommitTeleport(player, cmd, *probe, currentTime);
+            break;
+        }
+
         if (ShouldPredictPlaneCrossing(*probe))
         {
             TryCommitPredictedPlaneCrossing(player, cmd, *probe, currentTime);
@@ -602,7 +695,7 @@ void CPortalTransitionSimulator::UpdatePhase(C_TerrorPlayer* player, CUserCmd* c
             m_context.signedDepth,
             probe->centerDistance,
             m_context.hasSignedDepth,
-            probe->insideAperture,
+            HasCrossingApertureEvidence(*probe),
             probe->movingIntoPortal))
         {
             TryCommitTeleport(player, cmd, *probe, currentTime);
@@ -632,6 +725,12 @@ void CPortalTransitionSimulator::UpdateExitPhase(const PortalProbe& exitProbe, f
     const float frontDistance = std::min(exitProbe.originDistance, exitProbe.eyeDistance);
     if (PortalTransitionDecision::ShouldReleaseExitControlledMove(frontDistance, exitProbe.insideAperture))
     {
+        // Start the temporal guard only after the spatial exit lock releases.
+        // With ExactTransform, a slow player can remain in ExitingPortal longer
+        // than the original commit-time cooldown duration.
+        m_context.cooldownUntil = PortalTransitionDecision::ComputeExitRearmCooldownUntil(
+            currentTime,
+            kTeleportCooldown);
         U::LogInfo("[PortalExitState] phase ExitingPortal/%s -> Cooldown/%s reason=exit-cleared frontDist=%.2f originDepth=%.2f eyeDepth=%.2f centerDepth=%.2f inside=%s cooldownRemaining=%.3f.\n",
             SideName(m_context.entrySide),
             SideName(m_context.exitSide),
@@ -643,6 +742,12 @@ void CPortalTransitionSimulator::UpdateExitPhase(const PortalProbe& exitProbe, f
             std::max(0.0f, m_context.cooldownUntil - currentTime));
         G::G_L4D2Portal.m_PortalTransition.RestoreControlledMoveType(GetLocalPlayer(), "exit-cleared");
         m_context.phase = PortalTransitionPhase::Cooldown;
+        U::LogInfo("[PortalExitRearm] released exit=%s spatialFront=%.2f inside=%s cooldownUntil=%.3f cooldownDuration=%.3f.\n",
+            SideName(m_context.exitSide),
+            frontDistance,
+            BoolText(exitProbe.insideAperture),
+            m_context.cooldownUntil,
+            kTeleportCooldown);
     }
 }
 
@@ -659,7 +764,11 @@ bool CPortalTransitionSimulator::TryCommitPredictedPlaneCrossing(
     if (I::GlobalVars && I::GlobalVars->interval_per_tick > 0.0f)
         interval = I::GlobalVars->interval_per_tick;
 
-    const float leadTime = std::min(interval, std::max(0.0f, (probe.centerDistance - kPredictedCrossingDepth) / -probe.velDot));
+    const float leadTime = PortalTransitionDecision::ComputePredictedPortalCommitLeadTime(
+        probe.centerDistance,
+        probe.velDot,
+        interval,
+        kPredictedCrossingDepth);
     PortalPlayerAnchor anchor = BuildPlayerAnchor(player);
     const Vector projectedDelta = anchor.velocity * leadTime;
     anchor.origin = anchor.origin + projectedDelta;
@@ -731,7 +840,29 @@ bool CPortalTransitionSimulator::TryCommitTeleport(
         + std::fabs(probe.exit->normal.y) * hullHalfExtents.y
         + std::fabs(probe.exit->normal.z) * hullHalfExtents.z;
     const float transformedCenterDepth = SignedDistanceToPortal(*probe.exit, transformedCenter);
+    if (!PortalTransitionDecision::IsPortalCommitHalfSpaceValid(
+        probe.centerDistance,
+        transformedCenterDepth))
+    {
+        U::LogError("[PortalTeleportCommit] rejected reason=invalid-half-space entry=%s cmd=%d previousEntryDepth=%.3f currentEntryDepth=%.3f commitEntryDepth=%.3f transformedExitDepth=%.3f hasPrevious=%s swept=%s sweepFraction=%.3f.\n",
+            SideName(probe.side),
+            cmd ? cmd->command_number : commandNumberOverride,
+            probe.previousCenterDistance,
+            probe.observedCenterDistance,
+            probe.centerDistance,
+            transformedCenterDepth,
+            BoolText(probe.hasPreviousSample),
+            BoolText(probe.sweptThroughAperture),
+            probe.sweptPlaneFraction);
+        m_context.phase = PortalTransitionPhase::IntersectingPortal;
+        m_context.signedDepth = probe.centerDistance;
+        m_context.hasSignedDepth = true;
+        return false;
+    }
+    const PortalExitClearanceMode exitClearanceMode =
+        PortalTransitionDecision::GetExitClearanceMode();
     const float exitClearancePush = PortalTransitionDecision::ComputeExitClearancePush(
+        exitClearanceMode,
         transformedCenterDepth,
         hullHalfExtentAlongExitNormal,
         kExitPlacementEpsilon);
@@ -757,6 +888,11 @@ bool CPortalTransitionSimulator::TryCommitTeleport(
     const Vector exitReferenceOrigin = probe.exit->origin + probe.exit->normal * 25.0f;
     const Vector eyeFromOrigin = anchor.eye - anchor.origin;
     const Vector finalEye = newOrigin + eyeFromOrigin;
+    const Vector exactMappedEye = PortalTransform::TransformPoint(entryToExit, anchor.eye);
+    constexpr float kPortalRenderCameraPush = 1.0f;
+    const Vector portalRenderEye = exactMappedEye + probe.exit->normal * kPortalRenderCameraPush;
+    const Vector exactToPhysical = finalEye - exactMappedEye;
+    const Vector renderToPhysical = finalEye - portalRenderEye;
     const Vector gmodHead = PortalTransform::ComputeGModPortalHeadPosition(*probe.entry, *probe.exit, anchor.eye);
     const Vector gmodOrigin = PortalTransform::ComputeOriginForGModHeadPosition(gmodHead, eyeFromOrigin);
     const Vector gmodOriginDelta = newOrigin - gmodOrigin;
@@ -824,10 +960,24 @@ bool CPortalTransitionSimulator::TryCommitTeleport(
     m_context.hasValidExitPlacement = true;
     m_context.hasSignedDepth = true;
 
-    U::LogInfo("[PortalTeleportCommit] committed entry=%s exit=%s cmd=%d rawExitDepth=%.2f hullExtent=%.2f clearancePush=%.2f finalExitDepth=%.2f oldOrigin=(%.1f %.1f %.1f) newOrigin=(%.1f %.1f %.1f) oldEye=(%.1f %.1f %.1f) newEye=(%.1f %.1f %.1f) oldCenter=(%.1f %.1f %.1f) newCenter=(%.1f %.1f %.1f) velocity=(%.1f %.1f %.1f)->(%.1f %.1f %.1f) angles=(%.1f %.1f %.1f)->(%.1f %.1f %.1f).\n",
+    U::LogInfo("[PortalCrossingTransaction] entry=%s exit=%s cmd=%d path=%s previousEntryDepth=%.3f currentEntryDepth=%.3f commitEntryDepth=%.3f transformedExitDepth=%.3f finalExitDepth=%.3f hasPrevious=%s swept=%s sweepFraction=%.3f.\n",
         SideName(probe.side),
         SideName(exitSide),
         m_context.teleportCommandNumber,
+        overrideAnchor ? "projected" : "live",
+        probe.previousCenterDistance,
+        probe.observedCenterDistance,
+        probe.centerDistance,
+        transformedCenterDepth,
+        m_context.signedDepth,
+        BoolText(probe.hasPreviousSample),
+        BoolText(probe.sweptThroughAperture),
+        probe.sweptPlaneFraction);
+    U::LogInfo("[PortalTeleportCommit] committed entry=%s exit=%s cmd=%d clearanceMode=%s rawExitDepth=%.2f hullExtent=%.2f clearancePush=%.2f finalExitDepth=%.2f oldOrigin=(%.1f %.1f %.1f) newOrigin=(%.1f %.1f %.1f) oldEye=(%.1f %.1f %.1f) newEye=(%.1f %.1f %.1f) oldCenter=(%.1f %.1f %.1f) newCenter=(%.1f %.1f %.1f) velocity=(%.1f %.1f %.1f)->(%.1f %.1f %.1f) angles=(%.1f %.1f %.1f)->(%.1f %.1f %.1f).\n",
+        SideName(probe.side),
+        SideName(exitSide),
+        m_context.teleportCommandNumber,
+        PortalTransitionDecision::ExitClearanceModeName(exitClearanceMode),
         transformedCenterDepth,
         hullHalfExtentAlongExitNormal,
         exitClearancePush,
@@ -852,6 +1002,27 @@ bool CPortalTransitionSimulator::TryCommitTeleport(
         finalEye.x, finalEye.y, finalEye.z,
         gmodHead.x, gmodHead.y, gmodHead.z,
         gmodHeadDelta.x, gmodHeadDelta.y, gmodHeadDelta.z);
+    U::LogInfo("[PortalContinuity] entry=%s exit=%s cmd=%d commitPath=%s clearanceMode=%s exactMappedEye=(%.2f %.2f %.2f) portalRenderEye=(%.2f %.2f %.2f) physicalEye=(%.2f %.2f %.2f) renderPush=%.2f clearancePush=%.2f exactToPhysical=(%.2f %.2f %.2f) exactError=%.3f renderToPhysical=(%.2f %.2f %.2f) renderError=%.3f.\n",
+        SideName(probe.side),
+        SideName(exitSide),
+        m_context.teleportCommandNumber,
+        overrideAnchor ? "projected" : "live",
+        PortalTransitionDecision::ExitClearanceModeName(exitClearanceMode),
+        exactMappedEye.x, exactMappedEye.y, exactMappedEye.z,
+        portalRenderEye.x, portalRenderEye.y, portalRenderEye.z,
+        finalEye.x, finalEye.y, finalEye.z,
+        kPortalRenderCameraPush,
+        exitClearancePush,
+        exactToPhysical.x, exactToPhysical.y, exactToPhysical.z,
+        std::sqrt(exactToPhysical.LenghtSqr()),
+        renderToPhysical.x, renderToPhysical.y, renderToPhysical.z,
+        std::sqrt(renderToPhysical.LenghtSqr()));
+    U::LogInfo("[PortalExitRearm] armed entry=%s exit=%s cmd=%d clearanceMode=%s finalExitDepth=%.2f releaseFront=16.00 lockPhase=ExitingPortal.\n",
+        SideName(probe.side),
+        SideName(exitSide),
+        m_context.teleportCommandNumber,
+        PortalTransitionDecision::ExitClearanceModeName(exitClearanceMode),
+        m_context.signedDepth);
 
     m_lastCommittedMovementCommandNumber = m_context.teleportCommandNumber;
     m_lastCommittedMovementOrigin = newOrigin;
@@ -941,6 +1112,12 @@ bool CPortalTransitionSimulator::ShouldEnterIntersecting(const PortalProbe& prob
 {
     return probe.gmodWallBounds
         && probe.movingIntoPortal;
+}
+
+bool CPortalTransitionSimulator::HasCrossingApertureEvidence(const PortalProbe& probe) const
+{
+    return probe.insideAperture
+        || probe.sweptThroughAperture;
 }
 
 bool CPortalTransitionSimulator::ShouldTrackNearPortal(const PortalProbe& probe) const

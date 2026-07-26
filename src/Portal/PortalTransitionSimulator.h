@@ -67,11 +67,16 @@ private:
         float feetDistance = 0.0f;
         float cmdDot = 0.0f;
         float velDot = 0.0f;
+        float observedCenterDistance = 0.0f;
+        float previousCenterDistance = 0.0f;
+        float sweptPlaneFraction = 0.0f;
         bool originInside = false;
         bool eyeInside = false;
         bool centerInside = false;
         bool feetInside = false;
         bool insideAperture = false;
+        bool hasPreviousSample = false;
+        bool sweptThroughAperture = false;
         bool gmodWallBounds = false;
         float gmodFrontDistance = 0.0f;
         float feetLocalRight = 0.0f;
@@ -98,6 +103,7 @@ private:
 
     bool ShouldEnterApproach(const PortalProbe& probe) const;
     bool ShouldEnterIntersecting(const PortalProbe& probe) const;
+    bool HasCrossingApertureEvidence(const PortalProbe& probe) const;
     bool ShouldTrackNearPortal(const PortalProbe& probe) const;
     bool ShouldStayInCurrentPhase(const PortalProbe* probe) const;
     bool ShouldLog(float currentTime, float& nextLogTime, float intervalSeconds) const;
@@ -116,4 +122,11 @@ private:
     Vector m_lastCommittedMovementVelocity;
     QAngle m_lastCommittedMovementAngles;
     bool m_hasLastCommittedMovement = false;
+    PortalPlayerAnchor m_previousAnchor;
+    Vector m_previousBlueOrigin;
+    Vector m_previousBlueNormal;
+    Vector m_previousOrangeOrigin;
+    Vector m_previousOrangeNormal;
+    int m_previousAnchorCommandNumber = 0;
+    bool m_hasPreviousAnchor = false;
 };

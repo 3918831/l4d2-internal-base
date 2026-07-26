@@ -5,9 +5,121 @@
 #include "../../SDK/L4D2/Interfaces/CServerTools.h"
 #include "../L4D2_Portal.h"
 #include "../../Util/Logger/Logger.h"
+#include "../../Hooks/EngineTrace/EngineTrace.h"
+#include "../PortalBspCollisionCarver.h"
+#include "../PortalBspData.h"
+#include "../PortalBspPhase1.h"
 
 // hits solids (not grates) and passes through everything else
 #define MASK_SHOT_PORTAL            (CONTENTS_SOLID|CONTENTS_MOVEABLE|CONTENTS_WINDOW|CONTENTS_MONSTER)
+
+namespace
+{
+    class PlacementCarveGuard
+    {
+    public:
+        explicit PlacementCarveGuard(bool armed) : m_Armed(armed) {}
+
+        ~PlacementCarveGuard()
+        {
+            if (m_Armed)
+                PortalBspPhase1::TryActivate("portal-placement-aborted");
+        }
+
+        void Commit()
+        {
+            m_Armed = false;
+        }
+
+    private:
+        bool m_Armed = false;
+    };
+
+    PortalBspQuery::Vector3 ToBspVector(const Vector& value)
+    {
+        return { value.x, value.y, value.z };
+    }
+
+    const char* SurfaceBrushStatusName(PortalBspQuery::SurfaceBrushStatus status)
+    {
+        switch (status)
+        {
+        case PortalBspQuery::SurfaceBrushStatus::Success: return "Success";
+        case PortalBspQuery::SurfaceBrushStatus::NoBrushFound: return "NoBrushFound";
+        case PortalBspQuery::SurfaceBrushStatus::MissingData: return "MissingData";
+        case PortalBspQuery::SurfaceBrushStatus::InvalidRequiredMask: return "InvalidRequiredMask";
+        case PortalBspQuery::SurfaceBrushStatus::InvalidLeafIndex: return "InvalidLeafIndex";
+        case PortalBspQuery::SurfaceBrushStatus::InvalidLeafBrushRange: return "InvalidLeafBrushRange";
+        default: return "Unknown";
+        }
+    }
+
+    const char* OwnerName(PortalBrushOwner owner)
+    {
+        return owner == PortalBrushOwner::Blue ? "blue" : "orange";
+    }
+
+    const char* PointLeafStatusName(PortalBspQuery::PointLeafStatus status)
+    {
+        switch (status)
+        {
+        case PortalBspQuery::PointLeafStatus::Success: return "Success";
+        case PortalBspQuery::PointLeafStatus::MissingData: return "MissingData";
+        case PortalBspQuery::PointLeafStatus::InvalidRootNode: return "InvalidRootNode";
+        case PortalBspQuery::PointLeafStatus::InvalidNodeIndex: return "InvalidNodeIndex";
+        case PortalBspQuery::PointLeafStatus::InvalidPlaneIndex: return "InvalidPlaneIndex";
+        case PortalBspQuery::PointLeafStatus::InvalidLeafIndex: return "InvalidLeafIndex";
+        case PortalBspQuery::PointLeafStatus::TraversalLimit: return "TraversalLimit";
+        default: return "Unknown";
+        }
+    }
+
+    const char* BrushPointStatusName(PortalBspQuery::BrushPointStatus status)
+    {
+        switch (status)
+        {
+        case PortalBspQuery::BrushPointStatus::Inside: return "Inside";
+        case PortalBspQuery::BrushPointStatus::Outside: return "Outside";
+        case PortalBspQuery::BrushPointStatus::MissingData: return "MissingData";
+        case PortalBspQuery::BrushPointStatus::InvalidBrushIndex: return "InvalidBrushIndex";
+        case PortalBspQuery::BrushPointStatus::InvalidSideCount: return "InvalidSideCount";
+        case PortalBspQuery::BrushPointStatus::InvalidSideRange: return "InvalidSideRange";
+        case PortalBspQuery::BrushPointStatus::NullPlane: return "NullPlane";
+        case PortalBspQuery::BrushPointStatus::InvalidPlaneIndex: return "InvalidPlaneIndex";
+        case PortalBspQuery::BrushPointStatus::InvalidBoxBrushIndex: return "InvalidBoxBrushIndex";
+        default: return "Unknown";
+        }
+    }
+
+    void LogBindingState(const char* reason)
+    {
+        const PortalBrushBinding& blue = G::PortalBspCollisionCarver.GetBinding(PortalBrushOwner::Blue);
+        const PortalBrushBinding& orange = G::PortalBspCollisionCarver.GetBinding(PortalBrushOwner::Orange);
+        U::LogInfo("[PortalBsp][BindingState] reason=%s pairResolved=%s queryReady=%s phase1Enabled=%s carvingActive=%s blue(active=%s resolved=%s status=%s leaf=%d brush=%d contents=0x%08X offset=%.1f generation=%u) orange(active=%s resolved=%s status=%s leaf=%d brush=%d contents=0x%08X offset=%.1f generation=%u) destructiveWrites=%s.\n",
+            reason ? reason : "unknown",
+            G::PortalBspCollisionCarver.IsPairResolved() ? "true" : "false",
+            G::PortalBspData.IsQueryReady() ? "true" : "false",
+            G::PortalBspCollisionCarver.IsPhase1Enabled() ? "true" : "false",
+            G::PortalBspCollisionCarver.IsCarvingActive() ? "true" : "false",
+            G::G_L4D2Portal.g_BluePortal.bIsActive ? "true" : "false",
+            blue.resolved ? "true" : "false",
+            SurfaceBrushStatusName(blue.status),
+            blue.leafIndex,
+            blue.brushIndex,
+            static_cast<unsigned int>(blue.originalContents),
+            blue.selectedSampleOffset,
+            blue.mapGeneration,
+            G::G_L4D2Portal.g_OrangePortal.bIsActive ? "true" : "false",
+            orange.resolved ? "true" : "false",
+            SurfaceBrushStatusName(orange.status),
+            orange.leafIndex,
+            orange.brushIndex,
+            static_cast<unsigned int>(orange.originalContents),
+            orange.selectedSampleOffset,
+            orange.mapGeneration,
+            G::PortalBspCollisionCarver.IsCarvingActive() ? "true" : "false");
+    }
+}
 
 inline void UTIL_TraceLine(const Vector& vecAbsStart, const Vector& vecAbsEnd, unsigned int mask,
     ITraceFilter* pFilter, trace_t* ptr)
@@ -105,6 +217,7 @@ void CWeaponPortalgun::FirePortal(bool bPortal2, Vector* pVector /*= 0*/, bool b
 
     // 【检查】如果传送门正在关闭，忽略创建请求
     PortalInfo_t& portalInfo = bPortal2 ? G::G_L4D2Portal.g_OrangePortal : G::G_L4D2Portal.g_BluePortal;
+    const PortalBrushOwner owner = bPortal2 ? PortalBrushOwner::Orange : PortalBrushOwner::Blue;
     if (portalInfo.isAnimating && portalInfo.bIsClosing)
     {
         U::LogDebug("Portal creation blocked: close animation in progress.\n");
@@ -123,6 +236,12 @@ void CWeaponPortalgun::FirePortal(bool bPortal2, Vector* pVector /*= 0*/, bool b
         U::LogDebug("pLocalPlayer is nullptr or deadflag is true.\n");
         return;
     }
+
+    // A carved carrying brush must be restored before the placement trace so
+    // the shot observes the original world collision and resolves a fresh brush.
+    if (!PortalBspPhase1::PrepareForPlacement(owner, "portal-placement-before-trace"))
+        return;
+    PlacementCarveGuard placementCarveGuard(true);
 
     Vector vDirection;
     Vector vTracerOrigin;
@@ -243,6 +362,57 @@ void CWeaponPortalgun::FirePortal(bool bPortal2, Vector* pVector /*= 0*/, bool b
         // TODO: PlacePortal未完全实现
         U::LogDebug("Calling PlacePortal...\n");
         pPortal->PlacePortal(vFinalPosition, qFinalAngles, fPlacementSuccess, false);
+
+        const bool worldHit = tr.DidHit()
+            && !tr.startsolid
+            && tr.m_pEnt
+            && tr.m_pEnt->entindex() == 0;
+        if (worldHit)
+        {
+            const bool queryReady = Hooks::EngineTrace::EnsurePortalBspDataReady("portal-placement");
+            const bool resolved = G::PortalBspCollisionCarver.BindPortalBrush(
+                owner,
+                ToBspVector(tr.endpos),
+                ToBspVector(tr.plane.normal),
+                MASK_PLAYERSOLID,
+                G::PortalBspData,
+                queryReady);
+            const PortalBrushBinding& binding = G::PortalBspCollisionCarver.GetBinding(owner);
+            int oracleContents = 0;
+            const bool oracleValid = resolved
+                && Hooks::EngineTrace::TryGetBrushContentsForDiagnostics(binding.brushIndex, oracleContents);
+            U::LogInfo("[PortalBsp][Binding] owner=%s queryReady=%s resolved=%s status=%s pointLeaf=%s brushPoint=%s generation=%u hit=(%.3f,%.3f,%.3f) normal=(%.6f,%.6f,%.6f) sample=(%.3f,%.3f,%.3f) leaf=%d brush=%d contents=0x%08X oracleValid=%s oracleContents=0x%08X contentsMatch=%s offset=%.1f samples=%zu candidates=%zu duplicates=%zu invalidCandidates=%zu destructiveWrites=false.\n",
+                OwnerName(owner),
+                queryReady ? "true" : "false",
+                resolved ? "true" : "false",
+                SurfaceBrushStatusName(binding.status),
+                PointLeafStatusName(binding.pointLeafStatus),
+                BrushPointStatusName(binding.lastBrushStatus),
+                binding.mapGeneration,
+                binding.hitPosition.x, binding.hitPosition.y, binding.hitPosition.z,
+                binding.hitNormal.x, binding.hitNormal.y, binding.hitNormal.z,
+                binding.samplePosition.x, binding.samplePosition.y, binding.samplePosition.z,
+                binding.leafIndex,
+                binding.brushIndex,
+                static_cast<unsigned int>(binding.originalContents),
+                oracleValid ? "true" : "false",
+                static_cast<unsigned int>(oracleContents),
+                (oracleValid && oracleContents == binding.originalContents) ? "true" : "false",
+                binding.selectedSampleOffset,
+                binding.samplesTested,
+                binding.candidatesTested,
+                binding.duplicateCandidatesSkipped,
+                binding.invalidCandidatesSkipped);
+        }
+        else
+        {
+            G::PortalBspCollisionCarver.UnbindPortalBrush(owner);
+            U::LogWarning("[PortalBsp][Binding] owner=%s resolved=false status=NonWorldHit destructiveWrites=false.\n",
+                OwnerName(owner));
+        }
+        PortalBspPhase1::TryActivate("portal-placement-complete");
+        placementCarveGuard.Commit();
+        LogBindingState("portal-placement");
         U::LogDebug("FirePortal completed.\n");
     }
 

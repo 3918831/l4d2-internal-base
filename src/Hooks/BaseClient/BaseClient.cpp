@@ -5,6 +5,8 @@
 #include "../Hooks.h"
 #include "../../Portal/L4D2_Portal.h"
 #include "../../Portal/PortalBspData.h"
+#include "../../Portal/PortalBspCollisionCarver.h"
+#include "../../Portal/PortalBspPhase1.h"
 #include "../../SDK/L4D2/Interfaces/RenderView.h"
 #include "../../SDK/L4D2/Interfaces/EngineClient.h"
 #include "../../SDK/L4D2/Interfaces/ModelInfo.h"
@@ -82,6 +84,7 @@ void __fastcall BaseClient::LevelShutdown::Detour(void* ecx, void* edx)
 	// BSP hunk allocations are owned by the current map. Invalidate every cached
 	// address before the engine releases the map so no later stage can reuse it.
 	G::PortalBspData.InvalidateForMapChange();
+	PortalBspPhase1::DiscardInvalidatedState("LevelShutdown-after-invalidate");
 	U::PortalBspOffset::ClearCandidate();
 	U::LogInfo("[PortalBsp][Lifecycle] event=LevelShutdown generation=%u cacheInvalidated=true destructiveWrites=false.\n",
 		G::PortalBspData.GetSnapshot().mapGeneration);
@@ -111,7 +114,9 @@ void __fastcall BaseClient::FrameStageNotify::Detour(void* ecx, void* edx, Clien
 void __fastcall BaseClient::RenderView::Detour(void* ecx, void* edx, CViewSetup& setup, CViewSetup& hudViewSetup, int nClearFlags, int whatToDraw)
 {
 	G::G_L4D2Portal.m_PortalTransition.ApplyVisualTransition(setup);
+	G::G_L4D2Portal.m_PortalTransition.ApplyPortalNearClipFix(setup);
 	G::G_L4D2Portal.m_PortalTransition.LogRenderEnvironmentSnapshot("main-render", setup);
+	G::G_L4D2Portal.m_PortalTransition.LogVisualPlaneProbe(setup);
 
 	// 每帧开始时，重置状态
 	G::G_L4D2Portal.m_nPortalRenderDepth = 0;
@@ -135,7 +140,9 @@ void __fastcall BaseClient::RenderView::Detour(void* ecx, void* edx, CViewSetup&
 void __fastcall Hooks::BaseClient::RenderView::Detour(void* ecx, void* edx, CViewSetup& setup, CViewSetup& hudViewSetup, int nClearFlags, int whatToDraw)
 {
     G::G_L4D2Portal.m_PortalTransition.ApplyVisualTransition(setup);
+    G::G_L4D2Portal.m_PortalTransition.ApplyPortalNearClipFix(setup);
     G::G_L4D2Portal.m_PortalTransition.LogRenderEnvironmentSnapshot("main-render", setup);
+    G::G_L4D2Portal.m_PortalTransition.LogVisualPlaneProbe(setup);
 
     // 1. 如果已经在渲染传送门纹理，或者是递归保护，直接调用原始函数
     // if (g_bIsRenderingPortalTexture || !I::EngineClient->IsInGame()) {
@@ -199,7 +206,9 @@ void __fastcall Hooks::BaseClient::RenderView::Detour(void* ecx, void* edx, CVie
 void __fastcall Hooks::BaseClient::RenderView::Detour(void* ecx, void* edx, CViewSetup& setup, CViewSetup& hudViewSetup, int nClearFlags, int whatToDraw)
 {
     G::G_L4D2Portal.m_PortalTransition.ApplyVisualTransition(setup);
+    G::G_L4D2Portal.m_PortalTransition.ApplyPortalNearClipFix(setup);
     G::G_L4D2Portal.m_PortalTransition.LogRenderEnvironmentSnapshot("main-render", setup);
+    G::G_L4D2Portal.m_PortalTransition.LogVisualPlaneProbe(setup);
 
     // 0. 初始化
     G::G_L4D2Portal.m_renderQueue.clear();

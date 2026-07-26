@@ -29,55 +29,67 @@
 
 ## 1. Pure BSP query implementation
 
-- [ ] 1.1 Create `tests/PortalBspQueryTests.cpp` with synthetic BSP fixtures for front-child traversal, back-child traversal, negative child-to-leaf decoding, and invalid leaf rejection; verify tests initially fail because query functions do not exist.
-- [ ] 1.2 Extract memory-independent query helpers into `src/Portal/PortalBspQuery.h/.cpp` so unit tests do not depend on live engine addresses.
-- [ ] 1.3 Implement `PointLeafNum` equivalent using checked node and plane access; run tests and require all node/leaf tests to pass.
-- [ ] 1.4 Add failing tests for convex-brush point inclusion: inside, outside one plane, null plane, zero sides, and side-range overflow.
-- [ ] 1.5 Implement convex brush inclusion and require the tests to pass.
-- [ ] 1.6 Add failing tests for box-brush inclusion at center, faces, outside bounds, and invalid box index.
-- [ ] 1.7 Implement box-brush inclusion and require the tests to pass.
-- [ ] 1.8 Add failing tests for leafbrush enumeration, `MASK_PLAYERSOLID` filtering, duplicate candidate handling, and behind-surface sample order `{2, 4, 8, 1, 16, 0.5}`.
-- [ ] 1.9 Implement `FindBrushForSurfacePoint` and return diagnostic metadata containing leaf index, brush index, selected sample offset, and original contents.
-- [ ] 1.10 Add `tests/run_portal_bsp_query_tests.cmd` following the existing standalone test-runner pattern; expected result: all BSP query tests pass.
-- [ ] 1.11 Integrate the pure query helpers into `CPortalBspData` checked live-memory access.
-- [ ] 1.12 Run Debug x86 build plus all existing `tests/run_*.cmd` suites; expected result: no regression.
+- [x] 1.1 Create `tests/PortalBspQueryTests.cpp` with synthetic BSP fixtures for front-child traversal, back-child traversal, negative child-to-leaf decoding, and invalid leaf rejection; the RED baseline is confirmed by MSVC `C1083` because `PortalBspQuery.h` does not exist yet.
+- [x] 1.2 Extract memory-independent query helpers into `src/Portal/PortalBspQuery.h/.cpp` so unit tests do not depend on live engine addresses.
+- [x] 1.3 Implement `PointLeafNum` equivalent using checked node and plane access; run tests and require all node/leaf tests to pass.
+- [x] 1.4 Add failing tests for convex-brush point inclusion: inside, outside one plane, null plane, zero sides, and side-range overflow.
+- [x] 1.5 Implement convex brush inclusion and require the tests to pass.
+- [x] 1.6 Add failing tests for box-brush inclusion at center, faces, outside bounds, and invalid box index.
+- [x] 1.7 Implement box-brush inclusion and require the tests to pass.
+- [x] 1.8 Add failing tests for leafbrush enumeration, `MASK_PLAYERSOLID` filtering, duplicate candidate handling, and behind-surface sample order `{2, 4, 8, 1, 16, 0.5}`.
+- [x] 1.9 Implement `FindBrushForSurfacePoint` and return diagnostic metadata containing leaf index, brush index, selected sample offset, and original contents.
+- [x] 1.10 Add `tests/run_portal_bsp_query_tests.cmd` following the existing standalone test-runner pattern; all BSP query tests pass.
+- [x] 1.11 Integrate the pure query helpers into `CPortalBspData` checked live-memory access.
+- [x] 1.12 Run Debug x86 build plus all existing `tests/run_*.cmd` suites; Debug x86 completes with zero errors and all nine standalone test runners pass.
 
 ## 2. Portal placement binding, read-only
 
-- [ ] 2.1 Extend the portal placement result path in `src/Portal/client/weapon_portalgun.cpp` to retain/reuse the successful world hit position and plane normal when the portal becomes valid.
-- [ ] 2.2 Add `PortalBrushBinding` state owned by a new `CPortalBspCollisionCarver` in `src/Portal/PortalBspCollisionCarver.h/.cpp`; do not add brush fields directly to rendering responsibilities unless needed for lifecycle identity.
-- [ ] 2.3 Bind blue/orange portal ownership to resolved brush indices at successful placement and log the full resolution result.
-- [ ] 2.4 On portal replacement, resolve the new brush before releasing the previous binding; if resolution fails, retain the safe existing traversal behavior and do not mutate either brush.
-- [ ] 2.5 Clear read-only bindings on portal close, portal shutdown, and map invalidation.
-- [ ] 2.6 Add a diagnostic command/status output showing each portal's active state, resolved flag, brush index, original contents, and map generation.
-- [ ] 2.7 In game, compare the resolved brush against the SourcePawn algorithm on simple wall, floor, ceiling, and angled test placements; record unsupported cases without adding workarounds.
-- [ ] 2.8 Gate: require repeatable correct brush resolution on the chosen wall test case before permitting any write code to be enabled.
+- [x] 2.1 Extend the portal placement result path in `src/Portal/client/weapon_portalgun.cpp` to retain/reuse the successful world hit position and plane normal when the portal becomes valid.
+- [x] 2.2 Add `PortalBrushBinding` state owned by a new `CPortalBspCollisionCarver` in `src/Portal/PortalBspCollisionCarver.h/.cpp`; do not add brush fields directly to rendering responsibilities unless needed for lifecycle identity.
+- [x] 2.3 Bind blue/orange portal ownership to resolved brush indices at successful placement and log the full resolution result.
+- [x] 2.4 On portal replacement, resolve the new brush before releasing the previous binding; if resolution fails, retain the safe existing traversal behavior and do not mutate either brush.
+- [x] 2.5 Clear read-only bindings on portal close, portal shutdown, and map invalidation.
+- [x] 2.6 Add a diagnostic command/status output showing each portal's active state, resolved flag, brush index, original contents, and map generation.
+- [x] 2.7 In game, compare the resolved brush against the SourcePawn algorithm on simple wall, floor, ceiling, and angled test placements; record unsupported cases without adding workarounds.
+- [x] 2.8 Gate: require repeatable correct brush resolution on the chosen wall test case before permitting any write code to be enabled.
 
 ## 3. Reversible mutation core
 
-- [ ] 3.1 Add failing unit tests for one-owner activation, distinct-brush pair activation, same-brush dual ownership, reactivation idempotence, and original-contents preservation.
-- [ ] 3.2 Add failing tests for stale expected contents, out-of-range indices, map-generation mismatch, failed second write rollback, repeated restore, and owner release order.
-- [ ] 3.3 Implement an injectable brush-access interface for the carver so tests use fake storage and production uses `CPortalBspData`.
-- [ ] 3.4 Implement compare-before-write mutation to `CONTENTS_EMPTY`; never replace the saved original value with a value read after carving.
-- [ ] 3.5 Implement unique-brush transactions and owner masks for blue/orange portals.
-- [ ] 3.6 Implement one idempotent `RestoreAll(reason)` that validates generation and expected current value before restoring.
-- [ ] 3.7 Implement rollback of already-written brushes if any target validation or write fails.
-- [ ] 3.8 Run mutation unit tests; expected result: every success, rollback, shared-owner, and idempotence case passes.
-- [ ] 3.9 Add production writes behind an explicit development toggle that defaults off until the first controlled in-game run.
-- [ ] 3.10 Log every attempted, successful, rejected, rolled-back, and restored mutation with address-independent identifiers and values.
+- [x] 3.1 Add failing unit tests for one-owner activation, distinct-brush pair activation, same-brush dual ownership, reactivation idempotence, and original-contents preservation.
+- [x] 3.2 Add failing tests for stale expected contents, out-of-range indices, map-generation mismatch, failed second write rollback, repeated restore, and owner release order.
+- [x] 3.3 Implement an injectable brush-access interface for the carver so tests use fake storage and production uses `CPortalBspData`.
+- [x] 3.4 Implement compare-before-write mutation to `CONTENTS_EMPTY`; never replace the saved original value with a value read after carving.
+- [x] 3.5 Implement unique-brush transactions and owner masks for blue/orange portals.
+- [x] 3.6 Implement one idempotent `RestoreAll(reason)` that validates generation and expected current value before restoring.
+- [x] 3.7 Implement rollback of already-written brushes if any target validation or write fails.
+- [x] 3.8 Run mutation unit tests; expected result: every success, rollback, shared-owner, and idempotence case passes.
+- [x] 3.9 Add production writes behind an explicit development toggle that defaults off until the first controlled in-game run.
+- [x] 3.10 Log every attempted, successful, rejected, rolled-back, and restored mutation with address-independent identifiers and values.
 
 ## 4. Phase 1 — unrestricted whole-brush experiment
 
-- [ ] 4.1 Add a Phase 1 policy: both portals active + both bindings valid + development toggle enabled implies pair carving active, with no local-player distance or proximity test.
-- [ ] 4.2 Integrate activation after a valid pair is established; preserve transactional ordering so a pair is never half-carved.
-- [ ] 4.3 Integrate restoration before portal replacement release, portal close completion/invalidation, `PortalShutdown`, level shutdown, and DLL unload.
-- [ ] 4.4 Ensure map shutdown calls restore while current BSP pointers remain valid, then invalidates/increments map generation.
+- [x] 4.1 Add a Phase 1 policy: both portals active + both bindings valid + development toggle enabled implies pair carving active, with no local-player distance or proximity test.
+- [x] 4.2 Integrate activation after a valid pair is established; preserve transactional ordering so a pair is never half-carved.
+- [x] 4.3 Integrate restoration before portal replacement release, portal close completion/invalidation, `PortalShutdown`, level shutdown, and DLL unload.
+- [x] 4.4 Ensure map shutdown calls restore while current BSP pointers remain valid, then invalidates/increments map generation.
 - [ ] 4.5 Add diagnostic modes for baseline, BSP+legacy, BSP-only causal test, and forced-BSP-failure fallback.
 - [ ] 4.6 Add before/after/restored client and local-server hull traces through the target portal point and log fraction, `startsolid`, `allsolid`, end position, and plane normal.
-- [ ] 4.7 Build Debug x86 and run all unit tests; expected result: zero errors and all tests pass.
+- [x] 4.7 Build Debug x86 and run all unit tests; expected result: zero errors and all tests pass.
 - [ ] 4.8 Test distinct-brush blue/orange portals with BSP+legacy enabled; verify mutation and restoration values exactly match.
-- [ ] 4.9 Disable legacy collision-result clearing and controlled noclip for the causal run while retaining transition, transform, teleport, and prediction synchronization.
-- [ ] 4.10 Verify the local player can approach, cross, teleport, and exit using BSP carving as the wall-clearance mechanism.
+- [x] 4.9 Disable legacy collision-result clearing and controlled noclip for the causal run while retaining transition, transform, teleport, and prediction synchronization.
+- [x] 4.9a Keep the transition simulator idle until BSP carving is actually active; when movement mutation is disabled, always preserve original client/server `PlayerMove` and legacy ground handling, with regression tests for both gates.
+- [x] 4.9b Decouple one-shot committed Teleport prediction synchronization from continuous movement mutation; allow BSP traversal to atomically synchronize origin, velocity, and view angles during `ExitingPortal`/`Cooldown` without enabling controlled noclip or altering hull clearance.
+- [x] 4.9c Add file-only focused visual diagnostics and a runtime `FullHull`/`PlaneEpsilon` exit-clearance A/B control; keep console output limited to commands, status, and errors, and leave height-difference behavior, portal placement constraints, and blockers unchanged.
+- [x] 4.9d Add a runtime A/B portal-aware main-view near-clip reduction for the confirmed pre-Teleport portal-mask clipping interval; log it file-only and leave physical exit push, height-difference behavior, placement constraints, and blockers unchanged.
+- [x] 4.9e Add an `ExactTransform` zero-push diagnostic mode, file-only camera-handoff continuity evidence, and explicit spatial-plus-temporal exit rearm guards; leave crossing trigger timing, height-difference behavior, placement constraints, brush policy, and blockers unchanged.
+- [x] 4.9f Preserve the exact physical exit point while guarding the post-Teleport main-view handoff: append a validated safe exit visibility origin and extend portal-aware near clipping through bounded `ExitingPortal`/`Cooldown` intervals; keep recursive portal views, non-exact A/B modes, velocity, rearm policy, height-difference behavior, placement constraints, brush policy, and blockers unchanged.
+- [x] 4.9g Correct crossing half-space and high-speed commit semantics: projected anchors land just behind the entry plane, the raw transformed exit must remain on or in front of the exit plane, a first valid behind-plane observation commits in the same update, and a consecutive-command segment-plane aperture test provides the high-speed fallback. Keep the existing `Teleport` API; defer official-style camera and interpolation-history handoff to isolated follow-up work.
+- [x] 4.9h Add an official-style pre-Teleport entry camera handoff as a single-factor visual fix: while the local main camera is behind the tracked entry plane and inside its aperture during `IntersectingPortal`, transform only the rendered eye origin and angles through the existing entry-to-exit matrix. Keep physical/predicted Teleport, near clip, exit guard, movement, velocity, rearm, height differences, placement, brush policy, and interpolation-history behavior unchanged.
+- [x] 4.9i Implement and test the near-plane portal-model mask experiment. Round-thirteen evidence showed `[PortalMaskRepair]` applied continuously down to a 0.24-unit positive eye depth while the complete wall view remained reproducible, falsifying this path; remove its render-state override, runtime command, status field, and diagnostics under 4.9j rather than retaining a disproven workaround.
+- [x] 4.9j Align the remote RTT camera and exit clip plane with Portal SDK as the next single-factor fix: keep the exact transformed camera origin with zero normal push, use `dot(normal, exitOrigin - normal * 0.5)` for every remote clip plane, preserve the existing safe PVS origins and portal-entity/border placement, add rate-limited file-only `[PortalOfficialRemoteView]` evidence, and leave Teleport, BSP, near clip, entry handoff, exit guards, height differences, and placement constraints unchanged.
+- [x] 4.9k Port the Portal SDK primary-view near-plane render-fix mesh as the next single-factor fix: generate a `zNear + 0.05` camera-plane quad, clip it against twelve expanded aperture planes and the portal front plane, project it to NDC depth `0.00001`, and draw it through the existing `DrawModelExecute` stencil-replace stage. Reuse `IMatRenderContext::GetDynamicMesh` through a local Windows x86 ABI adapter; add no hook or offset, leave depth clearing/fog repair deferred, and record rate-limited file-only `[PortalRenderFix]` evidence.
+- [x] 4.9l Correct the render-fix dynamic-mesh index ABI after round-fifteen evidence: treat `m_nIndexSize` as the Source 0/1 element increment rather than a byte stride, add `m_nFirstVertex` to every 16-bit index, reject inactive, unexpected, undersized, negative, and overflowing descriptors before writing, and add pure regression tests plus rate-limited index diagnostics. Keep proxy geometry, stencil state, depth/fog, RTT, Teleport, BSP, and portal placement unchanged.
+- [x] 4.10 Verify the local player can approach, cross, teleport, and exit using BSP carving as the wall-clearance mechanism. Round sixteen recorded 23 successful bidirectional slow/high-speed Teleports with legacy collision bypass, controlled noclip, and movement mutation disabled; no black sky or wall-mask artifact was observed.
 - [ ] 4.11 Intentionally walk through other exposed parts of the carved brush and document the unrestricted behavior requested for Phase 1.
 - [ ] 4.12 Test both portals on the same brush and verify one write/one final restore.
 - [ ] 4.13 Re-place blue, re-place orange, close one portal, reload/chapter transition, map change, and normal DLL shutdown while carved; verify no original contents remain lost.

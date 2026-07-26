@@ -42,6 +42,10 @@
     <ClCompile Include="Features\EnginePrediction\EnginePrediction.cpp" />
     <ClCompile Include="Portal\L4D2_Portal.cpp" />
     <ClCompile Include="Portal\PortalBspData.cpp" />
+    <ClCompile Include="Portal\PortalBspQuery.cpp" />
+    <ClCompile Include="Portal\PortalBspCollisionCarver.cpp" />
+    <ClCompile Include="Portal\PortalBspPhase1.cpp" />
+    <ClCompile Include="Portal\PortalBspCommands.cpp" />
     <ClCompile Include="Portal\PortalCollisionBridge.cpp" />
     <ClCompile Include="Portal\PortalStage1Probe.cpp" />
     <ClCompile Include="Portal\PortalPlayerTeleport.cpp" />
@@ -50,6 +54,9 @@
     <ClCompile Include="Portal\PortalTransitionDecision.cpp" />
     <ClCompile Include="Portal\PortalTransitionSimulator.cpp" />
     <ClCompile Include="Portal\PortalTransform.cpp" />
+    <ClCompile Include="Portal\PortalRenderFixGeometry.cpp" />
+    <ClCompile Include="Portal\PortalRenderFixMeshWriter.cpp" />
+    <ClCompile Include="Portal\PortalRenderFixRenderer.cpp" />
     <ClCompile Include="Hooks\GameMovement\CCSGameMovement.cpp" />
     <ClCompile Include="Hooks\C_Weapon\Weapon_Pistol.cpp" />
     <ClCompile Include="Portal\server\prop_portal.cpp" />
@@ -147,6 +154,10 @@
     <ClInclude Include="SDK\L4D2\Includes\iconvar.h" />
     <ClInclude Include="Portal\L4D2_Portal.h" />
     <ClInclude Include="Portal\PortalBspData.h" />
+    <ClInclude Include="Portal\PortalBspQuery.h" />
+    <ClInclude Include="Portal\PortalBspCollisionCarver.h" />
+    <ClInclude Include="Portal\PortalBspBrushAccess.h" />
+    <ClInclude Include="Portal\PortalBspPhase1.h" />
     <ClInclude Include="Portal\PortalBspTypes.h" />
     <ClInclude Include="Portal\PortalPhysicsMode.h" />
     <ClInclude Include="Portal\PortalCollisionBridge.h" />
@@ -158,6 +169,9 @@
     <ClInclude Include="Portal\PortalTransitionSimulator.h" />
     <ClInclude Include="Portal\CustomRender.h" />
     <ClInclude Include="Portal\PortalTransform.h" />
+    <ClInclude Include="Portal\PortalRenderFixGeometry.h" />
+    <ClInclude Include="Portal\PortalRenderFixMeshWriter.h" />
+    <ClInclude Include="Portal\PortalRenderFixRenderer.h" />
     <ClInclude Include="SDK\L4D2\Interfaces\IInput.h" />
     <ClInclude Include="Hooks\GameMovement\CCSGameMovement.h" />
     <ClInclude Include="SDK\L4D2\Interfaces\Vphysics.h" />

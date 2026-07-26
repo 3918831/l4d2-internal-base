@@ -600,6 +600,11 @@ C_TerrorPlayer* CPortalCollisionBridge::GetLocalPlayer() const
 
 void CPortalCollisionBridge::ClearTraceHit(const PortalTraceRequest& request) const
 {
+    // Defense in depth: callers are mode-gated too, but the destructive write
+    // itself must remain inert while BSP collision carving is under test.
+    if (!PortalPhysicsMode::ShouldUseLegacyCollisionBypass())
+        return;
+
     trace_t* trace = request.trace;
     if (!trace)
         return;

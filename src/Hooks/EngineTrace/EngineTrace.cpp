@@ -166,6 +166,7 @@ namespace
 		const int renderLeafCount = I::EngineClient ? I::EngineClient->LevelLeafCount() : -1;
 		G::PortalBspData.CaptureForMap(layout.bspBase, renderLeafCount, mapName);
 		const PortalBsp::Snapshot& bsp = G::PortalBspData.GetSnapshot();
+		const PortalBsp::QueryStorage& query = G::PortalBspData.GetQueryStorage();
 
 		U::LogInfo("[PortalBsp][LayoutState] map=%s portal=%s generation=%u ready=%s offsetStored=%s destructiveWrites=false.\n",
 			mapName,
@@ -173,6 +174,21 @@ namespace
 			bsp.mapGeneration,
 			bsp.ready ? "true" : "false",
 			offsetStored ? "true" : "false");
+		U::LogInfo("[PortalBsp][QueryCache] map=%s portal=%s generation=%u ready=%s planes=%zu nodes=%zu leafs=%zu leafbrushes=%zu brushes=%zu brushsides=%zu boxbrushes=%zu invalidNodePlanes=%zu invalidBrushSidePlanes=%zu failure=%s destructiveWrites=false.\n",
+			mapName,
+			portalName,
+			bsp.mapGeneration,
+			query.ready ? "true" : "false",
+			query.planes.size(),
+			query.nodes.size(),
+			query.leaves.size(),
+			query.leafBrushes.size(),
+			query.brushes.size(),
+			query.brushSides.size(),
+			query.boxBrushes.size(),
+			query.invalidNodePlanePointers,
+			query.invalidBrushSidePlanePointers,
+			query.failureReason.empty() ? "none" : query.failureReason.c_str());
 
 		for (const PortalBsp::TableSnapshot& table : bsp.tables)
 		{
@@ -340,13 +356,14 @@ namespace
 
 	void LogEngineTraceAnalysisAnchors()
 	{
-		U::LogInfo("[PortalPhysicsMode] active=%s render=%s simulation=%s movementMutation=%s legacyCollisionBypass=%s teleport=%s destructiveDiagnostics=%s.\n",
+		U::LogInfo("[PortalPhysicsMode] active=%s render=%s simulation=%s movementMutation=%s legacyCollisionBypass=%s teleport=%s teleportPredictionSync=%s destructiveDiagnostics=%s.\n",
 			PortalPhysicsMode::CurrentName(),
 			PortalPhysicsMode::ShouldRenderPortals() ? "true" : "false",
 			PortalPhysicsMode::ShouldRunTraversalSimulation() ? "true" : "false",
 			PortalPhysicsMode::ShouldMutatePlayerMovement() ? "true" : "false",
 			PortalPhysicsMode::ShouldUseLegacyCollisionBypass() ? "true" : "false",
 			PortalPhysicsMode::ShouldCommitTeleport() ? "true" : "false",
+			PortalPhysicsMode::ShouldSynchronizeCommittedTeleportPrediction() ? "true" : "false",
 			PortalPhysicsMode::ShouldRunDestructiveDiagnostics() ? "true" : "false");
 
 		const EngineTraceDiagnostics::ModuleRange module = GetEngineModuleRange();
@@ -394,6 +411,73 @@ int __fastcall EngineTrace::GetLeafContainingPoint::Detour(void* ecx, void* edx,
 	int nLeaf = Table.Original<FN>(Index)(ecx, edx, ptTest);
 	MaybeLogPortalRuntimeOracles();
 	return nLeaf;
+}
+
+bool EngineTrace::EnsurePortalBspDataReady(const char* reason)
+{
+	const char* mapName = I::EngineClient && I::EngineClient->GetLevelName()
+		? I::EngineClient->GetLevelName()
+		: "unknown";
+	const PortalBsp::Snapshot& current = G::PortalBspData.GetSnapshot();
+	if (G::PortalBspData.IsReady()
+		&& G::PortalBspData.IsQueryReady()
+		&& current.mapName == mapName)
+	{
+		return true;
+	}
+
+	const EngineTraceBspProbe::GetBrushInfoLayoutCandidate layout = DecodeLiveGetBrushInfoLayout();
+	if (!layout.valid)
+	{
+		const bool hadCachedData = current.base != 0u
+			|| G::PortalBspData.IsReady()
+			|| G::PortalBspData.IsQueryReady();
+		if (hadCachedData)
+			G::PortalBspData.InvalidateForMapChange();
+		U::PortalBspOffset::ClearCandidate();
+		U::LogError("[PortalBsp][QueryInit] map=%s reason=%s ready=false failure=layout-decode-failed destructiveWrites=false.\n",
+			mapName,
+			reason ? reason : "unknown");
+		return false;
+	}
+
+	const EngineTraceDiagnostics::ModuleRange module = GetEngineModuleRange();
+	const bool offsetStored = U::PortalBspOffset::RecordCandidate(
+		layout.bspBase,
+		module.base,
+		module.size,
+		"EngineTrace.GetBrushInfo.semantic-operands");
+	const int renderLeafCount = I::EngineClient ? I::EngineClient->LevelLeafCount() : -1;
+	const bool layoutReady = G::PortalBspData.CaptureForMap(
+		layout.bspBase,
+		renderLeafCount,
+		mapName);
+	const PortalBsp::Snapshot& snapshot = G::PortalBspData.GetSnapshot();
+	const PortalBsp::QueryStorage& query = G::PortalBspData.GetQueryStorage();
+	const bool ready = offsetStored && layoutReady && query.ready;
+	U::LogInfo("[PortalBsp][QueryInit] map=%s reason=%s generation=%u layoutReady=%s queryReady=%s ready=%s planes=%zu nodes=%zu leafs=%zu leafbrushes=%zu brushes=%zu brushsides=%zu boxbrushes=%zu invalidNodePlanes=%zu invalidBrushSidePlanes=%zu failure=%s destructiveWrites=false.\n",
+		mapName,
+		reason ? reason : "unknown",
+		snapshot.mapGeneration,
+		layoutReady ? "true" : "false",
+		query.ready ? "true" : "false",
+		ready ? "true" : "false",
+		query.planes.size(),
+		query.nodes.size(),
+		query.leaves.size(),
+		query.leafBrushes.size(),
+		query.brushes.size(),
+		query.brushSides.size(),
+		query.boxBrushes.size(),
+		query.invalidNodePlanePointers,
+		query.invalidBrushSidePlanePointers,
+		query.failureReason.empty() ? "none" : query.failureReason.c_str());
+	return ready;
+}
+
+bool EngineTrace::TryGetBrushContentsForDiagnostics(int brushIndex, int& contents)
+{
+	return TryGetBrushInfo(brushIndex, contents);
 }
 
 void EngineTrace::Init()

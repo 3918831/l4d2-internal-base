@@ -17,7 +17,11 @@
 #include "../Util/Logger/Logger.h"
 #include "L4D2_Portal.h"
 #include "CustomRender.h"
+#include "PortalBspCollisionCarver.h"
+#include "PortalBspPhase1.h"
+#include "PortalTransitionDecision.h"
 
+#include <cmath>
 #include <fstream>
 #include <vector>
 
@@ -121,6 +125,65 @@ namespace
             fogInfo ? fogInfo->m_flDistanceToWater : 0.0f,
             fogInfo ? fogInfo->m_flWaterHeight : 0.0f,
             fogInfo ? fogInfo->m_pFogVolumeMaterial : nullptr);
+    }
+
+    void LogOfficialRemoteView(
+        int renderDepth,
+        const CViewSetup& sourceView,
+        const CViewSetup& remoteView,
+        const PortalInfo_t* entryPortal,
+        const PortalInfo_t* exitPortal,
+        const Vector& exitNormal,
+        float clipPlaneDistance)
+    {
+        if (renderDepth != 1
+            || !entryPortal
+            || !exitPortal
+            || !I::EngineClient)
+        {
+            return;
+        }
+
+        Vector entryNormal;
+        U::Math.AngleVectors(entryPortal->angles, &entryNormal, nullptr, nullptr);
+        const float entryEyeDepth =
+            entryNormal.Dot(sourceView.origin - entryPortal->origin);
+        if (std::fabs(entryEyeDepth) > 64.0f)
+            return;
+
+        static float nextLogTime = 0.0f;
+        const float currentTime = I::EngineClient->OBSOLETE_Time();
+        if (currentTime < nextLogTime)
+            return;
+
+        const float exitEyeDepth =
+            exitNormal.Dot(remoteView.origin - exitPortal->origin);
+        const float exitEyeClipDistance =
+            exitNormal.Dot(remoteView.origin) - clipPlaneDistance;
+        const char* entryName =
+            entryPortal == &G::G_L4D2Portal.g_BluePortal ? "Blue" : "Orange";
+        const char* exitName =
+            exitPortal == &G::G_L4D2Portal.g_BluePortal ? "Blue" : "Orange";
+
+        U::LogDebug(
+            "[PortalOfficialRemoteView] entry=%s exit=%s time=%.3f "
+            "entryEyeDepth=%.4f exitEyeDepth=%.4f exitEyeClipDistance=%.4f "
+            "cameraNormalPush=%.3f clipOffset=-0.500 clipD=%.4f "
+            "sourceOrigin=(%.2f %.2f %.2f) remoteOrigin=(%.2f %.2f %.2f) "
+            "exitOrigin=(%.2f %.2f %.2f) exitNormal=(%.4f %.4f %.4f).\n",
+            entryName,
+            exitName,
+            currentTime,
+            entryEyeDepth,
+            exitEyeDepth,
+            exitEyeClipDistance,
+            PortalTransitionDecision::ComputeOfficialPortalRemoteViewNormalPush(),
+            clipPlaneDistance,
+            sourceView.origin.x, sourceView.origin.y, sourceView.origin.z,
+            remoteView.origin.x, remoteView.origin.y, remoteView.origin.z,
+            exitPortal->origin.x, exitPortal->origin.y, exitPortal->origin.z,
+            exitNormal.x, exitNormal.y, exitNormal.z);
+        nextLogTime = currentTime + 0.25f;
     }
 }
 
@@ -413,6 +476,11 @@ void L4D2_Portal::PortalInit()
 // 清理函数，在不需要传送门时调用
 void L4D2_Portal::PortalShutdown()
 {
+    const bool bspRestored = PortalBspPhase1::RestoreAndClearBindings("PortalShutdown");
+    U::LogInfo("[PortalBsp][BindingLifecycle] event=PortalShutdown restored=%s bindingsCleared=%s destructiveWrites=%s.\n",
+        bspRestored ? "true" : "false",
+        bspRestored ? "true" : "false",
+        G::PortalBspCollisionCarver.IsCarvingActive() ? "true" : "false");
     m_PortalTransition.Reset();
     m_PortalTransitionSimulator.Reset();
     m_PortalCollisionBridge.Reset();
@@ -596,14 +664,12 @@ CViewSetup L4D2_Portal::CalculatePortalView(const CViewSetup& playerView, const 
         portalView.zNear = 1.0f;
     }
 
-    // 6. 【核心修正】将虚拟摄像机沿出口法线方向稍微向前推，以进入有效的Visleaf
-    // 这是解决黑天、全亮模型和渲染缺失问题的关键
+    // Match Portal SDK: keep the remote camera at the exact transformed eye.
+    // Visibility recovery is supplied separately through safe PVS origins.
     Vector exitPortalNormal;
     U::Math.AngleVectors(pExitPortal->angles, &exitPortalNormal, nullptr, nullptr);
-
-    // 将摄像机向前推动一个很小的单位（例如 1.0f），确保它在传送门“外面”
-    portalView.origin += exitPortalNormal * 1.0f;
-     //portalView.origin = pExitPortal->origin + exitPortalNormal * 1.0f;
+    portalView.origin += exitPortalNormal
+        * PortalTransitionDecision::ComputeOfficialPortalRemoteViewNormalPush();
     return portalView;
 }
 
@@ -705,10 +771,19 @@ bool L4D2_Portal::RenderPortalViewRecursive(const CViewSetup& previousView, Port
     clipPlane[1] = exitNormal.y;
     clipPlane[2] = exitNormal.z;
 
-    // 【核心修正】修正 D 值的计算，遵循 n·p - d = 0 的形式
-    // d = n·p，并加入一个小的偏移量防止瑕疵
-    // 使用验证过的公式：往前推 0.5f ~ 1.0f 以切掉墙体
-    clipPlane[3] = exitNormal.Dot(exitPortal->origin) + 1.0f;
+    // Portal SDK moves the remote clip plane half a unit behind the exit
+    // portal so the carrying wall is clipped without losing half-in objects.
+    clipPlane[3] =
+        PortalTransitionDecision::ComputeOfficialPortalRemoteClipPlaneDistance(
+            exitNormal.Dot(exitPortal->origin));
+    LogOfficialRemoteView(
+        m_nPortalRenderDepth,
+        previousView,
+        newPortalView,
+        entryPortal,
+        exitPortal,
+        exitNormal,
+        clipPlane[3]);
 
     pRenderContext->PushCustomClipPlane(clipPlane);
     pRenderContext->EnableClipping(true);
@@ -806,8 +881,9 @@ void L4D2_Portal::RenderViewToTexture(void* ecx, void* edx, const CViewSetup& ma
     clipPlane[0] = exitNormal.x; 
     clipPlane[1] = exitNormal.y; 
     clipPlane[2] = exitNormal.z;
-    // 官方偏移 0.5f，我们也用 0.5f
-    clipPlane[3] = (exitNormal.Dot(exitPortal->origin) + 1.0f); 
+    clipPlane[3] =
+        PortalTransitionDecision::ComputeOfficialPortalRemoteClipPlaneDistance(
+            exitNormal.Dot(exitPortal->origin));
 
     pRenderContext->PushCustomClipPlane(clipPlane);
     pRenderContext->EnableClipping(true);
@@ -955,8 +1031,9 @@ void L4D2_Portal::RenderTextureInternal(const CViewSetup& mainView, PortalInfo_t
     clipPlane[0] = exitNormal.x; 
     clipPlane[1] = exitNormal.y; 
     clipPlane[2] = exitNormal.z;
-    // 官方偏移 0.5f，我们也用 0.5f
-    clipPlane[3] = (exitNormal.Dot(exitPortal->origin) + 1.0f); 
+    clipPlane[3] =
+        PortalTransitionDecision::ComputeOfficialPortalRemoteClipPlaneDistance(
+            exitNormal.Dot(exitPortal->origin));
 
     pRenderContext->PushCustomClipPlane(clipPlane);
     pRenderContext->EnableClipping(true);
@@ -1184,6 +1261,19 @@ void L4D2_Portal::StartPortalCloseAnimation(PortalInfo_t* pPortal)
     if (!pPortal || !pPortal->bIsActive || pPortal->currentScale <= 0.0f || pPortal->animState == PORTAL_ANIM_CLOSING) {
         return;
     }
+
+    const PortalBrushOwner owner = pPortal == &g_OrangePortal
+        ? PortalBrushOwner::Orange
+        : PortalBrushOwner::Blue;
+    if (!PortalBspPhase1::Restore("portal-close"))
+    {
+        U::LogError("[PortalBsp][BindingLifecycle] event=PortalClose owner=%s blocked=true reason=restore-failed.\n",
+            owner == PortalBrushOwner::Blue ? "blue" : "orange");
+        return;
+    }
+    G::PortalBspCollisionCarver.UnbindPortalBrush(owner);
+    U::LogInfo("[PortalBsp][BindingLifecycle] event=PortalClose owner=%s bindingCleared=true destructiveWrites=false.\n",
+        owner == PortalBrushOwner::Blue ? "blue" : "orange");
 
     // 使用新状态
     pPortal->animState = PORTAL_ANIM_CLOSING;
