@@ -2,7 +2,7 @@
 
 日期：2026-07-26
 
-当前分支：`codex/bsp-query-stage1`
+当前分支：`codex/bsp-portal-traversal`
 
 工作目录：`l4d2-internal-base-bsp-query-stage1`
 主要方法论：从 Portal SDK 2013 提取官方不变量，以日志和单因子实测逐项验证，不凭感觉叠加 workaround。
@@ -212,7 +212,7 @@ depthFogRepair=deferred
 
 可以直接把以下内容交给新会话：
 
-> 当前 `codex/bsp-query-stage1` 已完成单人 localserver 的 BSP whole-brush 物理穿越阶段性基线。第十六轮确认 23 次双向穿越，无黑天空、条状墙体、门后墙体和高速闪烁，brush 关停恢复成功。请先阅读 `docs/portal-bsp-phase1-stage-retrospective.zh-CN.md` 与 `docs/handoff/portal-visual-continuity-next-session.zh-CN.md`，不要重新启用旧 noclip、movement mutation、出口 push 或 `PortalMaskRepair`。下一任务只研究残余视觉连续性，方法论以 Portal SDK 2013 的 `C_Portal_Player::PlayerPortalled`、`UpdatePortalEyeInterpolation`、`CalcPortalView` 为主，先加 transaction 级诊断，再做单因子 A/B。
+> 当前 `codex/bsp-portal-traversal` 已完成单人 localserver 的 BSP whole-brush 物理穿越阶段性基线。第十六轮确认 23 次双向穿越，无黑天空、条状墙体、门后墙体和高速闪烁，brush 关停恢复成功。请先阅读 `docs/portal-bsp-phase1-stage-retrospective.zh-CN.md` 与 `docs/handoff/portal-visual-continuity-next-session.zh-CN.md`，不要重新启用旧 noclip、movement mutation、出口 push 或 `PortalMaskRepair`。下一任务只研究残余视觉连续性，方法论以 Portal SDK 2013 的 `C_Portal_Player::PlayerPortalled`、`UpdatePortalEyeInterpolation`、`CalcPortalView` 为主，先加 transaction 级诊断，再做单因子 A/B。
 
 ## 交接五件套自检
 

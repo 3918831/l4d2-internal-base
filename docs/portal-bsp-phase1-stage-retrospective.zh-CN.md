@@ -2,7 +2,7 @@
 
 日期：2026-07-26
 
-分支：`codex/bsp-query-stage1`
+分支：`codex/bsp-portal-traversal`
 对应 OpenSpec：`add-bsp-portal-collision-carving`
 
 ## 1. 阶段结论
